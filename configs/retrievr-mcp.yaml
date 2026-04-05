@@ -16,11 +16,15 @@ sources:
   arxiv:
     enabled: true
     timeout: "15s"
+    rate_limit: 0.33
+    rate_limit_burst: 1
 
   pubmed:
     enabled: true
     api_key: ""
     timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
     extra:
       tool: "retrievr-mcp"
       email: "contact@example.com"
@@ -29,11 +33,15 @@ sources:
     enabled: true
     api_key: ""
     timeout: "10s"
+    rate_limit: 1.0
+    rate_limit_burst: 3
 
   openalex:
     enabled: true
     api_key: ""
     timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
     extra:
       mailto: "contact@example.com"
 
@@ -41,6 +49,8 @@ sources:
     enabled: true
     api_key: ""
     timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
     extra:
       include_models: "true"
       include_datasets: "true"
@@ -49,3 +59,5 @@ sources:
   europmc:
     enabled: true
     timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5

@@ -20,6 +20,11 @@ const (
 	DefaultCacheTTL         = 5 * time.Minute
 	DefaultCacheMaxEntries  = 1000
 	DefaultPluginTimeout    = 10 * time.Second
+
+	DefaultRateLimitRPS        = 1.0
+	DefaultRateLimitBurst      = 3
+	DefaultCredentialBucketTTL = 15 * time.Minute
+	DefaultCleanupInterval     = 450 * time.Second // half of credential bucket TTL
 )
 
 // Log level constants — used in config validation and logger setup.
@@ -48,6 +53,14 @@ const (
 	LogKeyAddr       = "addr"
 	LogKeyConfig     = "config"
 	LogKeyError      = "error"
+	LogKeySource     = "source"
+	LogKeyCredHash   = "cred_hash"
+	LogKeyRateRPS    = "rate_rps"
+	LogKeyRateBurst  = "rate_burst"
+	LogKeyRateRemain = "rate_remaining"
+	LogKeyCacheHit   = "cache_hit"
+	LogKeyCacheKey   = "cache_key"
+	LogKeyCacheSize  = "cache_size"
 )
 
 // ---------------------------------------------------------------------------

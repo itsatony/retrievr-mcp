@@ -270,11 +270,13 @@ type SourceHealth struct {
 // PluginConfig is the configuration for a single source plugin.
 // Used both for YAML config deserialization and as the Initialize parameter.
 type PluginConfig struct {
-	Enabled bool              `yaml:"enabled" json:"enabled"`
-	APIKey  string            `yaml:"api_key,omitempty" json:"api_key,omitempty"`
-	BaseURL string            `yaml:"base_url,omitempty" json:"base_url,omitempty"`
-	Timeout Duration          `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	Extra   map[string]string `yaml:"extra,omitempty" json:"extra,omitempty"`
+	Enabled        bool              `yaml:"enabled" json:"enabled"`
+	APIKey         string            `yaml:"api_key,omitempty" json:"api_key,omitempty"`
+	BaseURL        string            `yaml:"base_url,omitempty" json:"base_url,omitempty"`
+	Timeout        Duration          `yaml:"timeout,omitempty" json:"timeout,omitzero"`
+	RateLimit      float64           `yaml:"rate_limit,omitempty"       json:"rate_limit,omitempty"`
+	RateLimitBurst int               `yaml:"rate_limit_burst,omitempty" json:"rate_limit_burst,omitempty"`
+	Extra          map[string]string `yaml:"extra,omitempty"            json:"extra,omitempty"`
 }
 
 // Duration wraps time.Duration for YAML unmarshaling from string format (e.g. "10s").

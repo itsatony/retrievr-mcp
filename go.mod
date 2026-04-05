@@ -5,6 +5,7 @@ go 1.25.5
 require (
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/time v0.15.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

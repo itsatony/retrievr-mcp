@@ -23,6 +23,8 @@ const (
 	ErrMsgFormatUnsupported   = "requested format not supported by this source"
 	ErrMsgCredentialInvalid   = "provided credential was rejected by upstream source"
 	ErrMsgCredentialRequired  = "this source requires credentials for the requested operation"
+	ErrMsgCacheKeyGeneration  = "failed to generate cache key"
+	ErrMsgRateLimitWait       = "rate limiter wait failed"
 )
 
 // ---------------------------------------------------------------------------
@@ -56,6 +58,8 @@ var (
 	ErrFormatUnsupported   = errors.New(ErrMsgFormatUnsupported)
 	ErrCredentialInvalid   = errors.New(ErrMsgCredentialInvalid)
 	ErrCredentialRequired  = errors.New(ErrMsgCredentialRequired)
+	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)
+	ErrRateLimitWait       = errors.New(ErrMsgRateLimitWait)
 )
 
 // ---------------------------------------------------------------------------

@@ -4,11 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -87,9 +85,7 @@ func run() int {
 		slog.Any(internal.LogKeySources, cfg.EnabledSourceIDs()),
 	)
 
-	// --- DC-04: Full server wiring ---
-
-	// Step 1: Initialize plugins (empty for now — real plugins added in DC-05+).
+	// Initialize plugins (empty for now — real plugins added in future cycles).
 	plugins := map[string]internal.SourcePlugin{}
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
 
@@ -100,7 +96,7 @@ func run() int {
 			continue
 		}
 		rps := sourceCfg.RateLimit
-		if rps < internal.DefaultRateLimitRPS {
+		if rps < internal.RateLimitMinRPS {
 			rps = internal.DefaultRateLimitRPS
 		}
 		burst := sourceCfg.RateLimitBurst
@@ -165,7 +161,7 @@ func run() int {
 		return exitCodeSuccess
 
 	case err := <-errCh:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err != nil {
 			logger.Error(logMsgServerFail, slog.String(internal.LogKeyError, err.Error()))
 			return exitCodeStartup
 		}

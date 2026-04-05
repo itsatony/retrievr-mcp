@@ -14,7 +14,9 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	rateLimitMinRPS = 0.01 // minimum sane rate to prevent misconfiguration
+	// RateLimitMinRPS is the minimum sane rate to prevent misconfiguration.
+	// Exported for use by cmd/retrievr-mcp when applying rate limit defaults.
+	RateLimitMinRPS = 0.01
 )
 
 // ---------------------------------------------------------------------------
@@ -58,7 +60,7 @@ type RateLimiter struct {
 // Sub-minimum RPS or non-positive burst values are replaced with defaults.
 func NewRateLimiter(cfg RateLimiterConfig, bucketTTL time.Duration) *RateLimiter {
 	rps := cfg.RequestsPerSecond
-	if rps < rateLimitMinRPS {
+	if rps < RateLimitMinRPS {
 		rps = DefaultRateLimitRPS
 	}
 

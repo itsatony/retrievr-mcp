@@ -75,7 +75,7 @@ func TestSearchHandler_Success(t *testing.T) {
 		SourceArXiv: newMockPlugin(SourceArXiv, pubs),
 	}
 	router := testRouter(plugins)
-	handler := NewSearchHandler(router, discardLogger())
+	handler := NewSearchHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameSearch
@@ -106,7 +106,7 @@ func TestSearchHandler_MissingQuery(t *testing.T) {
 		SourceArXiv: newMockPlugin(SourceArXiv, nil),
 	}
 	router := testRouter(plugins)
-	handler := NewSearchHandler(router, discardLogger())
+	handler := NewSearchHandler(router)
 
 	// No query field.
 	req := mcp.CallToolRequest{}
@@ -137,7 +137,7 @@ func TestSearchHandler_WithFilters(t *testing.T) {
 		}),
 	}
 	router := testRouter(plugins)
-	handler := NewSearchHandler(router, discardLogger())
+	handler := NewSearchHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameSearch
@@ -173,7 +173,7 @@ func TestSearchHandler_WithCredentials(t *testing.T) {
 	cfg := testRouterConfig()
 	cfg.DefaultSources = []string{SourceS2}
 	router := NewRouter(cfg, plugins, nil, nil, testRateLimits(plugins), &CredentialResolver{}, discardLogger())
-	handler := NewSearchHandler(router, discardLogger())
+	handler := NewSearchHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameSearch
@@ -196,7 +196,7 @@ func TestSearchHandler_RouterError(t *testing.T) {
 	// Router with no plugins returns ErrSearchFailed (no valid sources).
 	plugins := map[string]SourcePlugin{}
 	router := testRouter(plugins)
-	handler := NewSearchHandler(router, discardLogger())
+	handler := NewSearchHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameSearch
@@ -229,7 +229,7 @@ func TestGetHandler_Success(t *testing.T) {
 		SourceArXiv: newMockPlugin(SourceArXiv, pubs),
 	}
 	router := testRouter(plugins)
-	handler := NewGetHandler(router, discardLogger())
+	handler := NewGetHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameGet
@@ -256,7 +256,7 @@ func TestGetHandler_InvalidID(t *testing.T) {
 		SourceArXiv: newMockPlugin(SourceArXiv, nil),
 	}
 	router := testRouter(plugins)
-	handler := NewGetHandler(router, discardLogger())
+	handler := NewGetHandler(router)
 
 	// Missing ID.
 	req := mcp.CallToolRequest{}
@@ -276,7 +276,7 @@ func TestGetHandler_MalformedID(t *testing.T) {
 		SourceArXiv: newMockPlugin(SourceArXiv, nil),
 	}
 	router := testRouter(plugins)
-	handler := NewGetHandler(router, discardLogger())
+	handler := NewGetHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameGet
@@ -297,7 +297,7 @@ func TestGetHandler_NotFound(t *testing.T) {
 		SourceArXiv: newMockPlugin(SourceArXiv, nil),
 	}
 	router := testRouter(plugins)
-	handler := NewGetHandler(router, discardLogger())
+	handler := NewGetHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameGet
@@ -323,7 +323,7 @@ func TestListSourcesHandler_Success(t *testing.T) {
 		SourceS2:    newMockPlugin(SourceS2, nil),
 	}
 	router := testRouter(plugins)
-	handler := NewListSourcesHandler(router, discardLogger())
+	handler := NewListSourcesHandler(router)
 
 	req := mcp.CallToolRequest{}
 	req.Params.Name = ToolNameListSources

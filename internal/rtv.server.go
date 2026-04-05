@@ -28,6 +28,10 @@ const (
 	// ShutdownTimeout is the maximum duration to wait for graceful HTTP drain.
 	// Exported for use by cmd/retrievr-mcp.
 	ShutdownTimeout = 10 * time.Second
+
+	// readHeaderTimeout protects against slowloris attacks by limiting how long
+	// the server waits for request headers.
+	readHeaderTimeout = 10 * time.Second
 )
 
 // ---------------------------------------------------------------------------
@@ -38,6 +42,7 @@ const (
 	logMsgServerStarting = "server starting"
 	logMsgServerStopping = "server shutting down"
 	logMsgServerStopped  = "server stopped"
+	logMsgEncodeFailed   = "response encode failed"
 )
 
 // ---------------------------------------------------------------------------
@@ -86,9 +91,9 @@ func NewServer(
 	mcpSrv.Use(ToolLoggingMiddleware(logger))
 
 	// Register all three tools.
-	mcpSrv.AddTool(SearchToolDefinition(), NewSearchHandler(router, logger))
-	mcpSrv.AddTool(GetToolDefinition(), NewGetHandler(router, logger))
-	mcpSrv.AddTool(ListSourcesToolDefinition(), NewListSourcesHandler(router, logger))
+	mcpSrv.AddTool(SearchToolDefinition(), NewSearchHandler(router))
+	mcpSrv.AddTool(GetToolDefinition(), NewGetHandler(router))
+	mcpSrv.AddTool(ListSourcesToolDefinition(), NewListSourcesHandler(router))
 
 	// Create StreamableHTTPServer as an http.Handler with request ID injection.
 	mcpHTTP := server.NewStreamableHTTPServer(mcpSrv,
@@ -109,8 +114,9 @@ func NewServer(
 	mux.Handle(mcpEndpointPath, mcpHTTP)
 
 	s.httpServer = &http.Server{
-		Addr:    cfg.Server.HTTPAddr,
-		Handler: mux,
+		Addr:              cfg.Server.HTTPAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	return s
@@ -167,11 +173,21 @@ func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
 		Status:  healthStatusOK,
 		Version: GetVersion(),
 	}
-	_ = json.NewEncoder(w).Encode(resp)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		s.logger.Warn(logMsgEncodeFailed,
+			slog.String(LogKeyEndpoint, healthEndpointPath),
+			slog.String(LogKeyError, err.Error()),
+		)
+	}
 }
 
 // handleVersion returns full version information as JSON.
 func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set(httpHeaderContentType, httpContentTypeJSON)
-	_ = json.NewEncoder(w).Encode(GetVersionInfo())
+	if err := json.NewEncoder(w).Encode(GetVersionInfo()); err != nil {
+		s.logger.Warn(logMsgEncodeFailed,
+			slog.String(LogKeyEndpoint, versionEndpointPath),
+			slog.String(LogKeyError, err.Error()),
+		)
+	}
 }

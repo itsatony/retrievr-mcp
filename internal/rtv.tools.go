@@ -108,6 +108,15 @@ const (
 )
 
 // ---------------------------------------------------------------------------
+// Tool error format constants
+// ---------------------------------------------------------------------------
+
+const (
+	errFmtFieldRequired = "%s: %s is required"
+	logMsgFilterParse   = "failed to parse filters from tool input"
+)
+
+// ---------------------------------------------------------------------------
 // Tool definitions
 // ---------------------------------------------------------------------------
 
@@ -201,13 +210,13 @@ func ListSourcesToolDefinition() mcp.Tool {
 // ---------------------------------------------------------------------------
 
 // NewSearchHandler returns a ToolHandlerFunc that delegates to Router.Search.
-func NewSearchHandler(router *Router, logger *slog.Logger) server.ToolHandlerFunc {
+func NewSearchHandler(router *Router) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract required query.
 		query, err := req.RequireString(FieldQuery)
 		if err != nil {
 			return mcp.NewToolResultError(
-				NewMCPError(ErrMsgInvalidInput, "", fmt.Sprintf("%s: %s is required", ErrMsgInvalidInput, FieldQuery)),
+				NewMCPError(ErrMsgInvalidInput, "", fmt.Sprintf(errFmtFieldRequired, ErrMsgInvalidInput, FieldQuery)),
 			), nil
 		}
 
@@ -242,13 +251,13 @@ func NewSearchHandler(router *Router, logger *slog.Logger) server.ToolHandlerFun
 }
 
 // NewGetHandler returns a ToolHandlerFunc that delegates to Router.Get.
-func NewGetHandler(router *Router, logger *slog.Logger) server.ToolHandlerFunc {
+func NewGetHandler(router *Router) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		// Extract required ID.
 		id, err := req.RequireString(FieldID)
 		if err != nil {
 			return mcp.NewToolResultError(
-				NewMCPError(ErrMsgInvalidInput, "", fmt.Sprintf("%s: %s is required", ErrMsgInvalidInput, FieldID)),
+				NewMCPError(ErrMsgInvalidInput, "", fmt.Sprintf(errFmtFieldRequired, ErrMsgInvalidInput, FieldID)),
 			), nil
 		}
 
@@ -274,7 +283,7 @@ func NewGetHandler(router *Router, logger *slog.Logger) server.ToolHandlerFunc {
 }
 
 // NewListSourcesHandler returns a ToolHandlerFunc that delegates to Router.ListSources.
-func NewListSourcesHandler(router *Router, logger *slog.Logger) server.ToolHandlerFunc {
+func NewListSourcesHandler(router *Router) server.ToolHandlerFunc {
 	return func(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		infos := router.ListSources(ctx)
 		return marshalToolResult(infos)
@@ -298,9 +307,13 @@ func extractFilters(args map[string]any) SearchFilters {
 	// JSON round-trip: map[string]any → JSON bytes → SearchFilters.
 	data, err := json.Marshal(raw)
 	if err != nil {
+		slog.Warn(logMsgFilterParse, slog.String(LogKeyError, err.Error()))
 		return filters
 	}
-	_ = json.Unmarshal(data, &filters)
+	if err := json.Unmarshal(data, &filters); err != nil {
+		slog.Warn(logMsgFilterParse, slog.String(LogKeyError, err.Error()))
+		return filters
+	}
 	return filters
 }
 

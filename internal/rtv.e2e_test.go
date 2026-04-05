@@ -322,7 +322,7 @@ sources:
 
 	for sourceID, sourceCfg := range cfg.Sources {
 		rps := sourceCfg.RateLimit
-		if rps < rateLimitMinRPS {
+		if rps < RateLimitMinRPS {
 			rps = DefaultRateLimitRPS
 		}
 		burst := sourceCfg.RateLimitBurst
@@ -497,7 +497,7 @@ sources:
 
 	for sourceID, sourceCfg := range cfg.Sources {
 		rps := sourceCfg.RateLimit
-		if rps < rateLimitMinRPS {
+		if rps < RateLimitMinRPS {
 			rps = DefaultRateLimitRPS
 		}
 		burst := sourceCfg.RateLimitBurst
@@ -761,7 +761,7 @@ sources:
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
 		rps := sourceCfg.RateLimit
-		if rps < rateLimitMinRPS {
+		if rps < RateLimitMinRPS {
 			rps = DefaultRateLimitRPS
 		}
 		burst := sourceCfg.RateLimitBurst
@@ -858,7 +858,7 @@ sources:
 	ctx := context.Background()
 
 	// 8a: rtv_search
-	searchHandler := NewSearchHandler(router, nil)
+	searchHandler := NewSearchHandler(router)
 	searchReq := mcp.CallToolRequest{}
 	searchReq.Params.Name = ToolNameSearch
 	searchReq.Params.Arguments = map[string]any{
@@ -873,7 +873,7 @@ sources:
 	assert.False(t, searchResult.IsError)
 
 	// Parse search response.
-	searchText := extractE2ETextContent(t, searchResult)
+	searchText := extractTextContent(t, searchResult)
 	var merged MergedSearchResult
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
@@ -903,7 +903,7 @@ sources:
 	assert.Contains(t, sharedPaper.SourceMetadata, "s2_tldr")
 
 	// 8b: rtv_get
-	getHandler := NewGetHandler(router, nil)
+	getHandler := NewGetHandler(router)
 	getReq := mcp.CallToolRequest{}
 	getReq.Params.Name = ToolNameGet
 	getReq.Params.Arguments = map[string]any{
@@ -915,7 +915,7 @@ sources:
 	require.NotNil(t, getResult)
 	assert.False(t, getResult.IsError)
 
-	getText := extractE2ETextContent(t, getResult)
+	getText := extractTextContent(t, getResult)
 	var pub Publication
 	err = json.Unmarshal([]byte(getText), &pub)
 	require.NoError(t, err)
@@ -937,7 +937,7 @@ sources:
 	assert.False(t, getCredResult.IsError)
 
 	// 8d: rtv_list_sources
-	listHandler := NewListSourcesHandler(router, nil)
+	listHandler := NewListSourcesHandler(router)
 	listReq := mcp.CallToolRequest{}
 	listReq.Params.Name = ToolNameListSources
 
@@ -946,7 +946,7 @@ sources:
 	require.NotNil(t, listResult)
 	assert.False(t, listResult.IsError)
 
-	listText := extractE2ETextContent(t, listResult)
+	listText := extractTextContent(t, listResult)
 	var infos []SourceInfo
 	err = json.Unmarshal([]byte(listText), &infos)
 	require.NoError(t, err)
@@ -968,13 +968,4 @@ sources:
 	for _, plugin := range plugins {
 		PluginContractTest(t, plugin)
 	}
-}
-
-// extractE2ETextContent extracts text from the first TextContent in a CallToolResult.
-func extractE2ETextContent(t *testing.T, result *mcp.CallToolResult) string {
-	t.Helper()
-	require.NotEmpty(t, result.Content, "result should have at least one content item")
-	tc, ok := result.Content[0].(mcp.TextContent)
-	require.True(t, ok, "first content item should be TextContent, got %T", result.Content[0])
-	return tc.Text
 }

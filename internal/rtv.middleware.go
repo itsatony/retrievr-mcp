@@ -61,6 +61,10 @@ func ToolLoggingMiddleware(logger *slog.Logger) server.ToolHandlerMiddleware {
 				errMsg := ""
 				if err != nil {
 					errMsg = err.Error()
+				} else if result != nil && len(result.Content) > 0 {
+					if tc, ok := result.Content[0].(mcp.TextContent); ok {
+						errMsg = tc.Text
+					}
 				}
 				logger.Warn(logMsgToolError,
 					slog.String(LogKeyRequestID, requestID),

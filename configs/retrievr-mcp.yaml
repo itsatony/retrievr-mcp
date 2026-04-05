@@ -15,6 +15,7 @@ router:
 sources:
   arxiv:
     enabled: true
+    base_url: "http://export.arxiv.org/api/query"
     timeout: "15s"
     rate_limit: 0.33
     rate_limit_burst: 1

@@ -969,3 +969,326 @@ sources:
 		PluginContractTest(t, plugin)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// DC-05: ArXiv Plugin E2E test
+// ---------------------------------------------------------------------------
+
+// e2e arxiv test constants.
+const (
+	e2eArxivVersion           = "0.5.0-e2e"
+	e2eArxivSearchTotal       = 2
+	e2eArxivGetID             = "2401.55555"
+	e2eArxivSearchResultCount = 2
+)
+
+// TestE2EArXivPluginFullPipeline exercises the full DC-05 pipeline:
+// config loading → real ArXivPlugin → httptest ArXiv API → real Router → real
+// Cache → real RateLimitManager → real CredentialResolver → MCP tool handlers.
+// The ONLY fake element is the ArXiv HTTP endpoint (httptest). Everything else
+// is real production code.
+func TestE2EArXivPluginFullPipeline(t *testing.T) {
+	// Not parallel: mutates global version state.
+	SetVersionForTesting(e2eArxivVersion, "e2e-commit", "2024-04-05")
+	t.Cleanup(ResetVersionForTesting)
+
+	// Step 1: Create httptest server that serves realistic ArXiv Atom XML.
+	arxivServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+
+		// Route: id_list → Get endpoint, search_query → Search endpoint.
+		if idList := r.URL.Query().Get("id_list"); idList != "" {
+			entry := arxivTestEntry{
+				ID:              e2eArxivGetID,
+				Title:           "E2E ArXiv Get Test Paper",
+				Summary:         "Detailed abstract for get test.",
+				Published:       "2024-02-20T10:00:00Z",
+				Updated:         "2024-03-15T14:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Get Author", Affiliation: "Stanford"}},
+				Categories:      []string{"cs.LG", "cs.AI"},
+				DOI:             "10.5678/e2e.get.001",
+				Comment:         "20 pages, 5 figures",
+				PrimaryCategory: "cs.LG",
+			}
+			fmt.Fprint(w, buildArxivTestFeedXML(1, 0, []arxivTestEntry{entry}))
+			return
+		}
+
+		// Search response with two entries.
+		entries := []arxivTestEntry{
+			{
+				ID:              "2401.11111",
+				Title:           "E2E ArXiv Search Paper One",
+				Summary:         "First search result abstract.",
+				Published:       "2024-01-10T08:00:00Z",
+				Updated:         "2024-01-10T08:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E"}},
+				Categories:      []string{"cs.CL"},
+				PrimaryCategory: "cs.CL",
+			},
+			{
+				ID:              "2401.22222",
+				Title:           "E2E ArXiv Search Paper Two",
+				Summary:         "Second search result abstract.",
+				Published:       "2024-02-15T12:00:00Z",
+				Updated:         "2024-02-15T12:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Bob E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.AI", "cs.LG"},
+				DOI:             "10.9999/e2e.search.002",
+				PrimaryCategory: "cs.AI",
+			},
+		}
+		fmt.Fprint(w, buildArxivTestFeedXML(e2eArxivSearchTotal, 0, entries))
+	}))
+	defer arxivServer.Close()
+
+	// Step 2: Load config from temp YAML.
+	configYAML := fmt.Sprintf(`
+server:
+  name: "retrievr-mcp"
+  http_addr: ":0"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  arxiv:
+    enabled: true
+    base_url: "%s"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  pubmed:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+  s2:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  openalex:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  huggingface:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  europmc:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+`, arxivServer.URL)
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 3: Create real ArXivPlugin using config (pointing at httptest).
+	arxivPlugin := &ArXivPlugin{}
+	err = arxivPlugin.Initialize(context.Background(), cfg.Sources[SourceArXiv])
+	require.NoError(t, err)
+
+	plugins := map[string]SourcePlugin{
+		SourceArXiv: arxivPlugin,
+	}
+
+	// Step 4: Create real infrastructure.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < RateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	resolver := &CredentialResolver{}
+
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 5: Create router + server.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	srv := NewServer(cfg, router, rateLimits, nil)
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Step 6: Verify /health.
+	resp, err := http.Get(ts.URL + healthEndpointPath)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var health healthResponse
+	err = json.NewDecoder(resp.Body).Decode(&health)
+	require.NoError(t, err)
+	assert.Equal(t, healthStatusOK, health.Status)
+	assert.Equal(t, e2eArxivVersion, health.Version)
+
+	// Step 7: Test rtv_search through full pipeline.
+	ctx := context.Background()
+	searchHandler := NewSearchHandler(router)
+
+	searchReq := mcp.CallToolRequest{}
+	searchReq.Params.Name = ToolNameSearch
+	searchReq.Params.Arguments = map[string]any{
+		FieldQuery:   "attention mechanism",
+		FieldSources: []any{SourceArXiv},
+		FieldLimit:   float64(10),
+	}
+
+	searchResult, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult)
+	assert.False(t, searchResult.IsError, "search should succeed")
+
+	searchText := extractTextContent(t, searchResult)
+	var merged MergedSearchResult
+	err = json.Unmarshal([]byte(searchText), &merged)
+	require.NoError(t, err)
+
+	assert.Len(t, merged.Results, e2eArxivSearchResultCount, "should return 2 ArXiv results")
+	assert.Equal(t, []string{SourceArXiv}, merged.SourcesQueried)
+	assert.Empty(t, merged.SourcesFailed)
+
+	// Verify first result mapping.
+	pub1 := merged.Results[0]
+	assert.Equal(t, SourceArXiv, pub1.Source)
+	assert.Equal(t, ContentTypePaper, pub1.ContentType)
+	assert.NotEmpty(t, pub1.Title)
+	assert.NotEmpty(t, pub1.Abstract)
+	assert.NotEmpty(t, pub1.URL)
+	assert.NotEmpty(t, pub1.PDFURL)
+	assert.NotEmpty(t, pub1.ArXivID)
+	assert.NotEmpty(t, pub1.Published)
+	assert.NotEmpty(t, pub1.Authors)
+
+	// Step 8: Test rtv_get through full pipeline.
+	getHandler := NewGetHandler(router)
+	getReq := mcp.CallToolRequest{}
+	getReq.Params.Name = ToolNameGet
+	getReq.Params.Arguments = map[string]any{
+		FieldID: SourceArXiv + prefixedIDSeparator + e2eArxivGetID,
+	}
+
+	getResult, err := getHandler(ctx, getReq)
+	require.NoError(t, err)
+	require.NotNil(t, getResult)
+	assert.False(t, getResult.IsError, "get should succeed")
+
+	getText := extractTextContent(t, getResult)
+	var pub Publication
+	err = json.Unmarshal([]byte(getText), &pub)
+	require.NoError(t, err)
+	assert.Equal(t, "E2E ArXiv Get Test Paper", pub.Title)
+	assert.Equal(t, SourceArXiv, pub.Source)
+	assert.Equal(t, e2eArxivGetID, pub.ArXivID)
+	assert.Equal(t, "10.5678/e2e.get.001", pub.DOI)
+	assert.Equal(t, "2024-02-20", pub.Published)
+	assert.NotEmpty(t, pub.Authors)
+	assert.NotEmpty(t, pub.Categories)
+	assert.NotNil(t, pub.SourceMetadata)
+
+	// Step 9: Test rtv_get with BibTeX format.
+	getBibReq := mcp.CallToolRequest{}
+	getBibReq.Params.Name = ToolNameGet
+	getBibReq.Params.Arguments = map[string]any{
+		FieldID:     SourceArXiv + prefixedIDSeparator + e2eArxivGetID,
+		FieldFormat: string(FormatBibTeX),
+	}
+
+	getBibResult, err := getHandler(ctx, getBibReq)
+	require.NoError(t, err)
+	require.NotNil(t, getBibResult)
+	assert.False(t, getBibResult.IsError)
+
+	getBibText := extractTextContent(t, getBibResult)
+	var bibPub Publication
+	err = json.Unmarshal([]byte(getBibText), &bibPub)
+	require.NoError(t, err)
+	require.NotNil(t, bibPub.FullText)
+	assert.Equal(t, FormatBibTeX, bibPub.FullText.ContentFormat)
+	assert.Contains(t, bibPub.FullText.Content, "@article{")
+	assert.Contains(t, bibPub.FullText.Content, "archivePrefix = {arXiv}")
+
+	// Step 10: Test rtv_list_sources — ArXiv should appear with correct capabilities.
+	listHandler := NewListSourcesHandler(router)
+	listReq := mcp.CallToolRequest{}
+	listReq.Params.Name = ToolNameListSources
+
+	listResult, err := listHandler(ctx, listReq)
+	require.NoError(t, err)
+	require.NotNil(t, listResult)
+	assert.False(t, listResult.IsError)
+
+	listText := extractTextContent(t, listResult)
+	var infos []SourceInfo
+	err = json.Unmarshal([]byte(listText), &infos)
+	require.NoError(t, err)
+	require.Len(t, infos, 1)
+
+	arxivInfo := infos[0]
+	assert.Equal(t, SourceArXiv, arxivInfo.ID)
+	assert.Equal(t, "ArXiv", arxivInfo.Name)
+	assert.True(t, arxivInfo.Enabled)
+	assert.Contains(t, arxivInfo.ContentTypes, ContentTypePaper)
+	assert.Equal(t, FormatXML, arxivInfo.NativeFormat)
+	assert.True(t, arxivInfo.SupportsDateFilter)
+	assert.True(t, arxivInfo.SupportsAuthorFilter)
+	assert.True(t, arxivInfo.SupportsCategoryFilter)
+	assert.False(t, arxivInfo.AcceptsCredentials) // ArXiv is anonymous
+
+	// Step 11: Verify cache — second search should be a cache hit.
+	searchResult2, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult2)
+	assert.False(t, searchResult2.IsError)
+
+	cacheMetrics := cache.Metrics()
+	assert.Equal(t, uint64(1), cacheMetrics.Hits, "second search should be a cache hit")
+
+	// Step 12: Run contract test on the real ArXiv plugin.
+	PluginContractTest(t, arxivPlugin)
+
+	// Step 13: Verify ArXiv plugin health.
+	health2 := arxivPlugin.Health(ctx)
+	assert.True(t, health2.Enabled)
+	assert.True(t, health2.Healthy)
+	assert.Empty(t, health2.LastError)
+}

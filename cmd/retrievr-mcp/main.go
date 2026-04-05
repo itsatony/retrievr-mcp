@@ -27,6 +27,7 @@ const (
 	logMsgConfigFail   = "failed to load config"
 
 	logMsgPluginsInit    = "plugins initialized"
+	logMsgPluginInitFail = "plugin initialization failed"
 	logMsgRateLimitsInit = "rate limits initialized"
 	logMsgRouterCreated  = "router created"
 	logMsgServerCreated  = "server created"
@@ -85,8 +86,21 @@ func run() int {
 		slog.Any(internal.LogKeySources, cfg.EnabledSourceIDs()),
 	)
 
-	// Initialize plugins (empty for now — real plugins added in future cycles).
-	plugins := map[string]internal.SourcePlugin{}
+	// Initialize plugins.
+	plugins := make(map[string]internal.SourcePlugin)
+
+	if arxivCfg, ok := cfg.Sources[internal.SourceArXiv]; ok && arxivCfg.Enabled {
+		arxivPlugin := &internal.ArXivPlugin{}
+		if err := arxivPlugin.Initialize(context.Background(), arxivCfg); err != nil {
+			logger.Error(logMsgPluginInitFail,
+				slog.String(internal.LogKeySource, internal.SourceArXiv),
+				slog.String(internal.LogKeyError, err.Error()),
+			)
+			return exitCodeStartup
+		}
+		plugins[internal.SourceArXiv] = arxivPlugin
+	}
+
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
 
 	// Step 2: Create rate limit manager and register all enabled sources.

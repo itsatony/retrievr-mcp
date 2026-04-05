@@ -1787,3 +1787,219 @@ func TestHFSortOrderMapping(t *testing.T) {
 		assert.Equal(t, hfDirectionAsc, direction)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// Test: Empty content type defaults to paper
+// ---------------------------------------------------------------------------
+
+func TestHuggingFaceSearchEmptyContentTypeDefaultsPaper(t *testing.T) {
+	t.Parallel()
+
+	var papersHit, modelsHit, datasetsHit atomic.Bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case hfAPIPapersSearchPath:
+			papersHit.Store(true)
+			fmt.Fprint(w, buildHFTestPapersSearchJSON([]hfTestPaper{defaultHFTestPaper1()}))
+		case hfAPIModelsPath:
+			modelsHit.Store(true)
+			fmt.Fprint(w, "[]")
+		case hfAPIDatasetsPath:
+			datasetsHit.Store(true)
+			fmt.Fprint(w, "[]")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	plugin := newHFTestPlugin(t, server.URL)
+	result, err := plugin.Search(context.Background(), SearchParams{
+		Query:       "test",
+		ContentType: "", // empty — should default to papers
+		Limit:       10,
+	}, nil)
+
+	require.NoError(t, err)
+	assert.Len(t, result.Results, 1)
+	assert.True(t, papersHit.Load(), "papers API should be hit for empty content_type")
+	assert.False(t, modelsHit.Load(), "models API should NOT be hit")
+	assert.False(t, datasetsHit.Load(), "datasets API should NOT be hit")
+}
+
+// ---------------------------------------------------------------------------
+// Test: resolveHFToken
+// ---------------------------------------------------------------------------
+
+func TestResolveHFToken(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil_creds_returns_server_default", func(t *testing.T) {
+		t.Parallel()
+		token := resolveHFToken(nil, testHFAPIKey)
+		assert.Equal(t, testHFAPIKey, token)
+	})
+
+	t.Run("per_call_overrides_server", func(t *testing.T) {
+		t.Parallel()
+		creds := &CallCredentials{HFToken: testHFPerCallKey}
+		token := resolveHFToken(creds, testHFAPIKey)
+		assert.Equal(t, testHFPerCallKey, token)
+	})
+
+	t.Run("empty_per_call_falls_through_to_server", func(t *testing.T) {
+		t.Parallel()
+		creds := &CallCredentials{HFToken: ""}
+		token := resolveHFToken(creds, testHFAPIKey)
+		assert.Equal(t, testHFAPIKey, token)
+	})
+
+	t.Run("no_creds_no_server_returns_empty", func(t *testing.T) {
+		t.Parallel()
+		token := resolveHFToken(nil, "")
+		assert.Empty(t, token)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Test: convertHFFormat direct
+// ---------------------------------------------------------------------------
+
+func TestConvertHFFormat(t *testing.T) {
+	t.Parallel()
+
+	t.Run("bibtex_sets_full_text", func(t *testing.T) {
+		t.Parallel()
+		pub := &Publication{
+			ID:        SourceHuggingFace + prefixedIDSeparator + hfSubTypePaper + testHFPaperID1,
+			Title:     testHFTitle1,
+			Authors:   []Author{{Name: testHFAuthor1}},
+			Published: testHFDate1Short,
+			URL:       hfPaperURLPrefix + testHFPaperID1,
+		}
+		err := convertHFFormat(pub, FormatBibTeX)
+		require.NoError(t, err)
+		require.NotNil(t, pub.FullText)
+		assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
+		assert.Contains(t, pub.FullText.Content, testHFTitle1)
+	})
+
+	t.Run("markdown_noop_when_already_present", func(t *testing.T) {
+		t.Parallel()
+		pub := &Publication{
+			FullText: &FullTextContent{
+				Content:       testHFMarkdownContent,
+				ContentFormat: FormatMarkdown,
+				ContentLength: len(testHFMarkdownContent),
+			},
+		}
+		err := convertHFFormat(pub, FormatMarkdown)
+		require.NoError(t, err)
+		assert.Equal(t, testHFMarkdownContent, pub.FullText.Content)
+	})
+
+	t.Run("markdown_error_when_no_full_text", func(t *testing.T) {
+		t.Parallel()
+		pub := &Publication{}
+		err := convertHFFormat(pub, FormatMarkdown)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrFormatUnsupported))
+	})
+
+	t.Run("xml_unsupported", func(t *testing.T) {
+		t.Parallel()
+		pub := &Publication{}
+		err := convertHFFormat(pub, FormatXML)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrFormatUnsupported))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Test: Get dataset + BibTeX and error paths
+// ---------------------------------------------------------------------------
+
+func TestHuggingFaceGetDatasetBibTeX(t *testing.T) {
+	t.Parallel()
+	dataset := defaultHFTestDataset1()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, buildHFTestDatasetJSON(hfTestDataset{
+			ID:          dataset.ID,
+			Author:      dataset.Author,
+			Likes:       dataset.Likes,
+			Downloads:   dataset.Downloads,
+			Tags:        dataset.Tags,
+			CreatedAt:   dataset.CreatedAt,
+			Description: dataset.Description,
+		}))
+	}))
+	defer server.Close()
+
+	plugin := newHFTestPlugin(t, server.URL)
+	pub, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatBibTeX, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+	require.NotNil(t, pub.FullText)
+	assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
+	assert.Contains(t, pub.FullText.Content, testHFDatasetID1)
+	assert.Contains(t, pub.FullText.Content, "2022")
+}
+
+func TestHuggingFaceGetDatasetServerError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	plugin := newHFTestPlugin(t, server.URL)
+	_, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatNative, nil)
+
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrGetFailed))
+}
+
+// ---------------------------------------------------------------------------
+// Test: doRequestRaw error paths
+// ---------------------------------------------------------------------------
+
+func TestHuggingFaceDoRequestRawErrors(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non_200_status", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+		}))
+		defer server.Close()
+
+		plugin := newHFTestPlugin(t, server.URL)
+		_, err := plugin.doRequestRaw(context.Background(), server.URL+"/test", "")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrHFHTTPRequest))
+	})
+
+	t.Run("context_canceled", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			time.Sleep(testHFPluginTimeout)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		plugin := newHFTestPlugin(t, server.URL)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := plugin.doRequestRaw(ctx, server.URL+"/test", "")
+		require.Error(t, err)
+	})
+}

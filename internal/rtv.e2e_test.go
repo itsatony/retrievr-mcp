@@ -3627,7 +3627,7 @@ func TestE2EHuggingFace(t *testing.T) {
 			}
 
 		// Model get.
-		case strings.HasPrefix(r.URL.Path, hfAPIModelsSlashPath) && !strings.HasPrefix(r.URL.Path, hfAPIModelsPath+"?"):
+		case strings.HasPrefix(r.URL.Path, hfAPIModelsSlashPath):
 			fmt.Fprintf(w, `{
 				"id": %q, "modelId": %q, "likes": %d, "downloads": %d,
 				"pipeline_tag": %q, "library_name": %q,

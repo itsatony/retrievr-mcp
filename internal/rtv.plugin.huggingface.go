@@ -192,13 +192,7 @@ type hfPaper struct {
 
 // hfAuthor represents a paper author.
 type hfAuthor struct {
-	Name string  `json:"name"`
-	User *hfUser `json:"user"`
-}
-
-// hfUser represents a HuggingFace user profile.
-type hfUser struct {
-	Username string `json:"user"`
+	Name string `json:"name"`
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +377,7 @@ func (p *HuggingFacePlugin) Health(_ context.Context) SourceHealth {
 
 // Search executes a search query against the HuggingFace Hub API.
 // Routes to papers, models, and/or datasets sub-APIs based on content_type.
+// When multiple sub-APIs are queried, calls are made concurrently.
 func (p *HuggingFacePlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrHFEmptyQuery
@@ -391,45 +386,59 @@ func (p *HuggingFacePlugin) Search(ctx context.Context, params SearchParams, cre
 	token := resolveHFToken(creds, p.apiKey)
 
 	// Determine which sub-APIs to query based on content_type AND config.
-	wantPapers := p.includePapers && (params.ContentType == ContentTypePaper || params.ContentType == ContentTypeAny)
-	wantModels := p.includeModels && (params.ContentType == ContentTypeModel || params.ContentType == ContentTypeAny)
-	wantDatasets := p.includeDatasets && (params.ContentType == ContentTypeDataset || params.ContentType == ContentTypeAny)
+	// Empty content_type is treated as ContentTypePaper (the default from tools.go).
+	ct := params.ContentType
+	wantPapers := p.includePapers && (ct == ContentTypePaper || ct == ContentTypeAny || ct == "")
+	wantModels := p.includeModels && (ct == ContentTypeModel || ct == ContentTypeAny)
+	wantDatasets := p.includeDatasets && (ct == ContentTypeDataset || ct == ContentTypeAny)
 
-	var allPubs []Publication
-	var firstErr error
+	// Fan out to sub-APIs concurrently.
+	type subResult struct {
+		pubs []Publication
+		err  error
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	results := make([]subResult, 0, hfContentTypesInitialCap)
+
+	searchFn := func(fn func(context.Context, SearchParams, string) ([]Publication, error)) {
+		defer wg.Done()
+		pubs, err := fn(ctx, params, token)
+		mu.Lock()
+		results = append(results, subResult{pubs: pubs, err: err})
+		mu.Unlock()
+	}
 
 	if wantPapers {
-		pubs, err := p.searchPapers(ctx, params, token)
-		if err != nil {
-			firstErr = err
-		} else {
-			allPubs = append(allPubs, pubs...)
-		}
+		wg.Add(1)
+		go searchFn(p.searchPapers)
 	}
-
 	if wantModels {
-		pubs, err := p.searchModels(ctx, params, token)
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-		} else {
-			allPubs = append(allPubs, pubs...)
-		}
+		wg.Add(1)
+		go searchFn(p.searchModels)
 	}
-
 	if wantDatasets {
-		pubs, err := p.searchDatasets(ctx, params, token)
-		if err != nil {
+		wg.Add(1)
+		go searchFn(p.searchDatasets)
+	}
+
+	wg.Wait()
+
+	// Merge results: partial success (at least one sub-API succeeded) returns results.
+	var allPubs []Publication
+	var firstErr error
+	for _, r := range results {
+		if r.err != nil {
 			if firstErr == nil {
-				firstErr = err
+				firstErr = r.err
 			}
 		} else {
-			allPubs = append(allPubs, pubs...)
+			allPubs = append(allPubs, r.pubs...)
 		}
 	}
 
-	// If ALL sub-searches failed, report error. If at least one succeeded, return partial results.
+	// If ALL sub-searches failed, report error.
 	if len(allPubs) == 0 && firstErr != nil {
 		p.recordError(firstErr)
 		return nil, fmt.Errorf("%w: %w", ErrSearchFailed, firstErr)

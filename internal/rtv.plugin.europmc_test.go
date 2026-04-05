@@ -178,9 +178,9 @@ func newEMCTestPlugin(t *testing.T, baseURL string) *EuropePMCPlugin {
 	t.Helper()
 	plugin := &EuropePMCPlugin{}
 	err := plugin.Initialize(context.Background(), PluginConfig{
-		Enabled:  true,
-		BaseURL:  baseURL,
-		Timeout:  Duration{Duration: testEMCPluginTimeout},
+		Enabled:   true,
+		BaseURL:   baseURL,
+		Timeout:   Duration{Duration: testEMCPluginTimeout},
 		RateLimit: 10.0,
 	})
 	require.NoError(t, err)
@@ -205,12 +205,12 @@ func TestEuropePMCSearch(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name           string
-		params         SearchParams
+		name              string
+		params            SearchParams
 		wantQueryContains []string
 		wantQueryAbsent   []string
-		wantErr        error
-		wantResults    int
+		wantErr           error
+		wantResults       int
 	}{
 		{
 			name: "basic_search",
@@ -638,10 +638,10 @@ func TestEuropePMCHTTPErrors(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		status     int
-		body       string
-		wantErr    error
+		name    string
+		status  int
+		body    string
+		wantErr error
 	}{
 		{
 			name:    "server_error_500",
@@ -831,14 +831,14 @@ func TestBuildEMCSearchQuery(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		params   SearchParams
+		name         string
+		params       SearchParams
 		wantContains []string
 		wantEmpty    bool
 	}{
 		{
-			name:   "basic_query",
-			params: SearchParams{Query: "CRISPR"},
+			name:         "basic_query",
+			params:       SearchParams{Query: "CRISPR"},
 			wantContains: []string{"CRISPR"},
 		},
 		{

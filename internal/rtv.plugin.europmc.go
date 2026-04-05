@@ -61,9 +61,9 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	emcSortRelevance    = ""               // default — no sort param needed
-	emcSortDateDesc     = "FIRST_PDATE desc"
-	emcSortDateAsc      = "FIRST_PDATE asc"
+	emcSortRelevance     = "" // default — no sort param needed
+	emcSortDateDesc      = "FIRST_PDATE desc"
+	emcSortDateAsc       = "FIRST_PDATE asc"
 	emcSortCitationsDesc = "CITED desc"
 )
 
@@ -180,7 +180,7 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	emcAuthorSeparator  = ", "
+	emcAuthorSeparator   = ", "
 	emcAuthorTrailingDot = "."
 )
 

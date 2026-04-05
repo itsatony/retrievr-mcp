@@ -2875,7 +2875,7 @@ const (
 	e2eEMCS2PaperID         = "s2paper001quint12345678901234567890abcdef"
 	e2eEMCPubMedPMID        = "99999999"
 	e2eEMCEuropePMCID       = "33333333"
-	e2eEMCSearchResultCount = 6  // 10 total (2+2+2+2+2) - 4 DOI dedup = 6
+	e2eEMCSearchResultCount = 6 // 10 total (2+2+2+2+2) - 4 DOI dedup = 6
 	e2eEMCExpectedCitations = 250
 	e2eEMCExpectedSources   = 5
 )
@@ -3303,10 +3303,10 @@ sources:
 	require.NoError(t, err)
 
 	plugins := map[string]SourcePlugin{
-		SourceArXiv:    arxivPlugin,
-		SourceS2:       s2Plugin,
-		SourceOpenAlex: oaPlugin,
-		SourcePubMed:   pmPlugin,
+		SourceArXiv:     arxivPlugin,
+		SourceS2:        s2Plugin,
+		SourceOpenAlex:  oaPlugin,
+		SourcePubMed:    pmPlugin,
 		SourceEuropePMC: emcPlugin,
 	}
 

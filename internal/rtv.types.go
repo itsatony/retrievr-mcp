@@ -108,27 +108,27 @@ const SourceCount = 6
 
 // Publication is the unified result type across all sources.
 type Publication struct {
-	ID             string            `json:"id"`                        // Prefixed: "arxiv:2401.12345"
-	Source         string            `json:"source"`                    // Primary source
-	AlsoFoundIn    []string          `json:"also_found_in,omitempty"`   // Cross-source dedup tracking
-	ContentType    ContentType       `json:"content_type"`              //nolint:tagliatelle
-	Title          string            `json:"title"`                     //
-	Authors        []Author          `json:"authors"`                   //
-	Published      string            `json:"published"`                 // YYYY-MM-DD
-	Updated        string            `json:"updated,omitempty"`         //
-	Abstract       string            `json:"abstract,omitempty"`        //
-	URL            string            `json:"url"`                       //
-	PDFURL         string            `json:"pdf_url,omitempty"`         //
-	DOI            string            `json:"doi,omitempty"`             //
-	ArXivID        string            `json:"arxiv_id,omitempty"`        // For cross-source dedup
-	Categories     []string          `json:"categories,omitempty"`      //
-	CitationCount  *int              `json:"citation_count,omitempty"`  // Pointer: nil when unknown
-	FullText       *FullTextContent  `json:"full_text,omitempty"`       //
-	References     []Reference       `json:"references,omitempty"`      //
-	Citations      []Reference       `json:"citations,omitempty"`       //
-	Related        []Reference       `json:"related,omitempty"`         //
-	License        string            `json:"license,omitempty"`         //
-	SourceMetadata map[string]any    `json:"source_metadata,omitempty"` //
+	ID             string           `json:"id"`                        // Prefixed: "arxiv:2401.12345"
+	Source         string           `json:"source"`                    // Primary source
+	AlsoFoundIn    []string         `json:"also_found_in,omitempty"`   // Cross-source dedup tracking
+	ContentType    ContentType      `json:"content_type"`              //nolint:tagliatelle
+	Title          string           `json:"title"`                     //
+	Authors        []Author         `json:"authors"`                   //
+	Published      string           `json:"published"`                 // YYYY-MM-DD
+	Updated        string           `json:"updated,omitempty"`         //
+	Abstract       string           `json:"abstract,omitempty"`        //
+	URL            string           `json:"url"`                       //
+	PDFURL         string           `json:"pdf_url,omitempty"`         //
+	DOI            string           `json:"doi,omitempty"`             //
+	ArXivID        string           `json:"arxiv_id,omitempty"`        // For cross-source dedup
+	Categories     []string         `json:"categories,omitempty"`      //
+	CitationCount  *int             `json:"citation_count,omitempty"`  // Pointer: nil when unknown
+	FullText       *FullTextContent `json:"full_text,omitempty"`       //
+	References     []Reference      `json:"references,omitempty"`      //
+	Citations      []Reference      `json:"citations,omitempty"`       //
+	Related        []Reference      `json:"related,omitempty"`         //
+	License        string           `json:"license,omitempty"`         //
+	SourceMetadata map[string]any   `json:"source_metadata,omitempty"` //
 }
 
 // Author represents a publication author.
@@ -159,20 +159,20 @@ type FullTextContent struct {
 
 // SearchParams contains all parameters for a search request.
 type SearchParams struct {
-	Query       string       `json:"query"`
-	ContentType ContentType  `json:"content_type"`
+	Query       string        `json:"query"`
+	ContentType ContentType   `json:"content_type"`
 	Filters     SearchFilters `json:"filters"`
-	Sort        SortOrder    `json:"sort"`
-	Limit       int          `json:"limit"`
-	Offset      int          `json:"offset"`
+	Sort        SortOrder     `json:"sort"`
+	Limit       int           `json:"limit"`
+	Offset      int           `json:"offset"`
 }
 
 // SearchFilters contains optional filters to narrow search results.
 type SearchFilters struct {
 	Title        string   `json:"title,omitempty"`
 	Authors      []string `json:"authors,omitempty"`
-	DateFrom     string   `json:"date_from,omitempty"`     // YYYY-MM-DD or YYYY
-	DateTo       string   `json:"date_to,omitempty"`       // YYYY-MM-DD or YYYY
+	DateFrom     string   `json:"date_from,omitempty"` // YYYY-MM-DD or YYYY
+	DateTo       string   `json:"date_to,omitempty"`   // YYYY-MM-DD or YYYY
 	Categories   []string `json:"categories,omitempty"`
 	OpenAccess   *bool    `json:"open_access,omitempty"`   // Pointer: nil = not set
 	MinCitations *int     `json:"min_citations,omitempty"` // Pointer: nil = not set
@@ -238,19 +238,19 @@ func (c *CallCredentials) ResolveForSource(sourceID string, serverDefault string
 
 // SourceCapabilities reports what filtering, sorting, and features a source supports.
 type SourceCapabilities struct {
-	SupportsFullText         bool          `json:"supports_full_text"`
-	SupportsCitations        bool          `json:"supports_citations"`
-	SupportsDateFilter       bool          `json:"supports_date_filter"`
-	SupportsAuthorFilter     bool          `json:"supports_author_filter"`
-	SupportsCategoryFilter   bool          `json:"supports_category_filter"`
-	SupportsSortRelevance    bool          `json:"supports_sort_relevance"`
-	SupportsSortDate         bool          `json:"supports_sort_date"`
-	SupportsSortCitations    bool          `json:"supports_sort_citations"`
-	SupportsOpenAccessFilter bool          `json:"supports_open_access_filter"`
-	SupportsPagination       bool          `json:"supports_pagination"`
-	MaxResultsPerQuery       int           `json:"max_results_per_query"`
-	CategoriesHint           string        `json:"categories_hint,omitempty"`
-	NativeFormat             ContentFormat `json:"native_format"`
+	SupportsFullText         bool            `json:"supports_full_text"`
+	SupportsCitations        bool            `json:"supports_citations"`
+	SupportsDateFilter       bool            `json:"supports_date_filter"`
+	SupportsAuthorFilter     bool            `json:"supports_author_filter"`
+	SupportsCategoryFilter   bool            `json:"supports_category_filter"`
+	SupportsSortRelevance    bool            `json:"supports_sort_relevance"`
+	SupportsSortDate         bool            `json:"supports_sort_date"`
+	SupportsSortCitations    bool            `json:"supports_sort_citations"`
+	SupportsOpenAccessFilter bool            `json:"supports_open_access_filter"`
+	SupportsPagination       bool            `json:"supports_pagination"`
+	MaxResultsPerQuery       int             `json:"max_results_per_query"`
+	CategoriesHint           string          `json:"categories_hint,omitempty"`
+	NativeFormat             ContentFormat   `json:"native_format"`
 	AvailableFormats         []ContentFormat `json:"available_formats"`
 }
 
@@ -294,19 +294,19 @@ type RateLimitInfo struct {
 
 // SourceInfo is the response item from the list_sources tool.
 type SourceInfo struct {
-	ID                 string          `json:"id"`
-	Name               string          `json:"name"`
-	Description        string          `json:"description"`
-	Enabled            bool            `json:"enabled"`
-	ContentTypes       []ContentType   `json:"content_types"`
-	NativeFormat       ContentFormat   `json:"native_format"`
-	AvailableFormats   []ContentFormat `json:"available_formats"`
-	SupportsFullText   bool            `json:"supports_full_text"`
-	SupportsCitations  bool            `json:"supports_citations"`
-	SupportsDateFilter bool            `json:"supports_date_filter"`
-	SupportsAuthorFilter   bool        `json:"supports_author_filter"`
-	SupportsCategoryFilter bool        `json:"supports_category_filter"`
-	RateLimit          RateLimitInfo   `json:"rate_limit"`
-	CategoriesHint     string          `json:"categories_hint,omitempty"`
-	AcceptsCredentials bool            `json:"accepts_credentials"`
+	ID                     string          `json:"id"`
+	Name                   string          `json:"name"`
+	Description            string          `json:"description"`
+	Enabled                bool            `json:"enabled"`
+	ContentTypes           []ContentType   `json:"content_types"`
+	NativeFormat           ContentFormat   `json:"native_format"`
+	AvailableFormats       []ContentFormat `json:"available_formats"`
+	SupportsFullText       bool            `json:"supports_full_text"`
+	SupportsCitations      bool            `json:"supports_citations"`
+	SupportsDateFilter     bool            `json:"supports_date_filter"`
+	SupportsAuthorFilter   bool            `json:"supports_author_filter"`
+	SupportsCategoryFilter bool            `json:"supports_category_filter"`
+	RateLimit              RateLimitInfo   `json:"rate_limit"`
+	CategoriesHint         string          `json:"categories_hint,omitempty"`
+	AcceptsCredentials     bool            `json:"accepts_credentials"`
 }

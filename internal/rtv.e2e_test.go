@@ -81,13 +81,14 @@ sources:
 	ResetVersionForTesting()
 	t.Cleanup(ResetVersionForTesting)
 
+	const testVersion = "99.88.77"
 	versionPath := filepath.Join(dir, "versions.yaml")
-	err = os.WriteFile(versionPath, []byte("version: \"0.1.0\"\n"), 0o644)
+	err = os.WriteFile(versionPath, []byte("version: \""+testVersion+"\"\n"), 0o644)
 	require.NoError(t, err)
 
 	err = LoadVersion(versionPath)
 	require.NoError(t, err)
-	assert.Equal(t, "0.1.0", GetVersion())
+	assert.Equal(t, testVersion, GetVersion())
 
 	// Step 4: Build a realistic MergedSearchResult and verify JSON matches spec shape.
 	citations := 42

@@ -11,9 +11,9 @@ import (
 
 // Version-related constants.
 const (
-	VersionDev            = "dev"
-	VersionUnknown        = "unknown"
-	buildInfoKeyRevision  = "vcs.revision"
+	VersionDev           = "dev"
+	VersionUnknown       = "unknown"
+	buildInfoKeyRevision = "vcs.revision"
 )
 
 // Log field key constants for version info.
@@ -32,7 +32,7 @@ type versionState struct {
 }
 
 var (
-	versionOnce sync.Once
+	versionOnce    sync.Once
 	currentVersion = versionState{
 		Version:   VersionDev,
 		GitCommit: VersionUnknown,

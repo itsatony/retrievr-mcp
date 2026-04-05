@@ -1743,3 +1743,511 @@ sources:
 	assert.True(t, s2Health.Healthy)
 	assert.Empty(t, s2Health.LastError)
 }
+
+// ---------------------------------------------------------------------------
+// DC-07: OpenAlex Plugin E2E test — real ArXiv + real S2 + real OpenAlex
+// ---------------------------------------------------------------------------
+
+// e2e OA + S2 + ArXiv triple-source test constants.
+const (
+	e2eOAVersion           = "0.7.0-e2e"
+	e2eOASharedDOI         = "10.1234/e2e-triple-source-doi"
+	e2eOASharedArXivID     = "2401.99999"
+	e2eOAWorkID            = "W9999999999"
+	e2eOASearchResultCount = 4 // 6 total (2+2+2) - 2 DOI dedup = 4
+	e2eOAExpectedCitations = 150
+	e2eOAExpectedSources   = 3
+)
+
+// TestE2EOpenAlexPluginTripleSourcePipeline exercises the full DC-07 pipeline:
+// config loading → real ArXivPlugin + real S2Plugin + real OpenAlexPlugin →
+// httptest servers → real Router → real Cache → real RateLimitManager →
+// real CredentialResolver → MCP tool handlers. Validates triple-source search,
+// dedup by DOI, inverted abstract reconstruction, and credential propagation.
+func TestE2EOpenAlexPluginTripleSourcePipeline(t *testing.T) {
+	// Not parallel: mutates global version state.
+	SetVersionForTesting(e2eOAVersion, "e2e-commit", "2024-04-07")
+	t.Cleanup(ResetVersionForTesting)
+
+	// Step 1: Create httptest ArXiv server.
+	arxivServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+
+		if idList := r.URL.Query().Get("id_list"); idList != "" {
+			entry := arxivTestEntry{
+				ID:              e2eOASharedArXivID,
+				Title:           "E2E Triple-Source Paper",
+				Summary:         "Abstract for triple-source test.",
+				Published:       "2024-01-15T08:00:00Z",
+				Updated:         "2024-01-20T10:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.CL", "cs.AI"},
+				DOI:             e2eOASharedDOI,
+				PrimaryCategory: "cs.CL",
+			}
+			fmt.Fprint(w, buildArxivTestFeedXML(1, 0, []arxivTestEntry{entry}))
+			return
+		}
+
+		entries := []arxivTestEntry{
+			{
+				ID:              e2eOASharedArXivID,
+				Title:           "E2E Triple-Source Paper",
+				Summary:         "Abstract for triple-source test.",
+				Published:       "2024-01-15T08:00:00Z",
+				Updated:         "2024-01-20T10:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.CL", "cs.AI"},
+				DOI:             e2eOASharedDOI,
+				PrimaryCategory: "cs.CL",
+			},
+			{
+				ID:              "2401.88888",
+				Title:           "E2E ArXiv-Only Paper",
+				Summary:         "Only found on ArXiv.",
+				Published:       "2024-02-01T08:00:00Z",
+				Updated:         "2024-02-01T08:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Bob E2E"}},
+				Categories:      []string{"cs.LG"},
+				PrimaryCategory: "cs.LG",
+			},
+		}
+		fmt.Fprint(w, buildArxivTestFeedXML(2, 0, entries))
+	}))
+	defer arxivServer.Close()
+
+	// Step 2: Create httptest S2 server.
+	const e2eOAS2PaperID = "s2paper001abcdef1234567890abcdef12345678"
+
+	s2Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/citations"):
+			fmt.Fprint(w, `{"offset":0,"next":null,"data":[]}`)
+		case strings.HasSuffix(path, "/references"):
+			fmt.Fprint(w, `{"offset":0,"next":null,"data":[]}`)
+		case strings.Contains(path, "/paper/search"):
+			papers := []string{
+				fmt.Sprintf(`{
+					"paperId":%q,
+					"externalIds":{"DOI":%q,"ArXiv":%q,"PMID":"","CorpusId":99999},
+					"title":"E2E Triple-Source Paper (S2 copy)",
+					"abstract":"S2 abstract for triple-source test.",
+					"year":2024,
+					"authors":[{"authorId":"a1","name":"Alice E2E"}],
+					"citationCount":120,
+					"referenceCount":20,
+					"publicationDate":"2024-01-15",
+					"journal":{"name":"Nature","volume":"625","pages":"1-10"},
+					"openAccessPdf":{"url":"https://example.com/triple.pdf"},
+					"fieldsOfStudy":["Computer Science"],
+					"url":"https://www.semanticscholar.org/paper/s2triple",
+					"isOpenAccess":true,
+					"publicationTypes":["JournalArticle"]
+				}`, e2eOAS2PaperID, e2eOASharedDOI, e2eOASharedArXivID),
+				`{
+					"paperId":"s2paper002unique",
+					"externalIds":null,
+					"title":"E2E S2-Only Paper",
+					"abstract":"Only found on S2.",
+					"year":2024,
+					"authors":[{"authorId":"a2","name":"Carol E2E"}],
+					"citationCount":10,
+					"referenceCount":5,
+					"publicationDate":"2024-03-01",
+					"journal":null,
+					"openAccessPdf":null,
+					"fieldsOfStudy":["Computer Science"],
+					"url":"https://www.semanticscholar.org/paper/s2paper002",
+					"isOpenAccess":false,
+					"publicationTypes":["Conference"]
+				}`,
+			}
+			fmt.Fprintf(w, `{"total":2,"offset":0,"next":null,"data":[%s,%s]}`, papers[0], papers[1])
+		default:
+			fmt.Fprintf(w, `{
+				"paperId":%q,
+				"externalIds":{"DOI":%q,"ArXiv":%q,"PMID":"","CorpusId":99999},
+				"title":"E2E Triple-Source Paper (S2 copy)",
+				"abstract":"S2 abstract for triple-source test.",
+				"year":2024,
+				"authors":[{"authorId":"a1","name":"Alice E2E"}],
+				"citationCount":120,
+				"referenceCount":20,
+				"publicationDate":"2024-01-15",
+				"journal":{"name":"Nature","volume":"625","pages":"1-10"},
+				"openAccessPdf":{"url":"https://example.com/triple.pdf"},
+				"fieldsOfStudy":["Computer Science"],
+				"url":"https://www.semanticscholar.org/paper/s2triple",
+				"isOpenAccess":true,
+				"publicationTypes":["JournalArticle"]
+			}`, e2eOAS2PaperID, e2eOASharedDOI, e2eOASharedArXivID)
+		}
+	}))
+	defer s2Server.Close()
+
+	// Step 3: Create httptest OpenAlex server with inverted abstract.
+	oaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/works/") && path != "/works" {
+			// Get single work.
+			fmt.Fprintf(w, `{
+				"id":"https://openalex.org/%s",
+				"doi":"https://doi.org/%s",
+				"title":"E2E Triple-Source Paper (OA copy)",
+				"display_name":"E2E Triple-Source Paper (OA copy)",
+				"publication_year":2024,
+				"publication_date":"2024-01-15",
+				"type":"article",
+				"cited_by_count":%d,
+				"authorships":[{"author_position":"first","author":{"id":"https://openalex.org/A1","display_name":"Alice E2E","orcid":null},"institutions":[{"id":"https://openalex.org/I1","display_name":"MIT"}]}],
+				"primary_location":{"source":{"id":"https://openalex.org/S1","display_name":"Nature","type":"journal","issn_l":"0028-0836"},"pdf_url":"https://example.com/triple-oa.pdf","landing_page_url":"https://doi.org/%s","is_oa":true},
+				"open_access":{"is_oa":true,"oa_url":"https://example.com/triple-oa.pdf","oa_status":"gold"},
+				"abstract_inverted_index":{"Reconstructed":[-1],"abstract":[0],"from":[1],"OpenAlex":[2],"inverted":[3],"index.":[4]},
+				"concepts":[{"id":"https://openalex.org/C1","display_name":"Computer Science","level":0,"score":0.95}],
+				"topics":[{"id":"https://openalex.org/T1","display_name":"Deep Learning"}],
+				"primary_topic":{"id":"https://openalex.org/T1","display_name":"Deep Learning"},
+				"biblio":null,
+				"ids":null,
+				"referenced_works":[],
+				"related_works":[],
+				"license":null
+			}`, e2eOAWorkID, e2eOASharedDOI, e2eOAExpectedCitations, e2eOASharedDOI)
+			return
+		}
+
+		// Search response.
+		fmt.Fprintf(w, `{
+			"meta":{"count":2,"page":1,"per_page":25},
+			"results":[
+				{
+					"id":"https://openalex.org/%s",
+					"doi":"https://doi.org/%s",
+					"title":"E2E Triple-Source Paper (OA copy)",
+					"display_name":"E2E Triple-Source Paper (OA copy)",
+					"publication_year":2024,
+					"publication_date":"2024-01-15",
+					"type":"article",
+					"cited_by_count":%d,
+					"authorships":[{"author_position":"first","author":{"id":"https://openalex.org/A1","display_name":"Alice E2E","orcid":null},"institutions":[{"id":"https://openalex.org/I1","display_name":"MIT"}]}],
+					"primary_location":{"source":{"id":"https://openalex.org/S1","display_name":"Nature","type":"journal","issn_l":"0028-0836"},"pdf_url":"https://example.com/triple-oa.pdf","landing_page_url":"https://doi.org/%s","is_oa":true},
+					"open_access":{"is_oa":true,"oa_url":"https://example.com/triple-oa.pdf","oa_status":"gold"},
+					"abstract_inverted_index":{"abstract":[0],"from":[1],"OpenAlex":[2],"inverted":[3],"index.":[4]},
+					"concepts":[{"id":"https://openalex.org/C1","display_name":"Computer Science","level":0,"score":0.95}],
+					"topics":[],
+					"primary_topic":null,
+					"biblio":null,
+					"ids":null,
+					"referenced_works":[],
+					"related_works":[],
+					"license":null
+				},
+				{
+					"id":"https://openalex.org/W8888888888",
+					"doi":null,
+					"title":"E2E OA-Only Paper",
+					"display_name":"E2E OA-Only Paper",
+					"publication_year":2024,
+					"publication_date":"2024-02-15",
+					"type":"article",
+					"cited_by_count":5,
+					"authorships":[{"author_position":"first","author":{"id":"https://openalex.org/A2","display_name":"Diana E2E","orcid":null},"institutions":[]}],
+					"primary_location":null,
+					"open_access":null,
+					"abstract_inverted_index":{"OA":[0],"only":[1],"paper.":[2]},
+					"concepts":[],
+					"topics":[],
+					"primary_topic":null,
+					"biblio":null,
+					"ids":null,
+					"referenced_works":[],
+					"related_works":[],
+					"license":null
+				}
+			]
+		}`, e2eOAWorkID, e2eOASharedDOI, e2eOAExpectedCitations, e2eOASharedDOI)
+	}))
+	defer oaServer.Close()
+
+	// Step 4: Load config from temp YAML.
+	configYAML := fmt.Sprintf(`
+server:
+  name: "retrievr-mcp"
+  http_addr: ":0"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv", "s2", "openalex"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  arxiv:
+    enabled: true
+    base_url: "%s"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  pubmed:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+  s2:
+    enabled: true
+    base_url: "%s"
+    api_key: "e2e-server-s2-key"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  openalex:
+    enabled: true
+    base_url: "%s"
+    api_key: "e2e-server-oa-key"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+    extra:
+      mailto: "e2e@test.com"
+  huggingface:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  europmc:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+`, arxivServer.URL, s2Server.URL, oaServer.URL)
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 5: Create real plugins.
+	arxivPlugin := &ArXivPlugin{}
+	err = arxivPlugin.Initialize(context.Background(), cfg.Sources[SourceArXiv])
+	require.NoError(t, err)
+
+	s2Plugin := &S2Plugin{}
+	err = s2Plugin.Initialize(context.Background(), cfg.Sources[SourceS2])
+	require.NoError(t, err)
+
+	oaPlugin := &OpenAlexPlugin{}
+	err = oaPlugin.Initialize(context.Background(), cfg.Sources[SourceOpenAlex])
+	require.NoError(t, err)
+
+	plugins := map[string]SourcePlugin{
+		SourceArXiv:    arxivPlugin,
+		SourceS2:       s2Plugin,
+		SourceOpenAlex: oaPlugin,
+	}
+
+	// Step 6: Create real infrastructure.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < RateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	resolver := &CredentialResolver{}
+
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 7: Create router + server.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	srv := NewServer(cfg, router, rateLimits, nil)
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Step 8: Test triple-source search via MCP tool handler.
+	ctx := context.Background()
+	searchHandler := NewSearchHandler(router)
+
+	searchReq := mcp.CallToolRequest{}
+	searchReq.Params.Name = ToolNameSearch
+	searchReq.Params.Arguments = map[string]any{
+		FieldQuery:   "triple-source test",
+		FieldSources: []any{SourceArXiv, SourceS2, SourceOpenAlex},
+		FieldSort:    string(SortCitations),
+		FieldLimit:   float64(10),
+	}
+
+	searchResult, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult)
+	assert.False(t, searchResult.IsError, "search should succeed")
+
+	searchText := extractTextContent(t, searchResult)
+	var merged MergedSearchResult
+	err = json.Unmarshal([]byte(searchText), &merged)
+	require.NoError(t, err)
+
+	// 6 total results (2 ArXiv + 2 S2 + 2 OA) - 2 DOI dedup = 4.
+	assert.Len(t, merged.Results, e2eOASearchResultCount, "6 pubs minus 2 DOI dedup = 4")
+	assert.Len(t, merged.SourcesQueried, e2eOAExpectedSources)
+	assert.Contains(t, merged.SourcesQueried, SourceArXiv)
+	assert.Contains(t, merged.SourcesQueried, SourceS2)
+	assert.Contains(t, merged.SourcesQueried, SourceOpenAlex)
+	assert.Empty(t, merged.SourcesFailed)
+
+	// Step 9: Verify DOI-based dedup across all three sources.
+	var sharedPaper *Publication
+	for i := range merged.Results {
+		if merged.Results[i].DOI == e2eOASharedDOI {
+			sharedPaper = &merged.Results[i]
+			break
+		}
+	}
+	require.NotNil(t, sharedPaper, "shared DOI paper should be in results")
+	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in from multiple sources")
+
+	// Highest citation count should win (OA has 150, S2 has 120, ArXiv has nil).
+	require.NotNil(t, sharedPaper.CitationCount)
+	assert.Equal(t, e2eOAExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
+
+	// Step 10: Test OpenAlex Get via MCP tool handler.
+	getHandler := NewGetHandler(router)
+	getReq := mcp.CallToolRequest{}
+	getReq.Params.Name = ToolNameGet
+	getReq.Params.Arguments = map[string]any{
+		FieldID: SourceOpenAlex + prefixedIDSeparator + e2eOAWorkID,
+	}
+
+	getResult, err := getHandler(ctx, getReq)
+	require.NoError(t, err)
+	require.NotNil(t, getResult)
+	assert.False(t, getResult.IsError)
+
+	getText := extractTextContent(t, getResult)
+	var pub Publication
+	err = json.Unmarshal([]byte(getText), &pub)
+	require.NoError(t, err)
+	assert.Contains(t, pub.Title, "Triple-Source")
+	assert.Equal(t, SourceOpenAlex, pub.Source)
+	assert.Equal(t, e2eOASharedDOI, pub.DOI)
+	// Verify inverted abstract was reconstructed.
+	assert.Contains(t, pub.Abstract, "abstract")
+	assert.Contains(t, pub.Abstract, "OpenAlex")
+	assert.Contains(t, pub.Abstract, "inverted")
+	assert.NotEmpty(t, pub.PDFURL)
+	require.NotNil(t, pub.CitationCount)
+	assert.Equal(t, e2eOAExpectedCitations, *pub.CitationCount)
+
+	// Step 11: Test OpenAlex Get with BibTeX format.
+	getBibReq := mcp.CallToolRequest{}
+	getBibReq.Params.Name = ToolNameGet
+	getBibReq.Params.Arguments = map[string]any{
+		FieldID:     SourceOpenAlex + prefixedIDSeparator + e2eOAWorkID,
+		FieldFormat: string(FormatBibTeX),
+	}
+
+	getBibResult, err := getHandler(ctx, getBibReq)
+	require.NoError(t, err)
+	require.NotNil(t, getBibResult)
+	assert.False(t, getBibResult.IsError)
+
+	getBibText := extractTextContent(t, getBibResult)
+	var bibPub Publication
+	err = json.Unmarshal([]byte(getBibText), &bibPub)
+	require.NoError(t, err)
+	require.NotNil(t, bibPub.FullText)
+	assert.Equal(t, FormatBibTeX, bibPub.FullText.ContentFormat)
+	assert.Contains(t, bibPub.FullText.Content, "@article{")
+	assert.Contains(t, bibPub.FullText.Content, e2eOASharedDOI)
+
+	// Step 12: Test list_sources — all three should appear.
+	listHandler := NewListSourcesHandler(router)
+	listReq := mcp.CallToolRequest{}
+	listReq.Params.Name = ToolNameListSources
+
+	listResult, err := listHandler(ctx, listReq)
+	require.NoError(t, err)
+	require.NotNil(t, listResult)
+	assert.False(t, listResult.IsError)
+
+	listText := extractTextContent(t, listResult)
+	var infos []SourceInfo
+	err = json.Unmarshal([]byte(listText), &infos)
+	require.NoError(t, err)
+	require.Len(t, infos, e2eOAExpectedSources)
+
+	// Sorted by ID: arxiv, openalex, s2.
+	assert.Equal(t, SourceArXiv, infos[0].ID)
+	assert.Equal(t, SourceOpenAlex, infos[1].ID)
+	assert.Equal(t, SourceS2, infos[2].ID)
+
+	// Verify OpenAlex capabilities in list_sources.
+	oaInfo := infos[1]
+	assert.Equal(t, oaPluginName, oaInfo.Name)
+	assert.True(t, oaInfo.Enabled)
+	assert.Contains(t, oaInfo.ContentTypes, ContentTypePaper)
+	assert.Equal(t, FormatJSON, oaInfo.NativeFormat)
+	assert.True(t, oaInfo.SupportsDateFilter)
+	assert.False(t, oaInfo.SupportsCitations, "OA does not support citations sub-resource")
+	assert.True(t, oaInfo.AcceptsCredentials)
+
+	// Step 13: Verify cache — second search should be a cache hit.
+	searchResult2, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult2)
+	assert.False(t, searchResult2.IsError)
+
+	cacheMetrics := cache.Metrics()
+	assert.Equal(t, uint64(1), cacheMetrics.Hits, "second search should be a cache hit")
+
+	// Step 14: Run contract tests on all three real plugins.
+	PluginContractTest(t, arxivPlugin)
+	PluginContractTest(t, s2Plugin)
+	PluginContractTest(t, oaPlugin)
+
+	// Step 15: Verify all three plugins are healthy.
+	arxivHealth := arxivPlugin.Health(ctx)
+	assert.True(t, arxivHealth.Enabled)
+	assert.True(t, arxivHealth.Healthy)
+
+	s2Health := s2Plugin.Health(ctx)
+	assert.True(t, s2Health.Enabled)
+	assert.True(t, s2Health.Healthy)
+
+	oaHealth := oaPlugin.Health(ctx)
+	assert.True(t, oaHealth.Enabled)
+	assert.True(t, oaHealth.Healthy)
+	assert.Empty(t, oaHealth.LastError)
+}

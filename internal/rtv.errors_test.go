@@ -51,6 +51,12 @@ func TestSentinelErrorMessages(t *testing.T) {
 		{"S2HTTPRequest", ErrS2HTTPRequest, ErrMsgS2HTTPRequest},
 		{"S2NotFound", ErrS2NotFound, ErrMsgS2NotFound},
 		{"S2EmptyQuery", ErrS2EmptyQuery, ErrMsgS2EmptyQuery},
+
+		// Plugin: OpenAlex
+		{"OAJSONParse", ErrOAJSONParse, ErrMsgOAJSONParse},
+		{"OAHTTPRequest", ErrOAHTTPRequest, ErrMsgOAHTTPRequest},
+		{"OANotFound", ErrOANotFound, ErrMsgOANotFound},
+		{"OAEmptyQuery", ErrOAEmptyQuery, ErrMsgOAEmptyQuery},
 	}
 
 	for _, tt := range tests {

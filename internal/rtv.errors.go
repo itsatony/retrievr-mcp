@@ -131,6 +131,24 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: OpenAlex
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgOAJSONParse   = "failed to parse openalex json response"
+	ErrMsgOAHTTPRequest = "openalex http request failed"
+	ErrMsgOANotFound    = "openalex work not found"
+	ErrMsgOAEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrOAJSONParse   = errors.New(ErrMsgOAJSONParse)
+	ErrOAHTTPRequest = errors.New(ErrMsgOAHTTPRequest)
+	ErrOANotFound    = errors.New(ErrMsgOANotFound)
+	ErrOAEmptyQuery  = errors.New(ErrMsgOAEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

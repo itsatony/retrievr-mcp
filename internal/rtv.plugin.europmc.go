@@ -93,12 +93,15 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	emcYearOnlyLength = 4
-	emcYearStartPad   = "-01-01"
-	emcYearEndPad     = "-12-31"
-	emcDateRangeTo    = " TO "
-	emcDateRangeOpen  = "["
-	emcDateRangeClose = "]"
+	emcYearOnlyLength     = 4
+	emcYearStartPad       = "-01-01"
+	emcYearEndPad         = "-12-31"
+	emcDateRangeTo        = " TO "
+	emcDateRangeOpen      = "["
+	emcDateRangeClose     = "]"
+	emcDateWildcard       = "*"
+	emcDateRangeWrapOpen  = "("
+	emcDateRangeWrapClose = ")"
 )
 
 // ---------------------------------------------------------------------------
@@ -148,6 +151,7 @@ const (
 const (
 	emcAbsURLPrefix    = "https://europepmc.org/article/"
 	emcFullTextXMLPath = "/fullTextXML"
+	emcPathSeparator   = "/"
 )
 
 // ---------------------------------------------------------------------------
@@ -597,13 +601,13 @@ func buildEMCDateRange(dateFrom, dateTo string) string {
 
 	// If only one end is specified, use wildcard for the other.
 	if from == "" {
-		from = "*"
+		from = emcDateWildcard
 	}
 	if to == "" {
-		to = "*"
+		to = emcDateWildcard
 	}
 
-	return "(" + emcFieldDate + emcDateRangeOpen + from + emcDateRangeTo + to + emcDateRangeClose + ")"
+	return emcDateRangeWrapOpen + emcFieldDate + emcDateRangeOpen + from + emcDateRangeTo + to + emcDateRangeClose + emcDateRangeWrapClose
 }
 
 // buildEMCSearchURL assembles the full search URL with query parameters.
@@ -651,7 +655,7 @@ func buildEMCGetURL(baseURL, id string) string {
 // buildEMCFullTextURL assembles the URL for retrieving full text XML.
 // Format: {baseURL}{source}/{id}/fullTextXML
 func buildEMCFullTextURL(baseURL, source, id string) string {
-	return baseURL + source + "/" + id + emcFullTextXMLPath
+	return baseURL + source + emcPathSeparator + id + emcFullTextXMLPath
 }
 
 // mapEMCSortOrder converts a SortOrder to a Europe PMC sort parameter value.
@@ -694,7 +698,7 @@ func mapEMCResultToPublication(result *emcResult) Publication {
 	}
 
 	// Build URL.
-	pub.URL = emcAbsURLPrefix + result.Source + "/" + result.ID
+	pub.URL = emcAbsURLPrefix + result.Source + emcPathSeparator + result.ID
 
 	// Citation count.
 	citationCount := result.CitedByCount

@@ -63,6 +63,12 @@ func TestSentinelErrorMessages(t *testing.T) {
 		{"PubMedHTTPRequest", ErrPubMedHTTPRequest, ErrMsgPubMedHTTPRequest},
 		{"PubMedNotFound", ErrPubMedNotFound, ErrMsgPubMedNotFound},
 		{"PubMedEmptyQuery", ErrPubMedEmptyQuery, ErrMsgPubMedEmptyQuery},
+
+		// Plugin: EuropePMC
+		{"EuropePMCJSONParse", ErrEuropePMCJSONParse, ErrMsgEuropePMCJSONParse},
+		{"EuropePMCHTTPRequest", ErrEuropePMCHTTPRequest, ErrMsgEuropePMCHTTPRequest},
+		{"EuropePMCNotFound", ErrEuropePMCNotFound, ErrMsgEuropePMCNotFound},
+		{"EuropePMCEmptyQuery", ErrEuropePMCEmptyQuery, ErrMsgEuropePMCEmptyQuery},
 	}
 
 	for _, tt := range tests {

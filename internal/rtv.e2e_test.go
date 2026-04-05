@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -410,4 +411,306 @@ sources:
 
 	// Verify cache length.
 	assert.Equal(t, 1, cache.Len())
+}
+
+// ---------------------------------------------------------------------------
+// DC-03: Router E2E test
+// ---------------------------------------------------------------------------
+
+// e2eMockPlugin creates a mock SourcePlugin for E2E testing.
+// It returns known results and implements the full interface with real values.
+type e2eMockPlugin struct {
+	id      string
+	results []Publication
+}
+
+func (p *e2eMockPlugin) ID() string          { return p.id }
+func (p *e2eMockPlugin) Name() string         { return p.id + " (e2e)" }
+func (p *e2eMockPlugin) Description() string  { return "E2E test plugin for " + p.id }
+func (p *e2eMockPlugin) ContentTypes() []ContentType { return []ContentType{ContentTypePaper} }
+func (p *e2eMockPlugin) Capabilities() SourceCapabilities {
+	return SourceCapabilities{
+		SupportsSortRelevance: true,
+		SupportsSortDate:      true,
+		SupportsPagination:    true,
+		MaxResultsPerQuery:    100,
+		NativeFormat:          FormatJSON,
+		AvailableFormats:      []ContentFormat{FormatJSON},
+	}
+}
+func (p *e2eMockPlugin) NativeFormat() ContentFormat       { return FormatJSON }
+func (p *e2eMockPlugin) AvailableFormats() []ContentFormat { return []ContentFormat{FormatJSON} }
+func (p *e2eMockPlugin) Health(_ context.Context) SourceHealth {
+	return SourceHealth{Enabled: true, Healthy: true, RateLimit: 10.0}
+}
+func (p *e2eMockPlugin) Initialize(_ context.Context, _ PluginConfig) error { return nil }
+func (p *e2eMockPlugin) Search(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+	return &SearchResult{Total: len(p.results), Results: p.results, HasMore: false}, nil
+}
+func (p *e2eMockPlugin) Get(_ context.Context, id string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+	for _, pub := range p.results {
+		_, rawID, err := ParsePrefixedID(pub.ID)
+		if err == nil && rawID == id {
+			return &pub, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: not found", ErrGetFailed)
+}
+
+// TestE2ERouterWithRealInfrastructure exercises the full DC-03 pipeline:
+// config loading → real Cache → real RateLimitManager → real CredentialResolver
+// → Router → Search/Get/ListSources. Mock plugins only (no real HTTP sources
+// exist yet), but ALL infrastructure is real.
+func TestE2ERouterWithRealInfrastructure(t *testing.T) {
+	// Step 1: Load config from temp YAML file.
+	configYAML := `
+server:
+  name: "retrievr-mcp"
+  http_addr: ":8099"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv", "s2"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  arxiv:
+    enabled: true
+    timeout: "15s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  pubmed:
+    enabled: true
+    api_key: "pm-server-key"
+    timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+  s2:
+    enabled: true
+    api_key: "s2-server-key"
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  openalex:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  huggingface:
+    enabled: true
+    api_key: "hf-token"
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  europmc:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+`
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 2: Create real infrastructure from config.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < rateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+
+	resolver := &CredentialResolver{}
+
+	// Step 3: Create mock plugins with known results.
+	const e2eDOI = "10.1234/e2e-shared-doi"
+	e2eCitations10 := 10
+	e2eCitations50 := 50
+
+	arxivPubs := []Publication{
+		{
+			ID:            "arxiv:2401.99999",
+			Source:        SourceArXiv,
+			ContentType:   ContentTypePaper,
+			Title:         "E2E Test Paper Alpha",
+			Authors:       []Author{{Name: "Alice Researcher"}},
+			Published:     "2024-01-15",
+			URL:           "https://arxiv.org/abs/2401.99999",
+			DOI:           e2eDOI,
+			ArXivID:       "2401.99999",
+			CitationCount: &e2eCitations10,
+			SourceMetadata: map[string]any{"arxiv_cat": "cs.AI"},
+		},
+		{
+			ID:          "arxiv:2401.88888",
+			Source:      SourceArXiv,
+			ContentType: ContentTypePaper,
+			Title:       "E2E Test Paper Beta",
+			Authors:     []Author{{Name: "Bob Scholar"}},
+			Published:   "2024-03-20",
+			URL:         "https://arxiv.org/abs/2401.88888",
+		},
+	}
+
+	s2Pubs := []Publication{
+		{
+			ID:            "s2:abc123",
+			Source:        SourceS2,
+			ContentType:   ContentTypePaper,
+			Title:         "E2E Test Paper Alpha (S2 copy)",
+			Authors:       []Author{{Name: "Alice Researcher", Affiliation: "MIT"}},
+			Published:     "2024-01-15",
+			URL:           "https://semanticscholar.org/paper/abc123",
+			DOI:           e2eDOI,
+			CitationCount: &e2eCitations50,
+			SourceMetadata: map[string]any{"s2_tldr": "A short summary"},
+		},
+		{
+			ID:          "s2:def456",
+			Source:      SourceS2,
+			ContentType: ContentTypePaper,
+			Title:       "E2E Test Paper Gamma",
+			Authors:     []Author{{Name: "Carol Thinker"}},
+			Published:   "2024-06-01",
+			URL:         "https://semanticscholar.org/paper/def456",
+		},
+	}
+
+	plugins := map[string]SourcePlugin{
+		SourceArXiv: &e2eMockPlugin{id: SourceArXiv, results: arxivPubs},
+		SourceS2:    &e2eMockPlugin{id: SourceS2, results: s2Pubs},
+	}
+
+	// Build server defaults from config.
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 4: Create router with all real infrastructure.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+
+	// Step 5: Test Search — verify full pipeline.
+	ctx := context.Background()
+
+	result, err := router.Search(ctx, SearchParams{
+		Query:       "e2e test",
+		ContentType: ContentTypePaper,
+		Sort:        SortCitations,
+		Limit:       10,
+	}, nil, nil) // nil sources → defaults (arxiv, s2)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Should have 3 results after dedup (4 total - 1 duplicate DOI).
+	expectedDedupedCount := 3
+	assert.Len(t, result.Results, expectedDedupedCount, "4 total minus 1 DOI dedup = 3")
+	assert.Len(t, result.SourcesQueried, 2)
+	assert.Empty(t, result.SourcesFailed)
+
+	// Verify dedup: shared DOI paper should have AlsoFoundIn.
+	var sharedPaper *Publication
+	for i := range result.Results {
+		if result.Results[i].DOI == e2eDOI {
+			sharedPaper = &result.Results[i]
+			break
+		}
+	}
+	require.NotNil(t, sharedPaper, "shared DOI paper should be in results")
+	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in")
+
+	// Highest citation count should win.
+	require.NotNil(t, sharedPaper.CitationCount)
+	assert.Equal(t, e2eCitations50, *sharedPaper.CitationCount, "highest citation count wins")
+
+	// Merged source metadata should contain keys from both sources.
+	require.NotNil(t, sharedPaper.SourceMetadata)
+	assert.Contains(t, sharedPaper.SourceMetadata, "arxiv_cat")
+	assert.Contains(t, sharedPaper.SourceMetadata, "s2_tldr")
+
+	// Verify citation sort order: 50, nil, nil.
+	require.NotNil(t, result.Results[0].CitationCount)
+	assert.Equal(t, e2eCitations50, *result.Results[0].CitationCount)
+
+	// Step 6: Test cache — second search should be a cache hit.
+	result2, err := router.Search(ctx, SearchParams{
+		Query:       "e2e test",
+		ContentType: ContentTypePaper,
+		Sort:        SortCitations,
+		Limit:       10,
+	}, nil, nil)
+
+	require.NoError(t, err)
+	assert.Len(t, result2.Results, expectedDedupedCount, "cached result should match")
+
+	cacheMetrics := cache.Metrics()
+	assert.Equal(t, uint64(1), cacheMetrics.Hits, "second search should be a cache hit")
+
+	// Step 7: Test Get — parse prefixed ID, route to plugin, strip prefix.
+	pub, err := router.Get(ctx, "arxiv:2401.99999",
+		[]IncludeField{IncludeAbstract}, FormatNative, nil)
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+	assert.Equal(t, "E2E Test Paper Alpha", pub.Title)
+
+	// Step 8: Test Get with per-call credentials.
+	perCallCreds := &CallCredentials{S2APIKey: "per-call-s2-key"}
+	pub2, err := router.Get(ctx, "s2:abc123",
+		[]IncludeField{IncludeAbstract}, FormatNative, perCallCreds)
+	require.NoError(t, err)
+	require.NotNil(t, pub2)
+	assert.Contains(t, pub2.Title, "Alpha")
+
+	// Step 9: Test ListSources.
+	infos := router.ListSources(ctx)
+	assert.Len(t, infos, 2)
+	// Should be sorted by ID: arxiv before s2.
+	assert.Equal(t, SourceArXiv, infos[0].ID)
+	assert.Equal(t, SourceS2, infos[1].ID)
+	assert.True(t, infos[0].Enabled)
+	assert.NotEmpty(t, infos[0].ContentTypes)
+
+	// Step 10: Verify SourceInfo JSON shape matches spec.
+	infoJSON, err := json.Marshal(infos[0])
+	require.NoError(t, err)
+	infoStr := string(infoJSON)
+	assert.Contains(t, infoStr, `"id"`)
+	assert.Contains(t, infoStr, `"name"`)
+	assert.Contains(t, infoStr, `"content_types"`)
+	assert.Contains(t, infoStr, `"rate_limit"`)
+	assert.Contains(t, infoStr, `"accepts_credentials"`)
+
+	// Step 11: Run contract tests on our e2e mock plugins.
+	for _, plugin := range plugins {
+		PluginContractTest(t, plugin)
+	}
 }

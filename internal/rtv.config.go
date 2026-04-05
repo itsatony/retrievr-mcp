@@ -64,6 +64,9 @@ const (
 	LogKeyQuery      = "query"
 	LogKeyLimit      = "limit"
 	LogKeyPubID      = "pub_id"
+	LogKeySignal     = "signal"
+	LogKeyStatus     = "status"
+	LogKeyEndpoint   = "endpoint"
 )
 
 // ---------------------------------------------------------------------------

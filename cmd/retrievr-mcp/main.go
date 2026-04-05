@@ -1,12 +1,17 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	internal "github.com/itsatony/retrievr-mcp/internal"
 )
@@ -20,11 +25,24 @@ const (
 
 	logMsgStartup      = "starting retrievr-mcp"
 	logMsgConfigLoaded = "config loaded"
-	logMsgNotImpl      = "server not yet implemented, exiting"
 	logMsgVersionFail  = "failed to load version"
 	logMsgConfigFail   = "failed to load config"
 
+	logMsgPluginsInit    = "plugins initialized"
+	logMsgRateLimitsInit = "rate limits initialized"
+	logMsgRouterCreated  = "router created"
+	logMsgServerCreated  = "server created"
+	logMsgShutdownSignal = "received shutdown signal"
+	logMsgShutdownDone   = "shutdown complete"
+	logMsgShutdownFail   = "shutdown failed"
+	logMsgServerFail     = "server failed"
+
 	instanceIDBytes = 8
+
+	exitCodeSuccess = 0
+	exitCodeStartup = 1
+
+	signalChannelSize = 1
 )
 
 func main() {
@@ -43,7 +61,7 @@ func run() int {
 	// Load version from versions.yaml (or ldflags).
 	if err := internal.LoadVersion(defaultVersionPath); err != nil {
 		bootstrapLogger.Error(logMsgVersionFail, slog.String(internal.LogKeyError, err.Error()))
-		return 1
+		return exitCodeStartup
 	}
 
 	// Load and validate config.
@@ -53,7 +71,7 @@ func run() int {
 			slog.String(internal.LogKeyError, err.Error()),
 			slog.String(internal.LogKeyConfig, *configPath),
 		)
-		return 1
+		return exitCodeStartup
 	}
 
 	// Setup structured logger with full attributes.
@@ -69,9 +87,90 @@ func run() int {
 		slog.Any(internal.LogKeySources, cfg.EnabledSourceIDs()),
 	)
 
-	// Server wiring will be added in DC-04.
-	logger.Info(logMsgNotImpl)
-	return 0
+	// --- DC-04: Full server wiring ---
+
+	// Step 1: Initialize plugins (empty for now — real plugins added in DC-05+).
+	plugins := map[string]internal.SourcePlugin{}
+	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
+
+	// Step 2: Create rate limit manager and register all enabled sources.
+	rateLimits := internal.NewSourceRateLimitManager(internal.DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		if !sourceCfg.Enabled {
+			continue
+		}
+		rps := sourceCfg.RateLimit
+		if rps < internal.DefaultRateLimitRPS {
+			rps = internal.DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = internal.DefaultRateLimitBurst
+		}
+		rateLimits.Register(internal.RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(internal.DefaultCleanupInterval)
+	logger.Info(logMsgRateLimitsInit)
+
+	// Step 3: Create credential resolver.
+	resolver := &internal.CredentialResolver{}
+
+	// Step 4: Create cache (if enabled).
+	var cache *internal.Cache
+	if cfg.Router.CacheEnabled {
+		cache = internal.NewCache(internal.CacheConfig{
+			MaxEntries: cfg.Router.CacheMaxEntries,
+			TTL:        cfg.Router.CacheTTL.Duration,
+			Enabled:    cfg.Router.CacheEnabled,
+		})
+	}
+
+	// Step 5: Build server defaults map (sourceID → API key from config).
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 6: Create router.
+	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, logger)
+	logger.Info(logMsgRouterCreated)
+
+	// Step 7: Create MCP server.
+	srv := internal.NewServer(cfg, router, rateLimits, logger)
+	logger.Info(logMsgServerCreated)
+
+	// Step 8: Signal handling — graceful shutdown on SIGTERM/SIGINT.
+	errCh := make(chan error, signalChannelSize)
+	go func() {
+		errCh <- srv.Start()
+	}()
+
+	sigCh := make(chan os.Signal, signalChannelSize)
+	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+
+	select {
+	case sig := <-sigCh:
+		logger.Info(logMsgShutdownSignal, slog.String(internal.LogKeySignal, sig.String()))
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), internal.ShutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error(logMsgShutdownFail, slog.String(internal.LogKeyError, err.Error()))
+			return exitCodeStartup
+		}
+		logger.Info(logMsgShutdownDone)
+		return exitCodeSuccess
+
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error(logMsgServerFail, slog.String(internal.LogKeyError, err.Error()))
+			return exitCodeStartup
+		}
+		return exitCodeSuccess
+	}
 }
 
 func setupLogger(cfg *internal.Config) *slog.Logger {

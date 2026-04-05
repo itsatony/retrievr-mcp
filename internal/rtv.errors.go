@@ -27,6 +27,17 @@ const (
 )
 
 // ---------------------------------------------------------------------------
+// Server error message constants
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgServerStart    = "server start failed"
+	ErrMsgServerShutdown = "server shutdown failed"
+	ErrMsgInvalidInput   = "invalid tool input"
+	ErrMsgJSONMarshal    = "failed to marshal response"
+)
+
+// ---------------------------------------------------------------------------
 // Config / version error message constants
 // ---------------------------------------------------------------------------
 
@@ -58,6 +69,17 @@ var (
 	ErrCredentialInvalid   = errors.New(ErrMsgCredentialInvalid)
 	ErrCredentialRequired  = errors.New(ErrMsgCredentialRequired)
 	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)
+)
+
+// ---------------------------------------------------------------------------
+// Sentinel errors — server
+// ---------------------------------------------------------------------------
+
+var (
+	ErrServerStart    = errors.New(ErrMsgServerStart)
+	ErrServerShutdown = errors.New(ErrMsgServerShutdown)
+	ErrInvalidInput   = errors.New(ErrMsgInvalidInput)
+	ErrJSONMarshal    = errors.New(ErrMsgJSONMarshal)
 )
 
 // ---------------------------------------------------------------------------

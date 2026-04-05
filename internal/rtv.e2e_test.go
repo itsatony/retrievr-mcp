@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -673,4 +676,305 @@ sources:
 	for _, plugin := range plugins {
 		PluginContractTest(t, plugin)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// DC-04: MCP Server E2E test
+// ---------------------------------------------------------------------------
+
+// TestE2EMCPServerFullPipeline exercises the full DC-04 pipeline:
+// config loading → real Cache → real RateLimitManager → real CredentialResolver
+// → Router → MCP Server → HTTP endpoints → tool handlers. Mock plugins only
+// (no real HTTP sources), but ALL infrastructure is real.
+func TestE2EMCPServerFullPipeline(t *testing.T) {
+	// Not parallel: mutates global version state.
+	const e2eServerVersion = "0.4.0-e2e"
+	SetVersionForTesting(e2eServerVersion, "e2e-commit", "2024-04-05")
+	t.Cleanup(ResetVersionForTesting)
+
+	// Step 1: Load config from temp YAML file.
+	configYAML := `
+server:
+  name: "retrievr-mcp"
+  http_addr: ":0"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv", "s2"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  arxiv:
+    enabled: true
+    timeout: "15s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  pubmed:
+    enabled: true
+    api_key: "pm-server-key"
+    timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+  s2:
+    enabled: true
+    api_key: "s2-server-key"
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  openalex:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  huggingface:
+    enabled: true
+    api_key: "hf-token"
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  europmc:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+`
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 2: Create real infrastructure from config.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < rateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	resolver := &CredentialResolver{}
+
+	// Step 3: Create mock plugins with known results.
+	const e2eDOI = "10.1234/e2e-server-doi"
+	e2eCitations10 := 10
+	e2eCitations50 := 50
+
+	arxivPubs := []Publication{
+		{
+			ID: "arxiv:2401.99999", Source: SourceArXiv,
+			ContentType: ContentTypePaper, Title: "E2E Server Paper Alpha",
+			Authors: []Author{{Name: "Alice Researcher"}}, Published: "2024-01-15",
+			URL: "https://arxiv.org/abs/2401.99999", DOI: e2eDOI,
+			ArXivID: "2401.99999", CitationCount: &e2eCitations10,
+			SourceMetadata: map[string]any{"arxiv_cat": "cs.AI"},
+		},
+	}
+
+	s2Pubs := []Publication{
+		{
+			ID: "s2:abc123", Source: SourceS2,
+			ContentType: ContentTypePaper, Title: "E2E Server Paper Alpha (S2 copy)",
+			Authors: []Author{{Name: "Alice Researcher", Affiliation: "MIT"}}, Published: "2024-01-15",
+			URL: "https://semanticscholar.org/paper/abc123", DOI: e2eDOI,
+			CitationCount:  &e2eCitations50,
+			SourceMetadata: map[string]any{"s2_tldr": "A short summary"},
+		},
+		{
+			ID: "s2:def456", Source: SourceS2,
+			ContentType: ContentTypePaper, Title: "E2E Server Paper Gamma",
+			Authors: []Author{{Name: "Carol Thinker"}}, Published: "2024-06-01",
+			URL: "https://semanticscholar.org/paper/def456",
+		},
+	}
+
+	plugins := map[string]SourcePlugin{
+		SourceArXiv: newMockPlugin(SourceArXiv, arxivPubs),
+		SourceS2:    newMockPlugin(SourceS2, s2Pubs),
+	}
+
+	// Build server defaults from config.
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 4: Create router + server with all real infrastructure.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	srv := NewServer(cfg, router, rateLimits, nil)
+
+	// Step 5: Start httptest.Server for testing.
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Step 6: Test /health endpoint.
+	resp, err := http.Get(ts.URL + healthEndpointPath)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	var health healthResponse
+	err = json.NewDecoder(resp.Body).Decode(&health)
+	require.NoError(t, err)
+	assert.Equal(t, healthStatusOK, health.Status)
+	assert.Equal(t, e2eServerVersion, health.Version)
+
+	// Step 7: Test /version endpoint.
+	resp2, err := http.Get(ts.URL + versionEndpointPath)
+	require.NoError(t, err)
+	defer resp2.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp2.StatusCode)
+	var versionInfo map[string]string
+	err = json.NewDecoder(resp2.Body).Decode(&versionInfo)
+	require.NoError(t, err)
+	assert.Equal(t, e2eServerVersion, versionInfo[LogKeyVersion])
+
+	// Step 8: Test tool handlers directly (construct CallToolRequest).
+	ctx := context.Background()
+
+	// 8a: rtv_search
+	searchHandler := NewSearchHandler(router, nil)
+	searchReq := mcp.CallToolRequest{}
+	searchReq.Params.Name = ToolNameSearch
+	searchReq.Params.Arguments = map[string]any{
+		FieldQuery: "e2e test",
+		FieldSort:  string(SortCitations),
+		FieldLimit: float64(10),
+	}
+
+	searchResult, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult)
+	assert.False(t, searchResult.IsError)
+
+	// Parse search response.
+	searchText := extractE2ETextContent(t, searchResult)
+	var merged MergedSearchResult
+	err = json.Unmarshal([]byte(searchText), &merged)
+	require.NoError(t, err)
+
+	// After dedup (shared DOI): 3 total - 1 duplicate = 2 results.
+	expectedDedupedCount := 2
+	assert.Len(t, merged.Results, expectedDedupedCount, "3 pubs minus 1 DOI dedup = 2")
+	assert.Len(t, merged.SourcesQueried, 2)
+	assert.Empty(t, merged.SourcesFailed)
+
+	// Verify dedup: shared DOI paper should have AlsoFoundIn and highest citations.
+	var sharedPaper *Publication
+	for i := range merged.Results {
+		if merged.Results[i].DOI == e2eDOI {
+			sharedPaper = &merged.Results[i]
+			break
+		}
+	}
+	require.NotNil(t, sharedPaper, "shared DOI paper should be in results")
+	assert.NotEmpty(t, sharedPaper.AlsoFoundIn)
+	require.NotNil(t, sharedPaper.CitationCount)
+	assert.Equal(t, e2eCitations50, *sharedPaper.CitationCount, "highest citation count wins")
+
+	// Merged source metadata should contain keys from both sources.
+	require.NotNil(t, sharedPaper.SourceMetadata)
+	assert.Contains(t, sharedPaper.SourceMetadata, "arxiv_cat")
+	assert.Contains(t, sharedPaper.SourceMetadata, "s2_tldr")
+
+	// 8b: rtv_get
+	getHandler := NewGetHandler(router, nil)
+	getReq := mcp.CallToolRequest{}
+	getReq.Params.Name = ToolNameGet
+	getReq.Params.Arguments = map[string]any{
+		FieldID: "s2:def456",
+	}
+
+	getResult, err := getHandler(ctx, getReq)
+	require.NoError(t, err)
+	require.NotNil(t, getResult)
+	assert.False(t, getResult.IsError)
+
+	getText := extractE2ETextContent(t, getResult)
+	var pub Publication
+	err = json.Unmarshal([]byte(getText), &pub)
+	require.NoError(t, err)
+	assert.Equal(t, "E2E Server Paper Gamma", pub.Title)
+
+	// 8c: rtv_get with per-call credentials
+	getCredReq := mcp.CallToolRequest{}
+	getCredReq.Params.Name = ToolNameGet
+	getCredReq.Params.Arguments = map[string]any{
+		FieldID: "s2:abc123",
+		FieldCredentials: map[string]any{
+			CredFieldS2APIKey: "per-call-s2-key",
+		},
+	}
+
+	getCredResult, err := getHandler(ctx, getCredReq)
+	require.NoError(t, err)
+	require.NotNil(t, getCredResult)
+	assert.False(t, getCredResult.IsError)
+
+	// 8d: rtv_list_sources
+	listHandler := NewListSourcesHandler(router, nil)
+	listReq := mcp.CallToolRequest{}
+	listReq.Params.Name = ToolNameListSources
+
+	listResult, err := listHandler(ctx, listReq)
+	require.NoError(t, err)
+	require.NotNil(t, listResult)
+	assert.False(t, listResult.IsError)
+
+	listText := extractE2ETextContent(t, listResult)
+	var infos []SourceInfo
+	err = json.Unmarshal([]byte(listText), &infos)
+	require.NoError(t, err)
+	assert.Len(t, infos, 2)
+	assert.Equal(t, SourceArXiv, infos[0].ID)
+	assert.Equal(t, SourceS2, infos[1].ID)
+
+	// Step 9: Verify SourceInfo JSON spec shape.
+	infoJSON, err := json.Marshal(infos[0])
+	require.NoError(t, err)
+	infoStr := string(infoJSON)
+	assert.Contains(t, infoStr, `"id"`)
+	assert.Contains(t, infoStr, `"name"`)
+	assert.Contains(t, infoStr, `"content_types"`)
+	assert.Contains(t, infoStr, `"rate_limit"`)
+	assert.Contains(t, infoStr, `"accepts_credentials"`)
+
+	// Step 10: Run contract tests on our e2e mock plugins.
+	for _, plugin := range plugins {
+		PluginContractTest(t, plugin)
+	}
+}
+
+// extractE2ETextContent extracts text from the first TextContent in a CallToolResult.
+func extractE2ETextContent(t *testing.T, result *mcp.CallToolResult) string {
+	t.Helper()
+	require.NotEmpty(t, result.Content, "result should have at least one content item")
+	tc, ok := result.Content[0].(mcp.TextContent)
+	require.True(t, ok, "first content item should be TextContent, got %T", result.Content[0])
+	return tc.Text
 }

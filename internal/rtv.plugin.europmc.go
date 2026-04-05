@@ -786,4 +786,3 @@ func convertEMCFormat(_ *Publication, format ContentFormat) error {
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
 }
-

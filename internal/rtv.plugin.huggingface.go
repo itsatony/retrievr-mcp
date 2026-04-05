@@ -1034,4 +1034,3 @@ func convertHFFormat(pub *Publication, format ContentFormat) error {
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
 }
-

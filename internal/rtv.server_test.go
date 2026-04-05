@@ -17,10 +17,10 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testServerVersion          = "99.0.0"
-	testServerGitCommit        = "abc123"
-	testServerBuildDate        = "2024-01-01"
-	testMetricsRecordDuration  = 100 * time.Millisecond
+	testServerVersion         = "99.0.0"
+	testServerGitCommit       = "abc123"
+	testServerBuildDate       = "2024-01-01"
+	testMetricsRecordDuration = 100 * time.Millisecond
 )
 
 // ---------------------------------------------------------------------------

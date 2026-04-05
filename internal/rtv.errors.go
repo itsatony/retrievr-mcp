@@ -95,6 +95,24 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: ArXiv
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgArxivXMLParse    = "failed to parse arxiv xml response"
+	ErrMsgArxivHTTPRequest = "arxiv http request failed"
+	ErrMsgArxivNotFound    = "arxiv entry not found"
+	ErrMsgArxivEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrArxivXMLParse    = errors.New(ErrMsgArxivXMLParse)
+	ErrArxivHTTPRequest = errors.New(ErrMsgArxivHTTPRequest)
+	ErrArxivNotFound    = errors.New(ErrMsgArxivNotFound)
+	ErrArxivEmptyQuery  = errors.New(ErrMsgArxivEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

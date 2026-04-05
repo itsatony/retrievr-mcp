@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -139,31 +140,11 @@ const arxivBibTeXAuthorSeparator = " and "
 // ---------------------------------------------------------------------------
 
 const (
-	arxivGetMaxResults     = 1
-	arxivHTTPStatusErrFmt  = "status %d"
-	arxivQueryPartsInitCap = 4 // capacity hint: query + title + author + category
-)
-
-// ---------------------------------------------------------------------------
-// ArXiv error message constants
-// ---------------------------------------------------------------------------
-
-const (
-	ErrMsgArxivXMLParse    = "failed to parse arxiv xml response"
-	ErrMsgArxivHTTPRequest = "arxiv http request failed"
-	ErrMsgArxivNotFound    = "arxiv entry not found"
-	ErrMsgArxivEmptyQuery  = "search query is empty"
-)
-
-// ---------------------------------------------------------------------------
-// ArXiv sentinel errors
-// ---------------------------------------------------------------------------
-
-var (
-	ErrArxivXMLParse    = fmt.Errorf("%s", ErrMsgArxivXMLParse)
-	ErrArxivHTTPRequest = fmt.Errorf("%s", ErrMsgArxivHTTPRequest)
-	ErrArxivNotFound    = fmt.Errorf("%s", ErrMsgArxivNotFound)
-	ErrArxivEmptyQuery  = fmt.Errorf("%s", ErrMsgArxivEmptyQuery)
+	arxivGetMaxResults         = 1
+	arxivHTTPStatusErrFmt      = "status %d"
+	arxivQueryPartsInitCap     = 4         // capacity hint: query + title + author + category
+	arxivMaxResponseBytes      = 10 << 20  // 10 MB — generous upper bound for ArXiv API responses
+	arxivURLQuerySeparator     = "?"
 )
 
 // ---------------------------------------------------------------------------
@@ -416,11 +397,14 @@ func (p *ArXivPlugin) doRequest(ctx context.Context, reqURL string) (*arxivFeed,
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		// Drain body to allow HTTP connection reuse.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil, fmt.Errorf("%w: "+arxivHTTPStatusErrFmt, ErrArxivHTTPRequest, resp.StatusCode)
 	}
 
 	var feed arxivFeed
-	if err := xml.NewDecoder(resp.Body).Decode(&feed); err != nil {
+	limitedBody := io.LimitReader(resp.Body, arxivMaxResponseBytes)
+	if err := xml.NewDecoder(limitedBody).Decode(&feed); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrArxivXMLParse, err)
 	}
 
@@ -534,7 +518,7 @@ func buildArxivSearchURL(baseURL, query string, offset, limit int, sort SortOrde
 		}
 	}
 
-	return baseURL + "?" + params.Encode()
+	return baseURL + arxivURLQuerySeparator + params.Encode()
 }
 
 // buildArxivGetURL assembles the URL for fetching a single entry by ID.
@@ -542,7 +526,7 @@ func buildArxivGetURL(baseURL, id string) string {
 	params := url.Values{}
 	params.Set(arxivParamIDList, id)
 	params.Set(arxivParamMaxResults, strconv.Itoa(arxivGetMaxResults))
-	return baseURL + "?" + params.Encode()
+	return baseURL + arxivURLQuerySeparator + params.Encode()
 }
 
 // mapArxivSortOrder translates our SortOrder to ArXiv sort parameters.

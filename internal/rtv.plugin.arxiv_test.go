@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -889,10 +890,10 @@ func TestArXivHealthTracking(t *testing.T) {
 	t.Parallel()
 
 	// Setup: server that alternates success/failure.
-	callCount := 0
+	var callCount atomic.Int32
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		callCount++
-		if callCount == 2 { //nolint:mnd // second call fails
+		n := callCount.Add(1)
+		if n == 2 { //nolint:mnd // second call fails
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

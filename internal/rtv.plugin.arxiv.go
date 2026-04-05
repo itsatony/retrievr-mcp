@@ -64,10 +64,10 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	arxivSortRelevance  = "relevance"
-	arxivSortSubmitted  = "submittedDate"
-	arxivSortOrderAsc   = "ascending"
-	arxivSortOrderDesc  = "descending"
+	arxivSortRelevance = "relevance"
+	arxivSortSubmitted = "submittedDate"
+	arxivSortOrderAsc  = "ascending"
+	arxivSortOrderDesc = "descending"
 )
 
 // ---------------------------------------------------------------------------
@@ -84,8 +84,8 @@ const (
 
 	// Go reference time layouts for date conversion.
 	arxivDateInputLayout     = "2006-01-02" // YYYY-MM-DD input
-	arxivDateOutputFormat    = "20060102"    // YYYYMMDD output for ArXiv
-	arxivPublishedDateLayout = "2006-01-02"  // YYYY-MM-DD for Publication.Published
+	arxivDateOutputFormat    = "20060102"   // YYYYMMDD output for ArXiv
+	arxivPublishedDateLayout = "2006-01-02" // YYYY-MM-DD for Publication.Published
 
 	arxivYearOnlyLength = 4
 	arxivYearStartPad   = "0101" // January 1st for year-only date_from
@@ -140,11 +140,11 @@ const arxivBibTeXAuthorSeparator = " and "
 // ---------------------------------------------------------------------------
 
 const (
-	arxivGetMaxResults         = 1
-	arxivHTTPStatusErrFmt      = "status %d"
-	arxivQueryPartsInitCap     = 4         // capacity hint: query + title + author + category
-	arxivMaxResponseBytes      = 10 << 20  // 10 MB — generous upper bound for ArXiv API responses
-	arxivURLQuerySeparator     = "?"
+	arxivGetMaxResults     = 1
+	arxivHTTPStatusErrFmt  = "status %d"
+	arxivQueryPartsInitCap = 4        // capacity hint: query + title + author + category
+	arxivMaxResponseBytes  = 10 << 20 // 10 MB — generous upper bound for ArXiv API responses
+	arxivURLQuerySeparator = "?"
 )
 
 // ---------------------------------------------------------------------------

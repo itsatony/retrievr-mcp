@@ -133,9 +133,9 @@ func buildArxivTestFeedXML(totalResults, startIndex int, entries []arxivTestEntr
 // defaultTestEntry1 returns a standard test entry with all fields populated.
 func defaultTestEntry1() arxivTestEntry {
 	return arxivTestEntry{
-		ID:      testArxivID1,
-		Title:   testArxivTitle1,
-		Summary: "We present a novel approach to attention mechanisms.",
+		ID:              testArxivID1,
+		Title:           testArxivTitle1,
+		Summary:         "We present a novel approach to attention mechanisms.",
 		Published:       testArxivDate1,
 		Updated:         testArxivDate2,
 		Authors:         []arxivTestAuthor{{Name: testArxivAuthor1, Affiliation: testArxivAffil1}},
@@ -605,10 +605,10 @@ func TestArXivQueryBuilder(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		params   SearchParams
-		wantQ    string
-		wantErr  error
+		name    string
+		params  SearchParams
+		wantQ   string
+		wantErr error
 	}{
 		{
 			name:   "query_only",

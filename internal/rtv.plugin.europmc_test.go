@@ -494,6 +494,12 @@ func TestEuropePMCGet(t *testing.T) {
 			wantTitle:  testEMCTitle1,
 			wantBibTeX: true,
 		},
+		{
+			name:    "get_unsupported_format",
+			id:      testEMCPMID1,
+			format:  FormatXML,
+			wantErr: ErrFormatUnsupported,
+		},
 	}
 
 	for _, tt := range tests {
@@ -628,6 +634,68 @@ func TestEuropePMCFetchFullTextErrors(t *testing.T) {
 			assert.Nil(t, pub.FullText, "full text should be nil when fetch fails")
 		})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Full text skip for non-OA test
+// ---------------------------------------------------------------------------
+
+func TestEuropePMCGetFullTextSkippedForNonOA(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Full text endpoint should NOT be called for non-OA articles.
+		if strings.HasSuffix(path, emcFullTextXMLPath) {
+			t.Error("full text endpoint should not be called for non-OA article")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		results := []emcTestResult{defaultEMCTestResult2()} // IsOpenAccess = "N"
+		fmt.Fprint(w, buildEMCTestSearchJSON(1, results))
+	}))
+	defer server.Close()
+
+	plugin := newEMCTestPlugin(t, server.URL+"/")
+	pub, err := plugin.Get(context.Background(), testEMCPMID2,
+		[]IncludeField{IncludeFullText}, FormatNative, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+	assert.Nil(t, pub.FullText, "non-OA article should not have full text fetched")
+}
+
+// ---------------------------------------------------------------------------
+// Full text empty body test
+// ---------------------------------------------------------------------------
+
+func TestEuropePMCGetFullTextEmptyBody(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if strings.HasSuffix(path, emcFullTextXMLPath) {
+			w.Header().Set("Content-Type", "application/xml")
+			// Return 200 with empty body.
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		results := []emcTestResult{defaultEMCTestResult1()} // IsOpenAccess = "Y"
+		fmt.Fprint(w, buildEMCTestSearchJSON(1, results))
+	}))
+	defer server.Close()
+
+	plugin := newEMCTestPlugin(t, server.URL+"/")
+	pub, err := plugin.Get(context.Background(), testEMCPMID1,
+		[]IncludeField{IncludeFullText}, FormatNative, nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+	assert.Nil(t, pub.FullText, "empty full text body should result in nil FullText")
 }
 
 // ---------------------------------------------------------------------------

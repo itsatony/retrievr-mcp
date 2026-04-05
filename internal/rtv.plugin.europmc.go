@@ -516,7 +516,7 @@ func (p *EuropePMCPlugin) doRequest(ctx context.Context, reqURL string, target a
 		return fmt.Errorf("%w: "+emcHTTPStatusErrFmt, ErrEuropePMCHTTPRequest, resp.StatusCode)
 	}
 
-	limitedBody := io.LimitReader(resp.Body, emcMaxResponseBytes)
+	limitedBody := io.LimitReader(resp.Body, int64(emcMaxResponseBytes))
 	if err := json.NewDecoder(limitedBody).Decode(target); err != nil {
 		return fmt.Errorf("%w: %w", ErrEuropePMCJSONParse, err)
 	}

@@ -24,7 +24,7 @@ const (
 	DefaultRateLimitRPS        = 1.0
 	DefaultRateLimitBurst      = 3
 	DefaultCredentialBucketTTL = 15 * time.Minute
-	DefaultCleanupInterval     = 450 * time.Second // half of credential bucket TTL
+	DefaultCleanupInterval     = DefaultCredentialBucketTTL / 2
 )
 
 // Log level constants — used in config validation and logger setup.

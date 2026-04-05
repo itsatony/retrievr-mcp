@@ -46,6 +46,7 @@ func defaultEnabledCache(maxEntries int, ttl time.Duration) *Cache {
 // ---------------------------------------------------------------------------
 
 func TestCacheGetSetHit(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(DefaultCacheMaxEntries, DefaultCacheTTL)
 	result := testSearchResult(1)
 
@@ -62,6 +63,7 @@ func TestCacheGetSetHit(t *testing.T) {
 }
 
 func TestCacheGetMiss(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(DefaultCacheMaxEntries, DefaultCacheTTL)
 
 	got, ok := c.Get("nonexistent")
@@ -75,6 +77,7 @@ func TestCacheGetMiss(t *testing.T) {
 }
 
 func TestCacheTTLExpiry(t *testing.T) {
+	t.Parallel()
 	const shortTTL = 50 * time.Millisecond
 	const sleepDuration = 60 * time.Millisecond
 
@@ -103,6 +106,7 @@ func TestCacheTTLExpiry(t *testing.T) {
 }
 
 func TestCacheLRUEviction(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(3, DefaultCacheTTL)
 
 	// Fill the cache to capacity: a, b, c (a is LRU).
@@ -130,6 +134,7 @@ func TestCacheLRUEviction(t *testing.T) {
 }
 
 func TestCacheLRUAccessOrder(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(3, DefaultCacheTTL)
 
 	// Fill cache: a (oldest/LRU), b, c (newest/MRU).
@@ -158,6 +163,7 @@ func TestCacheLRUAccessOrder(t *testing.T) {
 }
 
 func TestCacheUpdateExisting(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(DefaultCacheMaxEntries, DefaultCacheTTL)
 
 	value1 := testSearchResult(1)
@@ -175,6 +181,7 @@ func TestCacheUpdateExisting(t *testing.T) {
 }
 
 func TestCacheDelete(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(DefaultCacheMaxEntries, DefaultCacheTTL)
 
 	c.Set("key1", testSearchResult(1))
@@ -194,6 +201,7 @@ func TestCacheDelete(t *testing.T) {
 }
 
 func TestCacheClear(t *testing.T) {
+	t.Parallel()
 	c := defaultEnabledCache(DefaultCacheMaxEntries, DefaultCacheTTL)
 
 	c.Set("a", testSearchResult(1))
@@ -224,6 +232,7 @@ func TestCacheClear(t *testing.T) {
 }
 
 func TestCacheDisabled(t *testing.T) {
+	t.Parallel()
 	c := NewCache(CacheConfig{
 		MaxEntries: DefaultCacheMaxEntries,
 		TTL:        DefaultCacheTTL,
@@ -241,12 +250,14 @@ func TestCacheDisabled(t *testing.T) {
 	// Len must always be 0.
 	assert.Equal(t, 0, c.Len())
 
+	// No metrics tracked when disabled.
 	m := c.Metrics()
 	assert.Equal(t, uint64(0), m.Hits)
-	assert.Equal(t, uint64(1), m.Misses)
+	assert.Equal(t, uint64(0), m.Misses)
 }
 
 func TestCacheMetrics(t *testing.T) {
+	t.Parallel()
 	// maxEntries=1 to trigger eviction easily.
 	c := defaultEnabledCache(1, DefaultCacheTTL)
 
@@ -272,6 +283,7 @@ func TestCacheMetrics(t *testing.T) {
 }
 
 func TestCacheConcurrentAccess(t *testing.T) {
+	t.Parallel()
 	const goroutines = 100
 
 	c := defaultEnabledCache(DefaultCacheMaxEntries, DefaultCacheTTL)
@@ -299,6 +311,7 @@ func TestCacheConcurrentAccess(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGenerateCacheKey(t *testing.T) {
+	t.Parallel()
 	baseParams := SearchParams{
 		Query:       "neural networks",
 		ContentType: ContentTypePaper,
@@ -391,6 +404,7 @@ func TestGenerateCacheKey(t *testing.T) {
 }
 
 func TestGenerateCacheKeyDeterministic(t *testing.T) {
+	t.Parallel()
 	params := SearchParams{
 		Query:       "large language models",
 		ContentType: ContentTypeAny,
@@ -410,6 +424,7 @@ func TestGenerateCacheKeyDeterministic(t *testing.T) {
 }
 
 func TestGenerateCacheKeyDoesNotMutateSourcesSlice(t *testing.T) {
+	t.Parallel()
 	params := SearchParams{Query: "test", Limit: 5}
 	sources := []string{SourceS2, SourceArXiv, SourcePubMed}
 

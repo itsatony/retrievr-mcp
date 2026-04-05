@@ -24,7 +24,6 @@ const (
 	ErrMsgCredentialInvalid   = "provided credential was rejected by upstream source"
 	ErrMsgCredentialRequired  = "this source requires credentials for the requested operation"
 	ErrMsgCacheKeyGeneration  = "failed to generate cache key"
-	ErrMsgRateLimitWait       = "rate limiter wait failed"
 )
 
 // ---------------------------------------------------------------------------
@@ -59,7 +58,6 @@ var (
 	ErrCredentialInvalid   = errors.New(ErrMsgCredentialInvalid)
 	ErrCredentialRequired  = errors.New(ErrMsgCredentialRequired)
 	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)
-	ErrRateLimitWait       = errors.New(ErrMsgRateLimitWait)
 )
 
 // ---------------------------------------------------------------------------

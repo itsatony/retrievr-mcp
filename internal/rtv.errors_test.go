@@ -39,7 +39,6 @@ func TestSentinelErrorMessages(t *testing.T) {
 		{"VersionLoad", ErrVersionLoad, ErrMsgVersionLoad},
 		{"DurationParse", ErrDurationParse, ErrMsgDurationParse},
 		{"CacheKeyGeneration", ErrCacheKeyGeneration, ErrMsgCacheKeyGeneration},
-		{"RateLimitWait", ErrRateLimitWait, ErrMsgRateLimitWait},
 	}
 
 	for _, tt := range tests {

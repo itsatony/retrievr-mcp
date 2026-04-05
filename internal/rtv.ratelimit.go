@@ -33,6 +33,7 @@ type RateLimiterConfig struct {
 // ---------------------------------------------------------------------------
 
 // credentialBucket pairs a rate.Limiter with its last-access time for TTL eviction.
+// lastAccess is only written under RateLimiter.mu. Reads in CleanupExpired also hold the lock.
 type credentialBucket struct {
 	limiter    *rate.Limiter
 	lastAccess time.Time
@@ -152,11 +153,13 @@ func (rl *RateLimiter) BucketCount() int {
 
 // SourceRateLimitManager manages rate limiters for all sources. Thread-safe.
 type SourceRateLimitManager struct {
-	mu       sync.RWMutex
-	limiters map[string]*RateLimiter // key = sourceID
-	ttl      time.Duration
-	stopCh   chan struct{}
-	doneCh   chan struct{}
+	mu        sync.RWMutex
+	limiters  map[string]*RateLimiter // key = sourceID
+	ttl       time.Duration
+	stopCh    chan struct{}
+	doneCh    chan struct{}
+	startOnce sync.Once
+	stopOnce  sync.Once
 }
 
 // NewSourceRateLimitManager creates a new manager with the given credential bucket TTL.
@@ -185,7 +188,7 @@ func (m *SourceRateLimitManager) Wait(ctx context.Context, sourceID, bucketKey s
 	m.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("%w: %s", ErrSourceNotFound, sourceID)
+		return fmt.Errorf("%w: source %q", ErrSourceNotFound, sourceID)
 	}
 
 	return limiter.Wait(ctx, bucketKey)
@@ -205,38 +208,59 @@ func (m *SourceRateLimitManager) Remaining(sourceID, bucketKey string) float64 {
 	return limiter.Remaining(bucketKey)
 }
 
-// Start launches a background goroutine that periodically evicts expired credential buckets.
+// Start launches a background goroutine that periodically evicts expired credential
+// buckets. Safe to call multiple times — only the first call starts the goroutine.
 func (m *SourceRateLimitManager) Start(interval time.Duration) {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		defer close(m.doneCh)
+	m.startOnce.Do(func() {
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			defer close(m.doneCh)
 
-		for {
-			select {
-			case <-ticker.C:
-				m.CleanupAllExpired()
-			case <-m.stopCh:
-				return
+			for {
+				select {
+				case <-ticker.C:
+					m.CleanupAllExpired()
+				case <-m.stopCh:
+					return
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
 
 // Stop signals the cleanup goroutine to exit and waits for it to finish.
+// Safe to call multiple times and safe to call even if Start() was never called.
 func (m *SourceRateLimitManager) Stop() {
-	close(m.stopCh)
-	<-m.doneCh
+	m.stopOnce.Do(func() {
+		close(m.stopCh)
+	})
+	// If Start was never called, doneCh was never closed by a goroutine.
+	// Use startOnce to detect: if Do runs, Start was never called, so close doneCh.
+	started := true
+	m.startOnce.Do(func() {
+		started = false
+		close(m.doneCh)
+	})
+	if started {
+		<-m.doneCh
+	}
 }
 
 // CleanupAllExpired evicts expired credential buckets across all sources.
 // Returns the total number of evicted buckets.
 func (m *SourceRateLimitManager) CleanupAllExpired() int {
+	// Snapshot limiters under read lock, then release before calling CleanupExpired
+	// which acquires each limiter's own mutex.
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	snapshot := make([]*RateLimiter, 0, len(m.limiters))
+	for _, limiter := range m.limiters {
+		snapshot = append(snapshot, limiter)
+	}
+	m.mu.RUnlock()
 
 	total := 0
-	for _, limiter := range m.limiters {
+	for _, limiter := range snapshot {
 		total += limiter.CleanupExpired()
 	}
 	return total

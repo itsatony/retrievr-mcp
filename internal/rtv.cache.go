@@ -118,9 +118,6 @@ func GenerateCacheKey(params SearchParams, sources []string) (string, error) {
 // or the entry has expired (the expired entry is evicted on access).
 func (c *Cache) Get(key string) (*SearchResult, bool) {
 	if !c.enabled {
-		c.mu.Lock()
-		c.metrics.Misses++
-		c.mu.Unlock()
 		return nil, false
 	}
 

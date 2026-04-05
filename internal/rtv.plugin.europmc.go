@@ -780,7 +780,7 @@ func parseEMCAuthors(authorString string) []Author {
 // ---------------------------------------------------------------------------
 
 // convertEMCFormat converts the publication to the requested format.
-func convertEMCFormat(pub *Publication, format ContentFormat) error {
+func convertEMCFormat(_ *Publication, format ContentFormat) error {
 	switch format {
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)

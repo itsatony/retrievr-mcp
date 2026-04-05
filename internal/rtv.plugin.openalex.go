@@ -849,7 +849,7 @@ func normalizeOADOI(rawDOI string) string {
 // ---------------------------------------------------------------------------
 
 // convertOAFormat applies format conversion on a Publication.
-func convertOAFormat(pub *Publication, format ContentFormat) error {
+func convertOAFormat(_ *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil

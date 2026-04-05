@@ -946,6 +946,83 @@ func TestRouterGetPrefixStripped(t *testing.T) {
 	assert.Equal(t, "2401.12345", receivedID, "plugin should receive raw ID without prefix")
 }
 
+func TestRouterGetBibTeXFormat(t *testing.T) {
+	t.Parallel()
+
+	var receivedFormat ContentFormat
+	plugin := newMockPlugin(mockSourceA, nil)
+	plugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+		receivedFormat = format
+		return &Publication{
+			ID:          "arxiv:2401.12345",
+			Source:      mockSourceA,
+			ContentType: ContentTypePaper,
+			Title:       "Test Paper on Attention",
+			Authors:     []Author{{Name: "Alice Smith"}},
+			Published:   "2024-06-15",
+			ArXivID:     testArXivID,
+			Categories:  []string{"cs.AI"},
+		}, nil
+	}
+
+	r := testRouter(map[string]SourcePlugin{mockSourceA: plugin})
+
+	pub, err := r.Get(context.Background(), "arxiv:2401.12345", nil, FormatBibTeX, nil)
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+
+	// Plugin must receive FormatNative (Router intercepts BibTeX).
+	assert.Equal(t, FormatNative, receivedFormat,
+		"plugin should receive FormatNative when BibTeX is requested")
+
+	// Router must generate BibTeX in FullText.
+	require.NotNil(t, pub.FullText)
+	assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
+	assert.True(t, len(pub.FullText.Content) > 0)
+	assert.Contains(t, pub.FullText.Content, bibtexEntryArticle+bibtexEntryOpen)
+	assert.Contains(t, pub.FullText.Content, bibtexFieldAuthor+bibtexFieldAssign)
+	assert.Contains(t, pub.FullText.Content, bibtexFieldTitle+bibtexFieldAssign)
+	assert.Contains(t, pub.FullText.Content, bibtexFieldEprint+bibtexFieldAssign+testArXivID)
+	assert.Equal(t, len(pub.FullText.Content), pub.FullText.ContentLength)
+	assert.False(t, pub.FullText.Truncated)
+}
+
+func TestRouterGetBibTeXMetrics(t *testing.T) {
+	t.Parallel()
+
+	plugin := newMockPlugin(mockSourceA, nil)
+	plugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+		return &Publication{
+			ID:          "arxiv:2401.12345",
+			Source:      mockSourceA,
+			ContentType: ContentTypePaper,
+			Title:       "Test Paper",
+			Published:   "2024-06-15",
+		}, nil
+	}
+
+	metrics := NewMetrics()
+	cfg := testRouterConfig()
+	plugins := map[string]SourcePlugin{mockSourceA: plugin}
+	r := NewRouter(cfg, plugins, nil, nil, testRateLimits(plugins), &CredentialResolver{}, metrics, discardLogger())
+
+	_, err := r.Get(context.Background(), "arxiv:2401.12345", nil, FormatBibTeX, nil)
+	require.NoError(t, err)
+
+	// Verify metrics were recorded.
+	families, gatherErr := metrics.Registry.Gather()
+	require.NoError(t, gatherErr)
+
+	var foundGetTotal bool
+	for _, f := range families {
+		if f.GetName() == metricsNamespace+"_"+metricGetTotal {
+			foundGetTotal = true
+			require.NotEmpty(t, f.GetMetric())
+		}
+	}
+	assert.True(t, foundGetTotal, "get_total metric should be recorded")
+}
+
 // ---------------------------------------------------------------------------
 // Router.ListSources tests
 // ---------------------------------------------------------------------------

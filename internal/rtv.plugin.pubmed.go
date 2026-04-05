@@ -1028,7 +1028,7 @@ func extractPMMeSHTerms(meshList pmMeshHeadingList) []string {
 // ---------------------------------------------------------------------------
 
 // convertPMFormat applies format conversion on a Publication.
-func convertPMFormat(pub *Publication, format ContentFormat) error {
+func convertPMFormat(_ *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil // Publication is natively JSON-serializable

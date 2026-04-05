@@ -2,9 +2,11 @@ package internal
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,9 +17,10 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testServerVersion   = "99.0.0"
-	testServerGitCommit = "abc123"
-	testServerBuildDate = "2024-01-01"
+	testServerVersion          = "99.0.0"
+	testServerGitCommit        = "abc123"
+	testServerBuildDate        = "2024-01-01"
+	testMetricsRecordDuration  = 100 * time.Millisecond
 )
 
 // ---------------------------------------------------------------------------
@@ -142,6 +145,68 @@ func TestMCPEndpointReachable(t *testing.T) {
 	// StreamableHTTPServer returns something (not 404 from mux).
 	assert.NotEqual(t, http.StatusNotFound, resp.StatusCode,
 		"MCP endpoint should be registered in the mux")
+}
+
+// ---------------------------------------------------------------------------
+// Metrics endpoint test
+// ---------------------------------------------------------------------------
+
+func TestMetricsEndpoint(t *testing.T) {
+	// Not parallel: mutates global version state.
+	SetVersionForTesting(testServerVersion, testServerGitCommit, testServerBuildDate)
+	t.Cleanup(ResetVersionForTesting)
+
+	metrics := NewMetrics()
+	// Seed some data so metrics are populated.
+	metrics.RecordSearch(SourceArXiv, metricStatusSuccess, testMetricsRecordDuration)
+	metrics.RecordGet(SourceArXiv, metricStatusSuccess)
+	metrics.RecordCacheHit()
+	metrics.RecordRateLimitWait(SourceArXiv)
+
+	cfg := testServerConfig()
+	router := testRouter(nil)
+	srv := NewServer(cfg, router, nil, metrics, discardLogger())
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + metricsEndpointPath)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, readErr := io.ReadAll(resp.Body)
+	require.NoError(t, readErr)
+	bodyStr := string(body)
+
+	// Verify Prometheus text format contains all rtv_ metric families.
+	assert.Contains(t, bodyStr, metricsNamespace+"_"+metricSearchTotal)
+	assert.Contains(t, bodyStr, metricsNamespace+"_"+metricSearchDurationSeconds)
+	assert.Contains(t, bodyStr, metricsNamespace+"_"+metricGetTotal)
+	assert.Contains(t, bodyStr, metricsNamespace+"_"+metricRateLimitWaitsTotal)
+	assert.Contains(t, bodyStr, metricsNamespace+"_"+metricCacheHitsTotal)
+	assert.Contains(t, bodyStr, metricsNamespace+"_"+metricCacheMissesTotal)
+}
+
+func TestMetricsEndpointDisabledWhenNil(t *testing.T) {
+	// Not parallel: mutates global version state.
+	SetVersionForTesting(testServerVersion, testServerGitCommit, testServerBuildDate)
+	t.Cleanup(ResetVersionForTesting)
+
+	cfg := testServerConfig()
+	router := testRouter(nil)
+	srv := NewServer(cfg, router, nil, nil, discardLogger())
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + metricsEndpointPath)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// When metrics is nil, /metrics should 404.
+	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
 
 // ---------------------------------------------------------------------------

@@ -39,6 +39,7 @@ func TestSentinelErrorMessages(t *testing.T) {
 		{"VersionLoad", ErrVersionLoad, ErrMsgVersionLoad},
 		{"DurationParse", ErrDurationParse, ErrMsgDurationParse},
 		{"CacheKeyGeneration", ErrCacheKeyGeneration, ErrMsgCacheKeyGeneration},
+		{"BibTeXGeneration", ErrBibTeXGeneration, ErrMsgBibTeXGeneration},
 
 		// Plugin: ArXiv
 		{"ArxivXMLParse", ErrArxivXMLParse, ErrMsgArxivXMLParse},

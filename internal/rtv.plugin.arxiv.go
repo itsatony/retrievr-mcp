@@ -632,7 +632,7 @@ func mapArxivCategories(cats []arxivCategory) []string {
 // ---------------------------------------------------------------------------
 
 // convertArxivFormat applies format conversion on a Publication.
-func convertArxivFormat(pub *Publication, format ContentFormat) error {
+func convertArxivFormat(_ *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil // Publication is natively JSON-serializable

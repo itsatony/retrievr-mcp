@@ -651,7 +651,7 @@ func mapS2PaperToReference(paper *s2Paper) Reference {
 // ---------------------------------------------------------------------------
 
 // convertS2Format applies format conversion on a Publication.
-func convertS2Format(pub *Publication, format ContentFormat) error {
+func convertS2Format(_ *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil // Publication is natively JSON-serializable

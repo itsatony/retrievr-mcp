@@ -83,7 +83,11 @@ const oaHTTPStatusErrFmt = "status %d"
 // OpenAlex date format constants
 // ---------------------------------------------------------------------------
 
-const oaYearOnlyLength = 4
+const (
+	oaYearOnlyLength  = 4
+	oaYearEndPad      = "-12-31"
+	oaFilterMaxParts  = 4 // typical max filter count for pre-allocation
+)
 
 // ---------------------------------------------------------------------------
 // OpenAlex metadata key constants
@@ -577,7 +581,7 @@ func buildOAGetURL(baseURL, workID, mailto, apiKey string) string {
 
 // buildOAFilterString constructs the comma-separated filter string from SearchFilters.
 func buildOAFilterString(filters SearchFilters) string {
-	parts := make([]string, 0, 4) //nolint:mnd // pre-alloc hint for typical filter count
+	parts := make([]string, 0, oaFilterMaxParts)
 
 	if filters.Title != "" {
 		parts = append(parts, oaFilterTitleSearch+filters.Title)
@@ -596,7 +600,7 @@ func buildOAFilterString(filters SearchFilters) string {
 			// For year-only end dates, combine with from date if also year-only.
 			// If from date already set a publication_year filter, we need a range.
 			// OpenAlex supports publication_year:YYYY or from/to_publication_date.
-			parts = append(parts, oaFilterToDate+filters.DateTo+"-12-31")
+			parts = append(parts, oaFilterToDate+filters.DateTo+oaYearEndPad)
 		} else {
 			parts = append(parts, oaFilterToDate+filters.DateTo)
 		}

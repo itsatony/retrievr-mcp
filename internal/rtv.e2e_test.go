@@ -1907,7 +1907,7 @@ func TestE2EOpenAlexPluginTripleSourcePipeline(t *testing.T) {
 				"authorships":[{"author_position":"first","author":{"id":"https://openalex.org/A1","display_name":"Alice E2E","orcid":null},"institutions":[{"id":"https://openalex.org/I1","display_name":"MIT"}]}],
 				"primary_location":{"source":{"id":"https://openalex.org/S1","display_name":"Nature","type":"journal","issn_l":"0028-0836"},"pdf_url":"https://example.com/triple-oa.pdf","landing_page_url":"https://doi.org/%s","is_oa":true},
 				"open_access":{"is_oa":true,"oa_url":"https://example.com/triple-oa.pdf","oa_status":"gold"},
-				"abstract_inverted_index":{"Reconstructed":[-1],"abstract":[0],"from":[1],"OpenAlex":[2],"inverted":[3],"index.":[4]},
+				"abstract_inverted_index":{"abstract":[0],"from":[1],"OpenAlex":[2],"inverted":[3],"index.":[4]},
 				"concepts":[{"id":"https://openalex.org/C1","display_name":"Computer Science","level":0,"score":0.95}],
 				"topics":[{"id":"https://openalex.org/T1","display_name":"Deep Learning"}],
 				"primary_topic":{"id":"https://openalex.org/T1","display_name":"Deep Learning"},

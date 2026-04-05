@@ -339,11 +339,11 @@ sources:
 
 	// Wait on S2 with the resolved bucket key — should succeed.
 	ctx := t.Context()
-	err = manager.Wait(ctx, SourceS2, s2BucketKey)
+	_, err = manager.Wait(ctx, SourceS2, s2BucketKey)
 	require.NoError(t, err)
 
 	// Wait on ArXiv with anonymous bucket key — should succeed.
-	err = manager.Wait(ctx, SourceArXiv, arxivBucketKey)
+	_, err = manager.Wait(ctx, SourceArXiv, arxivBucketKey)
 	require.NoError(t, err)
 
 	// Remaining should be positive (burst minus consumed).

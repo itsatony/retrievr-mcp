@@ -36,8 +36,13 @@ const (
 	integrationEMCRPS     = 10.0
 	integrationEMCBurst   = 5
 
-	integrationOAEmail = "test@retrievr-mcp.dev"
+	integrationOAEmail = "test@example.com"
 )
+
+// NOTE: Integration tests intentionally omit t.Parallel() because they hit live
+// upstream APIs with strict rate limits. Running them concurrently would cause
+// rate limit errors and flaky failures. Sequential execution with explicit
+// delays between tests is the only reliable approach for live API testing.
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -105,7 +110,7 @@ func TestIntegrationArXivSearch(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIntegrationS2Search(t *testing.T) {
-	// Delay to respect ArXiv rate limit from previous test.
+	// Sequential rate limit spacing between live API tests.
 	time.Sleep(integrationRateLimitDelay)
 
 	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
@@ -205,6 +210,7 @@ func TestIntegrationEuropePMCSearch(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIntegrationArXivGet(t *testing.T) {
+	// Sequential rate limit spacing between live API tests.
 	time.Sleep(integrationRateLimitDelay)
 
 	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
@@ -244,6 +250,7 @@ func TestIntegrationArXivGet(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIntegrationBibTeXGet(t *testing.T) {
+	// Sequential rate limit spacing between live API tests.
 	time.Sleep(integrationRateLimitDelay)
 
 	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
@@ -301,6 +308,7 @@ func TestIntegrationBibTeXGet(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestIntegrationMultiSourceSearch(t *testing.T) {
+	// Sequential rate limit spacing between live API tests.
 	time.Sleep(integrationRateLimitDelay)
 
 	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)

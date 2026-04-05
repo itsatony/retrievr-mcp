@@ -297,6 +297,17 @@ func TestGenerateBibTeX(t *testing.T) {
 			},
 			wantFields: []string{bibtexNotePrefix + SourceEuropePMC},
 		},
+		{
+			name: "empty source omits note field",
+			pub: &Publication{
+				ID:          "test:123",
+				Source:      "",
+				ContentType: ContentTypePaper,
+				Title:       testBibTitle,
+				Published:   testBibDate,
+			},
+			wantAbsent: []string{bibtexFieldNote + bibtexFieldAssign},
+		},
 	}
 
 	for _, tc := range tests {
@@ -409,6 +420,30 @@ func TestGenerateCiteKey(t *testing.T) {
 				Title:     "The A An",
 			},
 			want: "author2024the",
+		},
+		{
+			name: "fallback with source and prefixed ID",
+			pub: &Publication{
+				ID:     "arxiv:2401.99999",
+				Source: SourceArXiv,
+				Title:  "", // hits fallback path since no author/date/title produce a key
+			},
+			want: "arxiv24019999", // "2401.99999" → sanitize "240199999" → truncate to 8 → "24019999"
+		},
+		{
+			name: "fallback with no author no date no title word",
+			pub: &Publication{
+				ID:     "s2:abc123def456789",
+				Source: SourceS2,
+			},
+			want: "s2abc123de",
+		},
+		{
+			name: "fallback with unknown source and raw ID",
+			pub: &Publication{
+				ID: "rawid123",
+			},
+			want: "unknownrawid123",
 		},
 	}
 
@@ -534,6 +569,35 @@ func TestBibTeXEntryType(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := bibtexEntryType(tc.contentType)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestStripSourcePrefix
+// ---------------------------------------------------------------------------
+
+func TestStripSourcePrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"arxiv prefixed", "arxiv:2401.12345", "2401.12345"},
+		{"s2 prefixed", "s2:abc123", "abc123"},
+		{"no prefix returns input", "rawid123", "rawid123"},
+		{"empty string", "", ""},
+		{"colon only", ":", ""},
+		{"multiple colons", "a:b:c", "b:c"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := stripSourcePrefix(tc.input)
 			assert.Equal(t, tc.want, got)
 		})
 	}

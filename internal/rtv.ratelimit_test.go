@@ -35,7 +35,7 @@ func TestRateLimiterBasicRate(t *testing.T) {
 	defer cancel()
 
 	for i := range waitCount {
-		err := rl.Wait(ctx, "test-key")
+		_, err := rl.Wait(ctx, "test-key")
 		require.NoError(t, err, "Wait %d should succeed", i)
 	}
 }
@@ -59,7 +59,7 @@ func TestRateLimiterBurst(t *testing.T) {
 
 	start := time.Now()
 	for i := range burst {
-		err := rl.Wait(ctx, "burst-key")
+		_, err := rl.Wait(ctx, "burst-key")
 		require.NoError(t, err, "burst Wait %d should succeed", i)
 	}
 	elapsed := time.Since(start)
@@ -85,12 +85,12 @@ func TestRateLimiterPerCredentialIsolation(t *testing.T) {
 	ctx := context.Background()
 
 	// Exhaust cred-a's burst token.
-	err := rl.Wait(ctx, "cred-a")
+	_, err := rl.Wait(ctx, "cred-a")
 	require.NoError(t, err)
 
 	// cred-b should still get a token immediately since buckets are isolated.
 	start := time.Now()
-	err = rl.Wait(ctx, "cred-b")
+	_, err = rl.Wait(ctx, "cred-b")
 	require.NoError(t, err)
 	elapsed := time.Since(start)
 
@@ -115,14 +115,14 @@ func TestRateLimiterContextCancellation(t *testing.T) {
 	ctx := context.Background()
 
 	// Exhaust the burst token.
-	err := rl.Wait(ctx, "cancel-key")
+	_, err := rl.Wait(ctx, "cancel-key")
 	require.NoError(t, err)
 
 	// Now try with an already-canceled context.
 	canceledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err = rl.Wait(canceledCtx, "cancel-key")
+	_, err = rl.Wait(canceledCtx, "cancel-key")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrRateLimitExceeded),
 		"error should wrap ErrRateLimitExceeded, got: %v", err)
@@ -146,14 +146,14 @@ func TestRateLimiterContextDeadline(t *testing.T) {
 	ctx := context.Background()
 
 	// Exhaust the burst token.
-	err := rl.Wait(ctx, "deadline-key")
+	_, err := rl.Wait(ctx, "deadline-key")
 	require.NoError(t, err)
 
 	// Wait with a very short deadline.
 	deadlineCtx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	err = rl.Wait(deadlineCtx, "deadline-key")
+	_, err = rl.Wait(deadlineCtx, "deadline-key")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrRateLimitExceeded),
 		"error should wrap ErrRateLimitExceeded, got: %v", err)
@@ -176,8 +176,10 @@ func TestRateLimiterTTLEviction(t *testing.T) {
 	ctx := context.Background()
 
 	// Create two buckets.
-	require.NoError(t, rl.Wait(ctx, "old-1"))
-	require.NoError(t, rl.Wait(ctx, "old-2"))
+	_, err := rl.Wait(ctx, "old-1")
+	require.NoError(t, err)
+	_, err = rl.Wait(ctx, "old-2")
+	require.NoError(t, err)
 	assert.Equal(t, 2, rl.BucketCount())
 
 	// Let them expire.
@@ -188,7 +190,8 @@ func TestRateLimiterTTLEviction(t *testing.T) {
 	assert.Equal(t, 0, rl.BucketCount())
 
 	// Create a new bucket — it should survive cleanup immediately.
-	require.NoError(t, rl.Wait(ctx, "fresh"))
+	_, err = rl.Wait(ctx, "fresh")
+	require.NoError(t, err)
 	assert.Equal(t, 1, rl.BucketCount())
 
 	evicted = rl.CleanupExpired()
@@ -213,7 +216,8 @@ func TestRateLimiterRemaining(t *testing.T) {
 
 	// After one Wait, remaining should decrease.
 	ctx := context.Background()
-	require.NoError(t, rl.Wait(ctx, "known-key"))
+	_, err := rl.Wait(ctx, "known-key")
+	require.NoError(t, err)
 
 	remaining = rl.Remaining("known-key")
 	assert.Less(t, remaining, float64(burst),
@@ -232,17 +236,21 @@ func TestRateLimiterBucketCount(t *testing.T) {
 	assert.Equal(t, 0, rl.BucketCount())
 
 	ctx := context.Background()
-	require.NoError(t, rl.Wait(ctx, "key-1"))
+	_, err := rl.Wait(ctx, "key-1")
+	require.NoError(t, err)
 	assert.Equal(t, 1, rl.BucketCount())
 
-	require.NoError(t, rl.Wait(ctx, "key-2"))
+	_, err = rl.Wait(ctx, "key-2")
+	require.NoError(t, err)
 	assert.Equal(t, 2, rl.BucketCount())
 
 	// Same key again — count should not increase.
-	require.NoError(t, rl.Wait(ctx, "key-1"))
+	_, err = rl.Wait(ctx, "key-1")
+	require.NoError(t, err)
 	assert.Equal(t, 2, rl.BucketCount())
 
-	require.NoError(t, rl.Wait(ctx, "key-3"))
+	_, err = rl.Wait(ctx, "key-3")
+	require.NoError(t, err)
 	assert.Equal(t, 3, rl.BucketCount())
 }
 
@@ -268,10 +276,10 @@ func TestSourceRateLimitManagerRegister(t *testing.T) {
 
 	ctx := context.Background()
 
-	err := mgr.Wait(ctx, SourceArXiv, "user-1")
+	_, err := mgr.Wait(ctx, SourceArXiv, "user-1")
 	assert.NoError(t, err, "Wait on registered arxiv should succeed")
 
-	err = mgr.Wait(ctx, SourcePubMed, "user-1")
+	_, err = mgr.Wait(ctx, SourcePubMed, "user-1")
 	assert.NoError(t, err, "Wait on registered pubmed should succeed")
 }
 
@@ -280,7 +288,7 @@ func TestSourceRateLimitManagerWaitUnknownSource(t *testing.T) {
 
 	mgr := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 
-	err := mgr.Wait(context.Background(), "nonexistent", "key")
+	_, err := mgr.Wait(context.Background(), "nonexistent", "key")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrSourceNotFound),
 		"error should wrap ErrSourceNotFound, got: %v", err)
@@ -306,8 +314,10 @@ func TestSourceRateLimitManagerStartStop(t *testing.T) {
 	ctx := context.Background()
 
 	// Create some buckets.
-	require.NoError(t, mgr.Wait(ctx, SourceArXiv, "bucket-1"))
-	require.NoError(t, mgr.Wait(ctx, SourceArXiv, "bucket-2"))
+	_, err := mgr.Wait(ctx, SourceArXiv, "bucket-1")
+	require.NoError(t, err)
+	_, err = mgr.Wait(ctx, SourceArXiv, "bucket-2")
+	require.NoError(t, err)
 
 	mgr.Start(cleanupInterval)
 
@@ -361,7 +371,7 @@ func TestSourceRateLimitManagerConcurrent(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			bucketKey := "cred-" + string(rune('A'+idx%26))
-			errs[idx] = mgr.Wait(ctx, SourceS2, bucketKey)
+			_, errs[idx] = mgr.Wait(ctx, SourceS2, bucketKey)
 		}(i)
 	}
 

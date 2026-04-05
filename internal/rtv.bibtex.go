@@ -60,7 +60,10 @@ const (
 	bibtexMonthEnd      = 7
 	bibtexDateMinLenMon = 7 // YYYY-MM minimum length to extract month
 
-	bibtexCiteKeyFallback = "unknown"
+	bibtexCiteKeyFallback      = "unknown"
+	bibtexCiteKeySuffixMaxLen  = 8
+	bibtexErrDetailNilPub      = "publication is nil"
+	bibtexErrDetailEmptyTitle  = "publication title is empty"
 )
 
 // ---------------------------------------------------------------------------
@@ -69,6 +72,7 @@ const (
 
 // bibtexEscapePairs lists characters that must be escaped in BibTeX field
 // values. Order matters: ampersand first to avoid double-escaping.
+// Immutable after init. Do not modify.
 var bibtexEscapePairs = []struct {
 	old string
 	new string
@@ -86,6 +90,7 @@ var bibtexEscapePairs = []struct {
 // ---------------------------------------------------------------------------
 
 // bibtexMonthNames maps two-digit month strings to BibTeX three-letter names.
+// Immutable after init. Do not modify.
 var bibtexMonthNames = map[string]string{
 	"01": "jan", "02": "feb", "03": "mar", "04": "apr",
 	"05": "may", "06": "jun", "07": "jul", "08": "aug",
@@ -98,6 +103,7 @@ var bibtexMonthNames = map[string]string{
 
 // bibtexStopWords are common words skipped when selecting the title word
 // for a BibTeX cite key.
+// Immutable after init. Do not modify.
 var bibtexStopWords = map[string]bool{
 	"a": true, "an": true, "the": true, "on": true, "of": true,
 	"for": true, "in": true, "to": true, "and": true, "with": true,
@@ -123,10 +129,10 @@ const (
 // Returns ErrBibTeXGeneration if the publication is nil or has an empty title.
 func GenerateBibTeX(pub *Publication) (string, error) {
 	if pub == nil {
-		return "", fmt.Errorf("%w: publication is nil", ErrBibTeXGeneration)
+		return "", fmt.Errorf("%w: %s", ErrBibTeXGeneration, bibtexErrDetailNilPub)
 	}
 	if strings.TrimSpace(pub.Title) == "" {
-		return "", fmt.Errorf("%w: publication title is empty", ErrBibTeXGeneration)
+		return "", fmt.Errorf("%w: %s", ErrBibTeXGeneration, bibtexErrDetailEmptyTitle)
 	}
 
 	entryType := bibtexEntryType(pub.ContentType)
@@ -192,7 +198,9 @@ func GenerateBibTeX(pub *Publication) (string, error) {
 	}
 
 	// Note.
-	writeBibTeXField(&b, bibtexFieldNote, bibtexNotePrefix+pub.Source)
+	if pub.Source != "" {
+		writeBibTeXField(&b, bibtexFieldNote, bibtexNotePrefix+pub.Source)
+	}
 
 	// Close entry.
 	b.WriteString(bibtexEntryClose)
@@ -324,8 +332,8 @@ func generateCiteKey(pub *Publication) string {
 		// Append a short suffix from ID to make it somewhat unique.
 		if rawID := stripSourcePrefix(pub.ID); rawID != "" {
 			sanitized := sanitizeCiteKeyPart(rawID)
-			if len(sanitized) > bibtexYearLength+bibtexYearLength {
-				sanitized = sanitized[:bibtexYearLength+bibtexYearLength]
+			if len(sanitized) > bibtexCiteKeySuffixMaxLen {
+				sanitized = sanitized[:bibtexCiteKeySuffixMaxLen]
 			}
 			key += sanitized
 		}

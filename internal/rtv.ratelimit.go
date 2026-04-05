@@ -80,17 +80,35 @@ func NewRateLimiter(cfg RateLimiterConfig, bucketTTL time.Duration) *RateLimiter
 
 // Wait blocks until the rate limiter allows the request for the given bucket key,
 // or the context is canceled/expired. The bucket is created on first access.
-func (rl *RateLimiter) Wait(ctx context.Context, bucketKey string) error {
+// Returns throttled=true only when the caller had to wait for a token (i.e., the
+// request was actually rate-limited). Returns throttled=false when a token was
+// immediately available.
+func (rl *RateLimiter) Wait(ctx context.Context, bucketKey string) (throttled bool, err error) {
 	rl.mu.Lock()
 	bucket := rl.getOrCreateBucket(bucketKey)
 	rl.mu.Unlock()
 
-	// Wait OUTSIDE the lock — this may block.
-	if err := bucket.limiter.Wait(ctx); err != nil {
-		return fmt.Errorf("%w: %w", ErrRateLimitExceeded, err)
+	// Reserve a token and check whether we need to wait.
+	r := bucket.limiter.Reserve()
+	if !r.OK() {
+		return false, fmt.Errorf("%w: burst exceeded", ErrRateLimitExceeded)
 	}
 
-	return nil
+	delay := r.Delay()
+	if delay == 0 {
+		return false, nil // Token was immediately available — no throttling.
+	}
+
+	// Must wait for the token to become available.
+	t := time.NewTimer(delay)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true, nil // Actually had to wait.
+	case <-ctx.Done():
+		r.Cancel()
+		return false, fmt.Errorf("%w: %w", ErrRateLimitExceeded, ctx.Err())
+	}
 }
 
 // getOrCreateBucket returns the bucket for the given key, creating it if needed.
@@ -184,13 +202,14 @@ func (m *SourceRateLimitManager) Register(cfg RateLimiterConfig) {
 
 // Wait blocks until the rate limiter for the given source allows the request,
 // or returns an error if the source is unknown or the context is canceled.
-func (m *SourceRateLimitManager) Wait(ctx context.Context, sourceID, bucketKey string) error {
+// Returns throttled=true only when the caller had to wait for a token.
+func (m *SourceRateLimitManager) Wait(ctx context.Context, sourceID, bucketKey string) (bool, error) {
 	m.mu.RLock()
 	limiter, exists := m.limiters[sourceID]
 	m.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("%w: source %q", ErrSourceNotFound, sourceID)
+		return false, fmt.Errorf("%w: source %q", ErrSourceNotFound, sourceID)
 	}
 
 	return limiter.Wait(ctx, bucketKey)

@@ -340,10 +340,13 @@ func (r *Router) searchOneSource(
 	// Double %w wrapping is intentional (Go 1.20+ multi-error): errors.Is()
 	// matches both the sentinel (ErrSearchFailed) and the underlying cause.
 	if r.rateLimits != nil {
-		if err := r.rateLimits.Wait(ctx, sourceID, bucketKey); err != nil {
+		throttled, err := r.rateLimits.Wait(ctx, sourceID, bucketKey)
+		if err != nil {
 			return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err), duration: time.Since(start)}
 		}
-		r.metrics.RecordRateLimitWait(sourceID)
+		if throttled {
+			r.metrics.RecordRateLimitWait(sourceID)
+		}
 	}
 
 	// Per-source timeout.
@@ -418,11 +421,14 @@ func (r *Router) Get(
 	_, bucketKey := r.credentials.Resolve(sourceID, creds, serverDefault)
 
 	if r.rateLimits != nil {
-		if err := r.rateLimits.Wait(ctx, sourceID, bucketKey); err != nil {
+		throttled, err := r.rateLimits.Wait(ctx, sourceID, bucketKey)
+		if err != nil {
 			r.metrics.RecordGet(sourceID, metricStatusError)
 			return nil, fmt.Errorf("%w: %w", ErrGetFailed, err)
 		}
-		r.metrics.RecordRateLimitWait(sourceID)
+		if throttled {
+			r.metrics.RecordRateLimitWait(sourceID)
+		}
 	}
 
 	// Step 5: Per-source timeout + plugin call.

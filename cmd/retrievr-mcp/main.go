@@ -218,7 +218,7 @@ func run() int {
 	srv := internal.NewServer(cfg, router, rateLimits, metrics, logger)
 	logger.Info(logMsgServerCreated)
 
-	// Step 8: Signal handling — graceful shutdown on SIGTERM/SIGINT.
+	// Step 9: Signal handling — graceful shutdown on SIGTERM/SIGINT.
 	errCh := make(chan error, signalChannelSize)
 	go func() {
 		errCh <- srv.Start()

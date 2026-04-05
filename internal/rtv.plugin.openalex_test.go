@@ -858,6 +858,55 @@ func TestOAGetWithAPIKey(t *testing.T) {
 	require.NotNil(t, pub)
 }
 
+func TestOAGetWithPerCallAPIKey(t *testing.T) {
+	t.Parallel()
+
+	const perCallKey = "per-call-get-key"
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, perCallKey, r.URL.Query().Get(oaParamAPIKey))
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, buildOATestWorkJSON(defaultOATestWork1()))
+	}))
+	t.Cleanup(ts.Close)
+
+	plugin := newOATestPluginWithAPIKey(t, ts.URL, testOAAPIKey)
+	creds := &CallCredentials{OpenAlexAPIKey: perCallKey}
+	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, creds)
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+}
+
+func TestOAGetWithMailto(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, testOAMailto, r.URL.Query().Get(oaParamMailto))
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, buildOATestWorkJSON(defaultOATestWork1()))
+	}))
+	t.Cleanup(ts.Close)
+
+	plugin := newOATestPluginWithMailto(t, ts.URL, testOAMailto)
+	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, nil)
+	require.NoError(t, err)
+	require.NotNil(t, pub)
+}
+
+func TestOAGetNotFoundIncludesOANotFoundSentinel(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(ts.Close)
+
+	plugin := newOATestPlugin(t, ts.URL)
+	_, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrGetFailed)
+	assert.ErrorIs(t, err, ErrOANotFound, "error chain should include OA-specific not-found sentinel")
+}
+
 // ---------------------------------------------------------------------------
 // Inverted abstract reconstruction tests
 // ---------------------------------------------------------------------------

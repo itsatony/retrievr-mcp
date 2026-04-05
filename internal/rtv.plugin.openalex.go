@@ -152,6 +152,9 @@ const (
 
 const oaExtraKeyMailto = "mailto"
 
+// oaConceptLevelTop is the OpenAlex concept level for top-level disciplines.
+const oaConceptLevelTop = 0
+
 // ---------------------------------------------------------------------------
 // OpenAlex pagination constants
 // ---------------------------------------------------------------------------
@@ -837,7 +840,7 @@ func mapOAConcepts(concepts []oaConcept) []string {
 
 	result := make([]string, 0, len(concepts))
 	for _, c := range concepts {
-		if c.Level == 0 {
+		if c.Level == oaConceptLevelTop {
 			result = append(result, c.DisplayName)
 		}
 	}

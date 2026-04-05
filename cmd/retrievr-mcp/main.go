@@ -101,6 +101,18 @@ func run() int {
 		plugins[internal.SourceArXiv] = arxivPlugin
 	}
 
+	if s2Cfg, ok := cfg.Sources[internal.SourceS2]; ok && s2Cfg.Enabled {
+		s2Plugin := &internal.S2Plugin{}
+		if err := s2Plugin.Initialize(context.Background(), s2Cfg); err != nil {
+			logger.Error(logMsgPluginInitFail,
+				slog.String(internal.LogKeySource, internal.SourceS2),
+				slog.String(internal.LogKeyError, err.Error()),
+			)
+			return exitCodeStartup
+		}
+		plugins[internal.SourceS2] = s2Plugin
+	}
+
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
 
 	// Step 2: Create rate limit manager and register all enabled sources.

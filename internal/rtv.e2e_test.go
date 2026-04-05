@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -1291,4 +1292,454 @@ sources:
 	assert.True(t, health2.Enabled)
 	assert.True(t, health2.Healthy)
 	assert.Empty(t, health2.LastError)
+}
+
+// ---------------------------------------------------------------------------
+// DC-06: S2 Plugin E2E test — real ArXiv + real S2 multi-source
+// ---------------------------------------------------------------------------
+
+// e2e S2 + ArXiv multi-source test constants.
+const (
+	e2eS2Version           = "0.6.0-e2e"
+	e2eS2SharedDOI         = "10.1234/e2e-multi-source-doi"
+	e2eS2SharedArXivID     = "2401.77777"
+	e2eS2SearchResultCount = 3 // 4 total - 1 dedup = 3
+)
+
+// TestE2ES2PluginMultiSourcePipeline exercises the full DC-06 pipeline:
+// config loading → real ArXivPlugin + real S2Plugin → httptest servers →
+// real Router → real Cache → real RateLimitManager → real CredentialResolver
+// → MCP tool handlers. The ONLY fake elements are the HTTP endpoints (httptest).
+// Validates multi-source search, dedup by DOI, citation merge, and credential
+// propagation.
+func TestE2ES2PluginMultiSourcePipeline(t *testing.T) {
+	// Not parallel: mutates global version state.
+	SetVersionForTesting(e2eS2Version, "e2e-commit", "2024-04-06")
+	t.Cleanup(ResetVersionForTesting)
+
+	// Step 1: Create httptest ArXiv server.
+	arxivServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+
+		if idList := r.URL.Query().Get("id_list"); idList != "" {
+			entry := arxivTestEntry{
+				ID:              e2eS2SharedArXivID,
+				Title:           "E2E Multi-Source Paper Alpha",
+				Summary:         "Abstract for multi-source test.",
+				Published:       "2024-01-15T08:00:00Z",
+				Updated:         "2024-01-20T10:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.CL", "cs.AI"},
+				DOI:             e2eS2SharedDOI,
+				PrimaryCategory: "cs.CL",
+			}
+			fmt.Fprint(w, buildArxivTestFeedXML(1, 0, []arxivTestEntry{entry}))
+			return
+		}
+
+		// Search: two results, first has shared DOI for dedup.
+		entries := []arxivTestEntry{
+			{
+				ID:              e2eS2SharedArXivID,
+				Title:           "E2E Multi-Source Paper Alpha",
+				Summary:         "Abstract for multi-source test.",
+				Published:       "2024-01-15T08:00:00Z",
+				Updated:         "2024-01-20T10:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.CL", "cs.AI"},
+				DOI:             e2eS2SharedDOI,
+				PrimaryCategory: "cs.CL",
+			},
+			{
+				ID:              "2401.88888",
+				Title:           "E2E ArXiv-Only Paper",
+				Summary:         "Only found on ArXiv.",
+				Published:       "2024-02-01T08:00:00Z",
+				Updated:         "2024-02-01T08:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Bob E2E"}},
+				Categories:      []string{"cs.LG"},
+				PrimaryCategory: "cs.LG",
+			},
+		}
+		fmt.Fprint(w, buildArxivTestFeedXML(2, 0, entries))
+	}))
+	defer arxivServer.Close()
+
+	// Step 2: Create httptest S2 server.
+	const e2eS2PaperID = "s2paper001abcdef1234567890abcdef12345678"
+
+	s2Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		// Check for API key header.
+		apiKey := r.Header.Get("x-api-key")
+
+		// Route based on path.
+		path := r.URL.Path
+
+		switch {
+		case strings.HasSuffix(path, "/citations"):
+			// Citations response.
+			citingPaper := `{"paperId":"citing001","title":"Paper That Cites Alpha","year":2024,"authors":[{"authorId":"c1","name":"Citing Author"}],"citationCount":5,"externalIds":null}`
+			fmt.Fprintf(w, `{"offset":0,"next":null,"data":[{"citingPaper":%s}]}`, citingPaper)
+			return
+
+		case strings.HasSuffix(path, "/references"):
+			// References response.
+			refPaper := `{"paperId":"ref001","title":"Foundational Reference","year":2020,"authors":[{"authorId":"r1","name":"Reference Author"}],"citationCount":1000,"externalIds":null}`
+			fmt.Fprintf(w, `{"offset":0,"next":null,"data":[{"citedPaper":%s}]}`, refPaper)
+			return
+
+		case strings.Contains(path, "/paper/search"):
+			// Search response: two results, first shares DOI with ArXiv.
+			papers := []string{
+				fmt.Sprintf(`{
+					"paperId":%q,
+					"externalIds":{"DOI":%q,"ArXiv":%q,"PMID":"","CorpusId":99999},
+					"title":"E2E Multi-Source Paper Alpha (S2 copy)",
+					"abstract":"S2 abstract for multi-source test.",
+					"year":2024,
+					"authors":[{"authorId":"a1","name":"Alice E2E"}],
+					"citationCount":75,
+					"referenceCount":20,
+					"publicationDate":"2024-01-15",
+					"journal":{"name":"Nature","volume":"625","pages":"1-10"},
+					"openAccessPdf":{"url":"https://example.com/alpha.pdf"},
+					"fieldsOfStudy":["Computer Science"],
+					"url":"https://www.semanticscholar.org/paper/s2paper001",
+					"isOpenAccess":true,
+					"publicationTypes":["JournalArticle"]
+				}`, e2eS2PaperID, e2eS2SharedDOI, e2eS2SharedArXivID),
+				`{
+					"paperId":"s2paper002uniquedef789",
+					"externalIds":null,
+					"title":"E2E S2-Only Paper",
+					"abstract":"Only found on S2.",
+					"year":2024,
+					"authors":[{"authorId":"a2","name":"Carol E2E"}],
+					"citationCount":10,
+					"referenceCount":5,
+					"publicationDate":"2024-03-01",
+					"journal":null,
+					"openAccessPdf":null,
+					"fieldsOfStudy":["Computer Science"],
+					"url":"https://www.semanticscholar.org/paper/s2paper002",
+					"isOpenAccess":false,
+					"publicationTypes":["Conference"]
+				}`,
+			}
+			fmt.Fprintf(w, `{"total":2,"offset":0,"next":null,"data":[%s,%s]}`, papers[0], papers[1])
+			return
+
+		default:
+			// Get single paper by ID.
+			_ = apiKey // used for credential validation in header check above
+			fmt.Fprintf(w, `{
+				"paperId":%q,
+				"externalIds":{"DOI":%q,"ArXiv":%q,"PMID":"","CorpusId":99999},
+				"title":"E2E Multi-Source Paper Alpha (S2 copy)",
+				"abstract":"S2 abstract for multi-source test.",
+				"year":2024,
+				"authors":[{"authorId":"a1","name":"Alice E2E"}],
+				"citationCount":75,
+				"referenceCount":20,
+				"publicationDate":"2024-01-15",
+				"journal":{"name":"Nature","volume":"625","pages":"1-10"},
+				"openAccessPdf":{"url":"https://example.com/alpha.pdf"},
+				"fieldsOfStudy":["Computer Science"],
+				"url":"https://www.semanticscholar.org/paper/s2paper001",
+				"isOpenAccess":true,
+				"publicationTypes":["JournalArticle"]
+			}`, e2eS2PaperID, e2eS2SharedDOI, e2eS2SharedArXivID)
+		}
+	}))
+	defer s2Server.Close()
+
+	// Step 3: Load config from temp YAML.
+	configYAML := fmt.Sprintf(`
+server:
+  name: "retrievr-mcp"
+  http_addr: ":0"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv", "s2"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  arxiv:
+    enabled: true
+    base_url: "%s"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  pubmed:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+  s2:
+    enabled: true
+    base_url: "%s"
+    api_key: "e2e-server-s2-key"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  openalex:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  huggingface:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  europmc:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+`, arxivServer.URL, s2Server.URL)
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 4: Create real plugins.
+	arxivPlugin := &ArXivPlugin{}
+	err = arxivPlugin.Initialize(context.Background(), cfg.Sources[SourceArXiv])
+	require.NoError(t, err)
+
+	s2Plugin := &S2Plugin{}
+	err = s2Plugin.Initialize(context.Background(), cfg.Sources[SourceS2])
+	require.NoError(t, err)
+
+	plugins := map[string]SourcePlugin{
+		SourceArXiv: arxivPlugin,
+		SourceS2:    s2Plugin,
+	}
+
+	// Step 5: Create real infrastructure.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < RateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	resolver := &CredentialResolver{}
+
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 6: Create router + server.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	srv := NewServer(cfg, router, rateLimits, nil)
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Step 7: Test multi-source search via MCP tool handler.
+	ctx := context.Background()
+	searchHandler := NewSearchHandler(router)
+
+	searchReq := mcp.CallToolRequest{}
+	searchReq.Params.Name = ToolNameSearch
+	searchReq.Params.Arguments = map[string]any{
+		FieldQuery:   "multi-source test",
+		FieldSources: []any{SourceArXiv, SourceS2},
+		FieldSort:    string(SortCitations),
+		FieldLimit:   float64(10),
+	}
+
+	searchResult, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult)
+	assert.False(t, searchResult.IsError, "search should succeed")
+
+	searchText := extractTextContent(t, searchResult)
+	var merged MergedSearchResult
+	err = json.Unmarshal([]byte(searchText), &merged)
+	require.NoError(t, err)
+
+	// 4 total results (2 ArXiv + 2 S2) - 1 DOI dedup = 3.
+	assert.Len(t, merged.Results, e2eS2SearchResultCount, "4 pubs minus 1 DOI dedup = 3")
+	assert.Len(t, merged.SourcesQueried, 2)
+	assert.Contains(t, merged.SourcesQueried, SourceArXiv)
+	assert.Contains(t, merged.SourcesQueried, SourceS2)
+	assert.Empty(t, merged.SourcesFailed)
+
+	// Step 8: Verify DOI-based dedup.
+	var sharedPaper *Publication
+	for i := range merged.Results {
+		if merged.Results[i].DOI == e2eS2SharedDOI {
+			sharedPaper = &merged.Results[i]
+			break
+		}
+	}
+	require.NotNil(t, sharedPaper, "shared DOI paper should be in results")
+	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in")
+
+	// Highest citation count should win (S2 has 75, ArXiv has nil).
+	require.NotNil(t, sharedPaper.CitationCount)
+	e2eExpectedCitations := 75
+	assert.Equal(t, e2eExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
+
+	// Merged source metadata should contain keys from both sources.
+	require.NotNil(t, sharedPaper.SourceMetadata)
+
+	// Step 9: Verify citation sort order: 75 first (highest), then others.
+	require.NotNil(t, merged.Results[0].CitationCount)
+	assert.Equal(t, e2eExpectedCitations, *merged.Results[0].CitationCount)
+
+	// Step 10: Test S2 Get via MCP tool handler.
+	getHandler := NewGetHandler(router)
+	getReq := mcp.CallToolRequest{}
+	getReq.Params.Name = ToolNameGet
+	getReq.Params.Arguments = map[string]any{
+		FieldID: SourceS2 + prefixedIDSeparator + e2eS2PaperID,
+	}
+
+	getResult, err := getHandler(ctx, getReq)
+	require.NoError(t, err)
+	require.NotNil(t, getResult)
+	assert.False(t, getResult.IsError)
+
+	getText := extractTextContent(t, getResult)
+	var pub Publication
+	err = json.Unmarshal([]byte(getText), &pub)
+	require.NoError(t, err)
+	assert.Contains(t, pub.Title, "Alpha")
+	assert.Equal(t, SourceS2, pub.Source)
+	assert.Equal(t, e2eS2SharedDOI, pub.DOI)
+	assert.Equal(t, e2eS2SharedArXivID, pub.ArXivID)
+	assert.NotEmpty(t, pub.PDFURL)
+	require.NotNil(t, pub.CitationCount)
+	assert.Equal(t, e2eExpectedCitations, *pub.CitationCount)
+
+	// Step 11: Test S2 Get with citations include.
+	getCitReq := mcp.CallToolRequest{}
+	getCitReq.Params.Name = ToolNameGet
+	getCitReq.Params.Arguments = map[string]any{
+		FieldID:      SourceS2 + prefixedIDSeparator + e2eS2PaperID,
+		FieldInclude: []any{string(IncludeCitations)},
+	}
+
+	getCitResult, err := getHandler(ctx, getCitReq)
+	require.NoError(t, err)
+	require.NotNil(t, getCitResult)
+	assert.False(t, getCitResult.IsError)
+
+	getCitText := extractTextContent(t, getCitResult)
+	var citPub Publication
+	err = json.Unmarshal([]byte(getCitText), &citPub)
+	require.NoError(t, err)
+	assert.NotEmpty(t, citPub.Citations, "should have citations populated")
+	assert.Equal(t, "Paper That Cites Alpha", citPub.Citations[0].Title)
+
+	// Step 12: Test S2 Get with BibTeX format.
+	getBibReq := mcp.CallToolRequest{}
+	getBibReq.Params.Name = ToolNameGet
+	getBibReq.Params.Arguments = map[string]any{
+		FieldID:     SourceS2 + prefixedIDSeparator + e2eS2PaperID,
+		FieldFormat: string(FormatBibTeX),
+	}
+
+	getBibResult, err := getHandler(ctx, getBibReq)
+	require.NoError(t, err)
+	require.NotNil(t, getBibResult)
+	assert.False(t, getBibResult.IsError)
+
+	getBibText := extractTextContent(t, getBibResult)
+	var bibPub Publication
+	err = json.Unmarshal([]byte(getBibText), &bibPub)
+	require.NoError(t, err)
+	require.NotNil(t, bibPub.FullText)
+	assert.Equal(t, FormatBibTeX, bibPub.FullText.ContentFormat)
+	assert.Contains(t, bibPub.FullText.Content, "@article{")
+	assert.Contains(t, bibPub.FullText.Content, e2eS2SharedDOI)
+
+	// Step 13: Test list_sources — both ArXiv and S2 should appear.
+	listHandler := NewListSourcesHandler(router)
+	listReq := mcp.CallToolRequest{}
+	listReq.Params.Name = ToolNameListSources
+
+	listResult, err := listHandler(ctx, listReq)
+	require.NoError(t, err)
+	require.NotNil(t, listResult)
+	assert.False(t, listResult.IsError)
+
+	listText := extractTextContent(t, listResult)
+	var infos []SourceInfo
+	err = json.Unmarshal([]byte(listText), &infos)
+	require.NoError(t, err)
+	require.Len(t, infos, 2)
+
+	// Should be sorted by ID: arxiv before s2.
+	assert.Equal(t, SourceArXiv, infos[0].ID)
+	assert.Equal(t, SourceS2, infos[1].ID)
+
+	// Verify S2 capabilities in list_sources.
+	s2Info := infos[1]
+	assert.Equal(t, "Semantic Scholar", s2Info.Name)
+	assert.True(t, s2Info.Enabled)
+	assert.Contains(t, s2Info.ContentTypes, ContentTypePaper)
+	assert.Equal(t, FormatJSON, s2Info.NativeFormat)
+	assert.True(t, s2Info.SupportsDateFilter)
+	assert.True(t, s2Info.SupportsCitations)
+	assert.False(t, s2Info.SupportsAuthorFilter)
+	assert.True(t, s2Info.AcceptsCredentials) // S2 accepts per-call credentials
+
+	// Step 14: Verify cache — second search should be a cache hit.
+	searchResult2, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult2)
+	assert.False(t, searchResult2.IsError)
+
+	cacheMetrics := cache.Metrics()
+	assert.Equal(t, uint64(1), cacheMetrics.Hits, "second search should be a cache hit")
+
+	// Step 15: Run contract tests on both real plugins.
+	PluginContractTest(t, arxivPlugin)
+	PluginContractTest(t, s2Plugin)
+
+	// Step 16: Verify both plugins are healthy.
+	arxivHealth := arxivPlugin.Health(ctx)
+	assert.True(t, arxivHealth.Enabled)
+	assert.True(t, arxivHealth.Healthy)
+
+	s2Health := s2Plugin.Health(ctx)
+	assert.True(t, s2Health.Enabled)
+	assert.True(t, s2Health.Healthy)
+	assert.Empty(t, s2Health.LastError)
 }

@@ -113,6 +113,24 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: S2 (Semantic Scholar)
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgS2JSONParse   = "failed to parse s2 json response"
+	ErrMsgS2HTTPRequest = "s2 http request failed"
+	ErrMsgS2NotFound    = "s2 paper not found"
+	ErrMsgS2EmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrS2JSONParse   = errors.New(ErrMsgS2JSONParse)
+	ErrS2HTTPRequest = errors.New(ErrMsgS2HTTPRequest)
+	ErrS2NotFound    = errors.New(ErrMsgS2NotFound)
+	ErrS2EmptyQuery  = errors.New(ErrMsgS2EmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

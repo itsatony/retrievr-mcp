@@ -16,6 +16,9 @@ const (
 	// requestIDBytes is the number of random bytes used to generate a request ID.
 	// 16 bytes = 32 hex characters.
 	requestIDBytes = 16
+
+	// requestIDFallbackPrefix is used when crypto/rand fails (extremely rare).
+	requestIDFallbackPrefix = "fallback-"
 )
 
 // ---------------------------------------------------------------------------
@@ -37,7 +40,7 @@ const contextKeyRequestID contextKey = "request_id"
 func GenerateRequestID() string {
 	b := make([]byte, requestIDBytes)
 	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
+		return fmt.Sprintf("%s%d", requestIDFallbackPrefix, time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
 }

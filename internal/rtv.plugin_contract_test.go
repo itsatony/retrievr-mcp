@@ -40,27 +40,33 @@ func PluginContractTest(t *testing.T, plugin SourcePlugin) {
 	t.Helper()
 
 	t.Run("ID_NonEmpty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, plugin.ID(), "plugin ID must not be empty")
 	})
 
 	t.Run("ID_IsValidSourceID", func(t *testing.T) {
+		t.Parallel()
 		assert.True(t, IsValidSourceID(plugin.ID()),
 			"plugin ID %q must be a registered source constant", plugin.ID())
 	})
 
 	t.Run("Name_NonEmpty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, plugin.Name(), "plugin Name must not be empty")
 	})
 
 	t.Run("Description_NonEmpty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, plugin.Description(), "plugin Description must not be empty")
 	})
 
 	t.Run("ContentTypes_NonEmpty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, plugin.ContentTypes(), "plugin must report at least one ContentType")
 	})
 
 	t.Run("ContentTypes_ValidValues", func(t *testing.T) {
+		t.Parallel()
 		for _, ct := range plugin.ContentTypes() {
 			assert.True(t, validContentTypes[ct],
 				"ContentType %q is not a valid constant", ct)
@@ -68,6 +74,7 @@ func PluginContractTest(t *testing.T, plugin SourcePlugin) {
 	})
 
 	t.Run("Capabilities_MaxResultsPositive", func(t *testing.T) {
+		t.Parallel()
 		caps := plugin.Capabilities()
 		if caps.SupportsPagination {
 			assert.GreaterOrEqual(t, caps.MaxResultsPerQuery, contractTestMinMaxResults,
@@ -76,10 +83,12 @@ func PluginContractTest(t *testing.T, plugin SourcePlugin) {
 	})
 
 	t.Run("NativeFormat_NonEmpty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, plugin.NativeFormat(), "NativeFormat must not be empty")
 	})
 
 	t.Run("NativeFormat_InAvailableFormats", func(t *testing.T) {
+		t.Parallel()
 		nf := plugin.NativeFormat()
 		formats := plugin.AvailableFormats()
 		assert.True(t, slices.Contains(formats, nf),
@@ -87,10 +96,12 @@ func PluginContractTest(t *testing.T, plugin SourcePlugin) {
 	})
 
 	t.Run("AvailableFormats_NonEmpty", func(t *testing.T) {
+		t.Parallel()
 		assert.NotEmpty(t, plugin.AvailableFormats(), "AvailableFormats must not be empty")
 	})
 
 	t.Run("Health_ReturnsEnabled", func(t *testing.T) {
+		t.Parallel()
 		health := plugin.Health(context.Background())
 		assert.True(t, health.Enabled, "initialized plugin Health must report Enabled=true")
 	})

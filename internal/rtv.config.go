@@ -61,6 +61,9 @@ const (
 	LogKeyCacheHit   = "cache_hit"
 	LogKeyCacheKey   = "cache_key"
 	LogKeyCacheSize  = "cache_size"
+	LogKeyQuery      = "query"
+	LogKeyLimit      = "limit"
+	LogKeyPubID      = "pub_id"
 )
 
 // ---------------------------------------------------------------------------

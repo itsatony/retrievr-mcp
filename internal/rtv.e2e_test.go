@@ -417,46 +417,6 @@ sources:
 // DC-03: Router E2E test
 // ---------------------------------------------------------------------------
 
-// e2eMockPlugin creates a mock SourcePlugin for E2E testing.
-// It returns known results and implements the full interface with real values.
-type e2eMockPlugin struct {
-	id      string
-	results []Publication
-}
-
-func (p *e2eMockPlugin) ID() string          { return p.id }
-func (p *e2eMockPlugin) Name() string         { return p.id + " (e2e)" }
-func (p *e2eMockPlugin) Description() string  { return "E2E test plugin for " + p.id }
-func (p *e2eMockPlugin) ContentTypes() []ContentType { return []ContentType{ContentTypePaper} }
-func (p *e2eMockPlugin) Capabilities() SourceCapabilities {
-	return SourceCapabilities{
-		SupportsSortRelevance: true,
-		SupportsSortDate:      true,
-		SupportsPagination:    true,
-		MaxResultsPerQuery:    100,
-		NativeFormat:          FormatJSON,
-		AvailableFormats:      []ContentFormat{FormatJSON},
-	}
-}
-func (p *e2eMockPlugin) NativeFormat() ContentFormat       { return FormatJSON }
-func (p *e2eMockPlugin) AvailableFormats() []ContentFormat { return []ContentFormat{FormatJSON} }
-func (p *e2eMockPlugin) Health(_ context.Context) SourceHealth {
-	return SourceHealth{Enabled: true, Healthy: true, RateLimit: 10.0}
-}
-func (p *e2eMockPlugin) Initialize(_ context.Context, _ PluginConfig) error { return nil }
-func (p *e2eMockPlugin) Search(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
-	return &SearchResult{Total: len(p.results), Results: p.results, HasMore: false}, nil
-}
-func (p *e2eMockPlugin) Get(_ context.Context, id string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
-	for _, pub := range p.results {
-		_, rawID, err := ParsePrefixedID(pub.ID)
-		if err == nil && rawID == id {
-			return &pub, nil
-		}
-	}
-	return nil, fmt.Errorf("%w: not found", ErrGetFailed)
-}
-
 // TestE2ERouterWithRealInfrastructure exercises the full DC-03 pipeline:
 // config loading → real Cache → real RateLimitManager → real CredentialResolver
 // → Router → Search/Get/ListSources. Mock plugins only (no real HTTP sources
@@ -557,16 +517,16 @@ sources:
 
 	arxivPubs := []Publication{
 		{
-			ID:            "arxiv:2401.99999",
-			Source:        SourceArXiv,
-			ContentType:   ContentTypePaper,
-			Title:         "E2E Test Paper Alpha",
-			Authors:       []Author{{Name: "Alice Researcher"}},
-			Published:     "2024-01-15",
-			URL:           "https://arxiv.org/abs/2401.99999",
-			DOI:           e2eDOI,
-			ArXivID:       "2401.99999",
-			CitationCount: &e2eCitations10,
+			ID:             "arxiv:2401.99999",
+			Source:         SourceArXiv,
+			ContentType:    ContentTypePaper,
+			Title:          "E2E Test Paper Alpha",
+			Authors:        []Author{{Name: "Alice Researcher"}},
+			Published:      "2024-01-15",
+			URL:            "https://arxiv.org/abs/2401.99999",
+			DOI:            e2eDOI,
+			ArXivID:        "2401.99999",
+			CitationCount:  &e2eCitations10,
 			SourceMetadata: map[string]any{"arxiv_cat": "cs.AI"},
 		},
 		{
@@ -582,15 +542,15 @@ sources:
 
 	s2Pubs := []Publication{
 		{
-			ID:            "s2:abc123",
-			Source:        SourceS2,
-			ContentType:   ContentTypePaper,
-			Title:         "E2E Test Paper Alpha (S2 copy)",
-			Authors:       []Author{{Name: "Alice Researcher", Affiliation: "MIT"}},
-			Published:     "2024-01-15",
-			URL:           "https://semanticscholar.org/paper/abc123",
-			DOI:           e2eDOI,
-			CitationCount: &e2eCitations50,
+			ID:             "s2:abc123",
+			Source:         SourceS2,
+			ContentType:    ContentTypePaper,
+			Title:          "E2E Test Paper Alpha (S2 copy)",
+			Authors:        []Author{{Name: "Alice Researcher", Affiliation: "MIT"}},
+			Published:      "2024-01-15",
+			URL:            "https://semanticscholar.org/paper/abc123",
+			DOI:            e2eDOI,
+			CitationCount:  &e2eCitations50,
 			SourceMetadata: map[string]any{"s2_tldr": "A short summary"},
 		},
 		{
@@ -605,8 +565,8 @@ sources:
 	}
 
 	plugins := map[string]SourcePlugin{
-		SourceArXiv: &e2eMockPlugin{id: SourceArXiv, results: arxivPubs},
-		SourceS2:    &e2eMockPlugin{id: SourceS2, results: s2Pubs},
+		SourceArXiv: newMockPlugin(SourceArXiv, arxivPubs),
+		SourceS2:    newMockPlugin(SourceS2, s2Pubs),
 	}
 
 	// Build server defaults from config.

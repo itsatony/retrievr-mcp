@@ -36,11 +36,11 @@ const (
 	logMsgSearchComplete     = "search complete"
 	logMsgSourceSearchFailed = "source search failed"
 	logMsgGetStart           = "get started"
-	logMsgGetComplete          = "get complete"
-	logMsgListSources          = "list sources"
-	logMsgCacheHit             = "cache hit"
-	logMsgCacheMiss            = "cache miss"
-	logMsgNoValidSources       = "no valid sources in request"
+	logMsgGetComplete        = "get complete"
+	logMsgListSources        = "list sources"
+	logMsgCacheHit           = "cache hit"
+	logMsgCacheMiss          = "cache miss"
+	logMsgNoValidSources     = "no valid sources in request"
 )
 
 // ---------------------------------------------------------------------------
@@ -181,8 +181,8 @@ func (r *Router) Search(
 	r.logger.Info(logMsgSearchStart,
 		slog.String(LogKeyRequestID, requestID),
 		slog.Any(LogKeySources, resolved),
-		slog.String("query", params.Query),
-		slog.Int("limit", params.Limit),
+		slog.String(LogKeyQuery, params.Query),
+		slog.Int(LogKeyLimit, params.Limit),
 	)
 
 	// Step 3: Check cache.
@@ -196,6 +196,9 @@ func (r *Router) Search(
 					slog.String(LogKeyRequestID, requestID),
 					slog.String(LogKeyCacheKey, cacheKey),
 				)
+				// Cache stores only successful results. On hit, SourcesFailed is
+				// always empty because partial-failure results are not cached —
+				// only the merged/deduped output from successful sources is stored.
 				return &MergedSearchResult{
 					TotalResults:   cached.Total,
 					Results:        cached.Results,
@@ -232,9 +235,11 @@ func (r *Router) Search(
 	wg.Wait()
 
 	// Step 5: Classify results.
+	// Initialize as empty slices (not nil) to ensure consistent JSON serialization
+	// (produces [] rather than null) matching the cache-hit path.
 	var (
-		sourcesQueried []string
-		sourcesFailed  []string
+		sourcesQueried = make([]string, 0, len(resolved))
+		sourcesFailed  = make([]string, 0)
 		allResults     []Publication
 	)
 
@@ -261,7 +266,7 @@ func (r *Router) Search(
 
 	// All sources failed.
 	if len(sourcesFailed) == len(resolved) {
-		return nil, fmt.Errorf("%w", ErrAllSourcesFailed)
+		return nil, fmt.Errorf("%w: queried %d sources", ErrAllSourcesFailed, len(resolved))
 	}
 
 	// Step 6-7: Dedup.
@@ -317,11 +322,15 @@ func (r *Router) searchOneSource(
 ) sourceResult {
 	plugin := r.plugins[sourceID]
 
-	// Credential resolution.
+	// Credential resolution. The resolved credential string is not used here —
+	// plugins resolve credentials internally via creds.ResolveForSource(). We only
+	// need the deterministic bucket key for per-credential rate limiting.
 	serverDefault := r.serverDefaults[sourceID]
 	_, bucketKey := r.credentials.Resolve(sourceID, creds, serverDefault)
 
 	// Rate limit wait.
+	// Double %w wrapping is intentional (Go 1.20+ multi-error): errors.Is()
+	// matches both the sentinel (ErrSearchFailed) and the underlying cause.
 	if r.rateLimits != nil {
 		if err := r.rateLimits.Wait(ctx, sourceID, bucketKey); err != nil {
 			return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err)}
@@ -391,10 +400,11 @@ func (r *Router) Get(
 	r.logger.Info(logMsgGetStart,
 		slog.String(LogKeyRequestID, requestID),
 		slog.String(LogKeySource, sourceID),
-		slog.String("id", rawID),
+		slog.String(LogKeyPubID, rawID),
 	)
 
 	// Step 4: Credential resolution + rate limit wait.
+	// Only the bucket key is needed here; plugins resolve credentials internally.
 	serverDefault := r.serverDefaults[sourceID]
 	_, bucketKey := r.credentials.Resolve(sourceID, creds, serverDefault)
 
@@ -497,7 +507,10 @@ func dedup(results []Publication) []Publication {
 	}
 
 	for i := range results {
-		// Check DOI dedup.
+		// Check DOI dedup. When a duplicate is found, `continue` intentionally
+		// skips the ArXiv ID registration below. This means a duplicate's
+		// secondary identifiers are not indexed — transitive cross-identifier
+		// dedup is out of scope per the "exact-match dedup only" design.
 		if results[i].DOI != "" {
 			if primaryIdx, exists := doiIndex[results[i].DOI]; exists {
 				keep[i] = false

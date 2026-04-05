@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -52,13 +53,13 @@ type mockPlugin struct {
 	initFunc   func(ctx context.Context, cfg PluginConfig) error
 }
 
-func (m *mockPlugin) ID() string                        { return m.id }
-func (m *mockPlugin) Name() string                      { return m.name }
-func (m *mockPlugin) Description() string               { return m.description }
-func (m *mockPlugin) ContentTypes() []ContentType        { return m.contentTypes }
-func (m *mockPlugin) Capabilities() SourceCapabilities   { return m.capabilities }
-func (m *mockPlugin) NativeFormat() ContentFormat        { return m.nativeFormat }
-func (m *mockPlugin) AvailableFormats() []ContentFormat  { return m.availableFormats }
+func (m *mockPlugin) ID() string                            { return m.id }
+func (m *mockPlugin) Name() string                          { return m.name }
+func (m *mockPlugin) Description() string                   { return m.description }
+func (m *mockPlugin) ContentTypes() []ContentType           { return m.contentTypes }
+func (m *mockPlugin) Capabilities() SourceCapabilities      { return m.capabilities }
+func (m *mockPlugin) NativeFormat() ContentFormat           { return m.nativeFormat }
+func (m *mockPlugin) AvailableFormats() []ContentFormat     { return m.availableFormats }
 func (m *mockPlugin) Health(_ context.Context) SourceHealth { return m.healthState }
 
 func (m *mockPlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
@@ -744,10 +745,10 @@ func TestRouterSearchSourceTimeout(t *testing.T) {
 func TestRouterSearchCacheHit(t *testing.T) {
 	t.Parallel()
 
-	callCount := 0
+	var callCount atomic.Int32
 	plugin := newMockPlugin(mockSourceA, nil)
 	plugin.searchFunc = func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
-		callCount++
+		callCount.Add(1)
 		return &SearchResult{
 			Total:   1,
 			Results: []Publication{testPub(mockSourceA, "arxiv:1", testDOI1, nil)},
@@ -763,22 +764,22 @@ func TestRouterSearchCacheHit(t *testing.T) {
 	result1, err := r.Search(context.Background(), params, sources, nil)
 	require.NoError(t, err)
 	assert.Len(t, result1.Results, 1)
-	assert.Equal(t, 1, callCount)
+	assert.Equal(t, int32(1), callCount.Load())
 
 	// Second call — cache hit.
 	result2, err := r.Search(context.Background(), params, sources, nil)
 	require.NoError(t, err)
 	assert.Len(t, result2.Results, 1)
-	assert.Equal(t, 1, callCount, "plugin should not be called again on cache hit")
+	assert.Equal(t, int32(1), callCount.Load(), "plugin should not be called again on cache hit")
 }
 
 func TestRouterSearchCacheDisabled(t *testing.T) {
 	t.Parallel()
 
-	callCount := 0
+	var callCount atomic.Int32
 	plugin := newMockPlugin(mockSourceA, nil)
 	plugin.searchFunc = func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
-		callCount++
+		callCount.Add(1)
 		return &SearchResult{
 			Total:   1,
 			Results: []Publication{testPub(mockSourceA, "arxiv:1", testDOI1, nil)},
@@ -792,7 +793,7 @@ func TestRouterSearchCacheDisabled(t *testing.T) {
 
 	_, _ = r.Search(context.Background(), params, sources, nil)
 	_, _ = r.Search(context.Background(), params, sources, nil)
-	assert.Equal(t, 2, callCount, "plugin should be called both times without cache")
+	assert.Equal(t, int32(2), callCount.Load(), "plugin should be called both times without cache")
 }
 
 func TestRouterSearchNoValidSources(t *testing.T) {

@@ -3517,3 +3517,480 @@ sources:
 	assert.True(t, emcHealth.Healthy)
 	assert.Empty(t, emcHealth.LastError)
 }
+
+// ---------------------------------------------------------------------------
+// E2E: HuggingFace Plugin — papers, models, datasets through full pipeline
+// ---------------------------------------------------------------------------
+
+const (
+	e2eHFVersion            = "0.10.0-e2e"
+	e2eHFPaperID            = "2401.55555"
+	e2eHFPaperTitle         = "E2E HuggingFace Paper on Transformers"
+	e2eHFPaperSummary       = "A comprehensive study on transformer architectures."
+	e2eHFPaperDate          = "2024-01-20T00:00:00.000Z"
+	e2eHFPaperUpvotes       = 99
+	e2eHFPaperComments      = 12
+	e2eHFPaperAuthor1       = "E2E Author One"
+	e2eHFPaperAuthor2       = "E2E Author Two"
+	e2eHFModelID            = "e2e-org/e2e-model"
+	e2eHFModelDownloads     = 5000000
+	e2eHFModelLikes         = 1500
+	e2eHFModelPipeline      = "text-generation"
+	e2eHFModelLibrary       = "transformers"
+	e2eHFModelDate          = "2024-06-15T00:00:00.000Z"
+	e2eHFDatasetID          = "e2e-org/e2e-dataset"
+	e2eHFDatasetAuthor      = "e2e-org"
+	e2eHFDatasetDownloads   = 50000
+	e2eHFDatasetLikes       = 300
+	e2eHFDatasetDescription = "E2E test dataset for question answering"
+	e2eHFDatasetDate        = "2023-08-01T00:00:00.000Z"
+	e2eHFMarkdownContent    = "# E2E HuggingFace Paper on Transformers\n\nFull text content here."
+	e2eHFLinkedModelID      = "e2e-org/linked-model"
+	e2eHFSearchResultCount  = 3 // 1 paper + 1 model + 1 dataset
+	e2eHFExpectedSources    = 1
+	e2eHFModelTag1          = "pytorch"
+	e2eHFModelTag2          = "text-generation"
+	e2eHFDatasetTag1        = "task_categories:question-answering"
+	e2eHFServerAPIKey       = "hf-e2e-server-token"
+	e2eHFPerCallToken       = "hf-e2e-per-call-token"
+)
+
+// TestE2EHuggingFace exercises the full HuggingFace plugin pipeline:
+// httptest servers → real plugin → real router → MCP tool handlers.
+// Covers papers/models/datasets search, get with full text and related,
+// credential passthrough, BibTeX format, and ArXiv ID dedup.
+func TestE2EHuggingFace(t *testing.T) {
+	t.Parallel()
+
+	SetVersionForTesting(e2eHFVersion, "e2e-commit", "2024-04-07")
+
+	// Step 1: Set up httptest server that handles all HuggingFace sub-APIs.
+	hfServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		switch {
+		// Papers search.
+		case r.URL.Path == hfAPIPapersSearchPath:
+			fmt.Fprintf(w, `[{
+				"paper": {
+					"id": %q,
+					"title": %q,
+					"summary": %q,
+					"publishedAt": %q,
+					"upvotes": %d,
+					"authors": [{"name": %q, "user": null}, {"name": %q, "user": null}]
+				},
+				"publishedAt": %q,
+				"title": %q,
+				"summary": %q,
+				"numComments": %d
+			}]`, e2eHFPaperID, e2eHFPaperTitle, e2eHFPaperSummary, e2eHFPaperDate,
+				e2eHFPaperUpvotes, e2eHFPaperAuthor1, e2eHFPaperAuthor2,
+				e2eHFPaperDate, e2eHFPaperTitle, e2eHFPaperSummary, e2eHFPaperComments)
+
+		// Paper get by ArXiv ID.
+		case r.URL.Path == hfAPIPaperGetPath+e2eHFPaperID:
+			fmt.Fprintf(w, `{
+				"id": %q,
+				"title": %q,
+				"summary": %q,
+				"publishedAt": %q,
+				"upvotes": %d,
+				"authors": [{"name": %q, "user": null}, {"name": %q, "user": null}]
+			}`, e2eHFPaperID, e2eHFPaperTitle, e2eHFPaperSummary, e2eHFPaperDate,
+				e2eHFPaperUpvotes, e2eHFPaperAuthor1, e2eHFPaperAuthor2)
+
+		// Paper markdown.
+		case r.URL.Path == hfAPIPaperMarkdownPath+e2eHFPaperID+hfPaperMDSuffix:
+			w.Header().Set("Content-Type", "text/markdown")
+			fmt.Fprint(w, e2eHFMarkdownContent)
+
+		// Models search (also handles linked models query via filter param).
+		case r.URL.Path == hfAPIModelsPath:
+			filterVal := r.URL.Query().Get(hfParamFilter)
+			if strings.Contains(filterVal, hfArxivFilterPrefix) {
+				// Linked models for a paper.
+				fmt.Fprintf(w, `[{
+					"id": %q, "modelId": %q, "likes": 100, "downloads": 50000,
+					"pipeline_tag": "text-generation", "library_name": "transformers",
+					"tags": ["pytorch"], "createdAt": "2024-01-01T00:00:00.000Z", "private": false
+				}]`, e2eHFLinkedModelID, e2eHFLinkedModelID)
+			} else {
+				// Regular model search.
+				fmt.Fprintf(w, `[{
+					"id": %q, "modelId": %q, "likes": %d, "downloads": %d,
+					"pipeline_tag": %q, "library_name": %q,
+					"tags": [%q, %q], "createdAt": %q, "private": false
+				}]`, e2eHFModelID, e2eHFModelID, e2eHFModelLikes, e2eHFModelDownloads,
+					e2eHFModelPipeline, e2eHFModelLibrary,
+					e2eHFModelTag1, e2eHFModelTag2, e2eHFModelDate)
+			}
+
+		// Model get.
+		case strings.HasPrefix(r.URL.Path, hfAPIModelsSlashPath) && !strings.HasPrefix(r.URL.Path, hfAPIModelsPath+"?"):
+			fmt.Fprintf(w, `{
+				"id": %q, "modelId": %q, "likes": %d, "downloads": %d,
+				"pipeline_tag": %q, "library_name": %q,
+				"tags": [%q, %q], "createdAt": %q, "private": false
+			}`, e2eHFModelID, e2eHFModelID, e2eHFModelLikes, e2eHFModelDownloads,
+				e2eHFModelPipeline, e2eHFModelLibrary,
+				e2eHFModelTag1, e2eHFModelTag2, e2eHFModelDate)
+
+		// Datasets search.
+		case r.URL.Path == hfAPIDatasetsPath:
+			fmt.Fprintf(w, `[{
+				"id": %q, "author": %q, "likes": %d, "downloads": %d,
+				"tags": [%q], "createdAt": %q,
+				"description": %q, "private": false
+			}]`, e2eHFDatasetID, e2eHFDatasetAuthor, e2eHFDatasetLikes, e2eHFDatasetDownloads,
+				e2eHFDatasetTag1, e2eHFDatasetDate, e2eHFDatasetDescription)
+
+		// Dataset get.
+		case strings.HasPrefix(r.URL.Path, hfAPIDatasetsSlashPath):
+			fmt.Fprintf(w, `{
+				"id": %q, "author": %q, "likes": %d, "downloads": %d,
+				"tags": [%q], "createdAt": %q,
+				"description": %q, "private": false
+			}`, e2eHFDatasetID, e2eHFDatasetAuthor, e2eHFDatasetLikes, e2eHFDatasetDownloads,
+				e2eHFDatasetTag1, e2eHFDatasetDate, e2eHFDatasetDescription)
+
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer hfServer.Close()
+
+	// Step 2: Load config from temp YAML.
+	configYAML := fmt.Sprintf(`
+server:
+  name: "retrievr-mcp"
+  http_addr: ":0"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["huggingface"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  huggingface:
+    enabled: true
+    base_url: "%s"
+    api_key: "%s"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+    extra:
+      include_models: "true"
+      include_datasets: "true"
+      include_papers: "true"
+`, hfServer.URL, e2eHFServerAPIKey)
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 3: Create real HuggingFace plugin.
+	hfPlugin := &HuggingFacePlugin{}
+	err = hfPlugin.Initialize(context.Background(), cfg.Sources[SourceHuggingFace])
+	require.NoError(t, err)
+
+	plugins := map[string]SourcePlugin{
+		SourceHuggingFace: hfPlugin,
+	}
+
+	// Step 4: Create real infrastructure.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < RateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	resolver := &CredentialResolver{}
+
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 5: Create router + server.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	srv := NewServer(cfg, router, rateLimits, nil)
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	ctx := context.Background()
+
+	// ---------------------------------------------------------------
+	// Step 6: Search ContentTypeAny — should return papers + models + datasets.
+	// ---------------------------------------------------------------
+	searchHandler := NewSearchHandler(router)
+
+	searchReq := mcp.CallToolRequest{}
+	searchReq.Params.Name = ToolNameSearch
+	searchReq.Params.Arguments = map[string]any{
+		FieldQuery:       "e2e test",
+		FieldSources:     []any{SourceHuggingFace},
+		FieldContentType: string(ContentTypeAny),
+		FieldLimit:       float64(10),
+	}
+
+	searchResult, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult)
+	assert.False(t, searchResult.IsError, "search should succeed")
+
+	searchText := extractTextContent(t, searchResult)
+	var merged MergedSearchResult
+	err = json.Unmarshal([]byte(searchText), &merged)
+	require.NoError(t, err)
+
+	assert.Len(t, merged.Results, e2eHFSearchResultCount, "1 paper + 1 model + 1 dataset")
+	assert.Contains(t, merged.SourcesQueried, SourceHuggingFace)
+	assert.Empty(t, merged.SourcesFailed)
+
+	// Verify we have all three content types.
+	var hasPaper, hasModel, hasDataset bool
+	for _, pub := range merged.Results {
+		switch pub.ContentType {
+		case ContentTypePaper:
+			hasPaper = true
+			assert.Equal(t, e2eHFPaperTitle, pub.Title)
+			assert.Equal(t, e2eHFPaperID, pub.ArXivID)
+		case ContentTypeModel:
+			hasModel = true
+			assert.Equal(t, e2eHFModelID, pub.Title)
+		case ContentTypeDataset:
+			hasDataset = true
+			assert.Equal(t, e2eHFDatasetID, pub.Title)
+			assert.Equal(t, e2eHFDatasetDescription, pub.Abstract)
+		}
+	}
+	assert.True(t, hasPaper, "should have paper result")
+	assert.True(t, hasModel, "should have model result")
+	assert.True(t, hasDataset, "should have dataset result")
+
+	// ---------------------------------------------------------------
+	// Step 7: Search ContentTypePaper only.
+	// ---------------------------------------------------------------
+	paperSearchReq := mcp.CallToolRequest{}
+	paperSearchReq.Params.Name = ToolNameSearch
+	paperSearchReq.Params.Arguments = map[string]any{
+		FieldQuery:       "e2e test",
+		FieldSources:     []any{SourceHuggingFace},
+		FieldContentType: string(ContentTypePaper),
+		FieldLimit:       float64(10),
+	}
+
+	paperResult, err := searchHandler(ctx, paperSearchReq)
+	require.NoError(t, err)
+	paperText := extractTextContent(t, paperResult)
+	var paperMerged MergedSearchResult
+	err = json.Unmarshal([]byte(paperText), &paperMerged)
+	require.NoError(t, err)
+	assert.Len(t, paperMerged.Results, 1)
+	assert.Equal(t, ContentTypePaper, paperMerged.Results[0].ContentType)
+
+	// ---------------------------------------------------------------
+	// Step 8: Get paper with full text and related models.
+	// ---------------------------------------------------------------
+	getHandler := NewGetHandler(router)
+	getReq := mcp.CallToolRequest{}
+	getReq.Params.Name = ToolNameGet
+	getReq.Params.Arguments = map[string]any{
+		FieldID:      SourceHuggingFace + prefixedIDSeparator + hfSubTypePaper + e2eHFPaperID,
+		FieldInclude: []any{string(IncludeFullText), string(IncludeRelated)},
+	}
+
+	getResult, err := getHandler(ctx, getReq)
+	require.NoError(t, err)
+	require.NotNil(t, getResult)
+	assert.False(t, getResult.IsError)
+
+	getText := extractTextContent(t, getResult)
+	var pub Publication
+	err = json.Unmarshal([]byte(getText), &pub)
+	require.NoError(t, err)
+
+	assert.Equal(t, e2eHFPaperTitle, pub.Title)
+	assert.Equal(t, SourceHuggingFace, pub.Source)
+	assert.Equal(t, e2eHFPaperID, pub.ArXivID)
+	assert.Len(t, pub.Authors, 2)
+	assert.Equal(t, e2eHFPaperAuthor1, pub.Authors[0].Name)
+
+	// Full text markdown.
+	require.NotNil(t, pub.FullText, "full text should be fetched")
+	assert.Equal(t, FormatMarkdown, pub.FullText.ContentFormat)
+	assert.Equal(t, e2eHFMarkdownContent, pub.FullText.Content)
+
+	// Related linked models.
+	require.Len(t, pub.Related, 1)
+	assert.Contains(t, pub.Related[0].ID, e2eHFLinkedModelID)
+
+	// ---------------------------------------------------------------
+	// Step 9: Get model.
+	// ---------------------------------------------------------------
+	getModelReq := mcp.CallToolRequest{}
+	getModelReq.Params.Name = ToolNameGet
+	getModelReq.Params.Arguments = map[string]any{
+		FieldID: SourceHuggingFace + prefixedIDSeparator + hfSubTypeModel + e2eHFModelID,
+	}
+
+	getModelResult, err := getHandler(ctx, getModelReq)
+	require.NoError(t, err)
+	assert.False(t, getModelResult.IsError)
+
+	getModelText := extractTextContent(t, getModelResult)
+	var modelPub Publication
+	err = json.Unmarshal([]byte(getModelText), &modelPub)
+	require.NoError(t, err)
+	assert.Equal(t, e2eHFModelID, modelPub.Title)
+	assert.Equal(t, ContentTypeModel, modelPub.ContentType)
+	assert.Equal(t, float64(e2eHFModelDownloads), modelPub.SourceMetadata[hfMetaKeyDownloads])
+
+	// ---------------------------------------------------------------
+	// Step 10: Get dataset.
+	// ---------------------------------------------------------------
+	getDatasetReq := mcp.CallToolRequest{}
+	getDatasetReq.Params.Name = ToolNameGet
+	getDatasetReq.Params.Arguments = map[string]any{
+		FieldID: SourceHuggingFace + prefixedIDSeparator + hfSubTypeDataset + e2eHFDatasetID,
+	}
+
+	getDatasetResult, err := getHandler(ctx, getDatasetReq)
+	require.NoError(t, err)
+	assert.False(t, getDatasetResult.IsError)
+
+	getDatasetText := extractTextContent(t, getDatasetResult)
+	var datasetPub Publication
+	err = json.Unmarshal([]byte(getDatasetText), &datasetPub)
+	require.NoError(t, err)
+	assert.Equal(t, e2eHFDatasetID, datasetPub.Title)
+	assert.Equal(t, ContentTypeDataset, datasetPub.ContentType)
+	assert.Equal(t, e2eHFDatasetDescription, datasetPub.Abstract)
+
+	// ---------------------------------------------------------------
+	// Step 11: Get paper with BibTeX format.
+	// ---------------------------------------------------------------
+	getBibReq := mcp.CallToolRequest{}
+	getBibReq.Params.Name = ToolNameGet
+	getBibReq.Params.Arguments = map[string]any{
+		FieldID:     SourceHuggingFace + prefixedIDSeparator + hfSubTypePaper + e2eHFPaperID,
+		FieldFormat: string(FormatBibTeX),
+	}
+
+	getBibResult, err := getHandler(ctx, getBibReq)
+	require.NoError(t, err)
+	assert.False(t, getBibResult.IsError)
+
+	getBibText := extractTextContent(t, getBibResult)
+	var bibPub Publication
+	err = json.Unmarshal([]byte(getBibText), &bibPub)
+	require.NoError(t, err)
+	require.NotNil(t, bibPub.FullText)
+	assert.Equal(t, FormatBibTeX, bibPub.FullText.ContentFormat)
+	assert.Contains(t, bibPub.FullText.Content, e2eHFPaperTitle)
+	assert.Contains(t, bibPub.FullText.Content, e2eHFPaperAuthor1)
+
+	// ---------------------------------------------------------------
+	// Step 12: Credential passthrough — per-call token overrides server.
+	// ---------------------------------------------------------------
+	credSearchReq := mcp.CallToolRequest{}
+	credSearchReq.Params.Name = ToolNameSearch
+	credSearchReq.Params.Arguments = map[string]any{
+		FieldQuery:       "credential test",
+		FieldSources:     []any{SourceHuggingFace},
+		FieldContentType: string(ContentTypePaper),
+		FieldLimit:       float64(5),
+		FieldCredentials: map[string]any{
+			CredFieldHFToken: e2eHFPerCallToken,
+		},
+	}
+
+	credResult, err := searchHandler(ctx, credSearchReq)
+	require.NoError(t, err)
+	assert.False(t, credResult.IsError)
+
+	// ---------------------------------------------------------------
+	// Step 13: list_sources — HuggingFace should appear.
+	// ---------------------------------------------------------------
+	listHandler := NewListSourcesHandler(router)
+	listReq := mcp.CallToolRequest{}
+	listReq.Params.Name = ToolNameListSources
+
+	listResult, err := listHandler(ctx, listReq)
+	require.NoError(t, err)
+	assert.False(t, listResult.IsError)
+
+	listText := extractTextContent(t, listResult)
+	var infos []SourceInfo
+	err = json.Unmarshal([]byte(listText), &infos)
+	require.NoError(t, err)
+	require.Len(t, infos, e2eHFExpectedSources)
+
+	var hfInfo *SourceInfo
+	for i := range infos {
+		if infos[i].ID == SourceHuggingFace {
+			hfInfo = &infos[i]
+			break
+		}
+	}
+	require.NotNil(t, hfInfo, "HuggingFace should appear in list_sources")
+	assert.Equal(t, hfPluginName, hfInfo.Name)
+	assert.True(t, hfInfo.Enabled)
+	assert.Contains(t, hfInfo.ContentTypes, ContentTypePaper)
+	assert.Contains(t, hfInfo.ContentTypes, ContentTypeModel)
+	assert.Contains(t, hfInfo.ContentTypes, ContentTypeDataset)
+	assert.Equal(t, FormatJSON, hfInfo.NativeFormat)
+	assert.True(t, hfInfo.SupportsFullText)
+	assert.True(t, hfInfo.SupportsCategoryFilter)
+	assert.True(t, hfInfo.AcceptsCredentials, "HuggingFace accepts per-call credentials")
+
+	// ---------------------------------------------------------------
+	// Step 14: Cache — second search should be a cache hit.
+	// ---------------------------------------------------------------
+	searchResult2, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	assert.False(t, searchResult2.IsError)
+
+	cacheMetrics := cache.Metrics()
+	assert.Equal(t, uint64(1), cacheMetrics.Hits, "second search should be a cache hit")
+
+	// ---------------------------------------------------------------
+	// Step 15: Contract test + health check on the real plugin.
+	// ---------------------------------------------------------------
+	PluginContractTest(t, hfPlugin)
+
+	hfHealth := hfPlugin.Health(ctx)
+	assert.True(t, hfHealth.Enabled)
+	assert.True(t, hfHealth.Healthy)
+	assert.Empty(t, hfHealth.LastError)
+}

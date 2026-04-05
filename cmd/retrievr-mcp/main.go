@@ -149,6 +149,18 @@ func run() int {
 		plugins[internal.SourceEuropePMC] = emcPlugin
 	}
 
+	if hfCfg, ok := cfg.Sources[internal.SourceHuggingFace]; ok && hfCfg.Enabled {
+		hfPlugin := &internal.HuggingFacePlugin{}
+		if err := hfPlugin.Initialize(context.Background(), hfCfg); err != nil {
+			logger.Error(logMsgPluginInitFail,
+				slog.String(internal.LogKeySource, internal.SourceHuggingFace),
+				slog.String(internal.LogKeyError, err.Error()),
+			)
+			return exitCodeStartup
+		}
+		plugins[internal.SourceHuggingFace] = hfPlugin
+	}
+
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
 
 	// Step 2: Create rate limit manager and register all enabled sources.

@@ -185,6 +185,24 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: HuggingFace
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgHFJSONParse   = "failed to parse huggingface json response"
+	ErrMsgHFHTTPRequest = "huggingface http request failed"
+	ErrMsgHFNotFound    = "huggingface item not found"
+	ErrMsgHFEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrHFJSONParse   = errors.New(ErrMsgHFJSONParse)
+	ErrHFHTTPRequest = errors.New(ErrMsgHFHTTPRequest)
+	ErrHFNotFound    = errors.New(ErrMsgHFNotFound)
+	ErrHFEmptyQuery  = errors.New(ErrMsgHFEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

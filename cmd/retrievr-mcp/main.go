@@ -125,6 +125,18 @@ func run() int {
 		plugins[internal.SourceOpenAlex] = oaPlugin
 	}
 
+	if pmCfg, ok := cfg.Sources[internal.SourcePubMed]; ok && pmCfg.Enabled {
+		pmPlugin := &internal.PubMedPlugin{}
+		if err := pmPlugin.Initialize(context.Background(), pmCfg); err != nil {
+			logger.Error(logMsgPluginInitFail,
+				slog.String(internal.LogKeySource, internal.SourcePubMed),
+				slog.String(internal.LogKeyError, err.Error()),
+			)
+			return exitCodeStartup
+		}
+		plugins[internal.SourcePubMed] = pmPlugin
+	}
+
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
 
 	// Step 2: Create rate limit manager and register all enabled sources.

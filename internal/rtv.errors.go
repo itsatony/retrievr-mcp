@@ -149,6 +149,24 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: PubMed
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgPubMedXMLParse    = "failed to parse pubmed xml response"
+	ErrMsgPubMedHTTPRequest = "pubmed http request failed"
+	ErrMsgPubMedNotFound    = "pubmed article not found"
+	ErrMsgPubMedEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrPubMedXMLParse    = errors.New(ErrMsgPubMedXMLParse)
+	ErrPubMedHTTPRequest = errors.New(ErrMsgPubMedHTTPRequest)
+	ErrPubMedNotFound    = errors.New(ErrMsgPubMedNotFound)
+	ErrPubMedEmptyQuery  = errors.New(ErrMsgPubMedEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

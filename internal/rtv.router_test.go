@@ -172,6 +172,7 @@ func testRouter(plugins map[string]SourcePlugin) *Router {
 		nil, // no cache
 		testRateLimits(plugins),
 		&CredentialResolver{},
+		nil, // no metrics
 		discardLogger(),
 	)
 }
@@ -184,7 +185,7 @@ func testRouterWithCache(plugins map[string]SourcePlugin) *Router {
 		MaxEntries: DefaultCacheMaxEntries,
 		TTL:        DefaultCacheTTL,
 		Enabled:    true,
-	})
+	}, nil)
 	return NewRouter(
 		cfg,
 		plugins,
@@ -192,6 +193,7 @@ func testRouterWithCache(plugins map[string]SourcePlugin) *Router {
 		cache,
 		testRateLimits(plugins),
 		&CredentialResolver{},
+		nil, // no metrics
 		discardLogger(),
 	)
 }
@@ -207,6 +209,7 @@ func testRouterNoDedupNoCache(plugins map[string]SourcePlugin) *Router {
 		nil,
 		testRateLimits(plugins),
 		&CredentialResolver{},
+		nil, // no metrics
 		discardLogger(),
 	)
 }
@@ -731,7 +734,7 @@ func TestRouterSearchSourceTimeout(t *testing.T) {
 	cfg.PerSourceTimeout = Duration{Duration: testShortTimeout}
 	r := NewRouter(cfg, plugins, nil, nil,
 		testRateLimits(plugins),
-		&CredentialResolver{}, discardLogger())
+		&CredentialResolver{}, nil, discardLogger())
 
 	result, err := r.Search(context.Background(), SearchParams{
 		Query: "test", Limit: 10, Sort: SortRelevance,
@@ -1104,7 +1107,7 @@ func TestNewRouterNilLogger(t *testing.T) {
 
 	r := NewRouter(testRouterConfig(), nil, nil, nil,
 		NewSourceRateLimitManager(DefaultCredentialBucketTTL),
-		&CredentialResolver{}, nil)
+		&CredentialResolver{}, nil, nil)
 
 	// Should not panic — logger is replaced with discard logger.
 	assert.NotNil(t, r)
@@ -1118,7 +1121,7 @@ func TestNewRouterDefensiveCopy(t *testing.T) {
 	}
 	r := NewRouter(testRouterConfig(), plugins, nil, nil,
 		NewSourceRateLimitManager(DefaultCredentialBucketTTL),
-		&CredentialResolver{}, discardLogger())
+		&CredentialResolver{}, nil, discardLogger())
 
 	// Mutate the original map — should not affect the router.
 	delete(plugins, mockSourceA)

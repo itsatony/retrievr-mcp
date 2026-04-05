@@ -48,13 +48,14 @@ type cacheEntry struct {
 
 // Cache is a thread-safe in-memory LRU cache with TTL expiration.
 type Cache struct {
-	mu         sync.Mutex
-	maxEntries int
-	ttl        time.Duration
-	enabled    bool
-	items      map[string]*list.Element
-	evictList  *list.List
-	metrics    CacheMetrics
+	mu          sync.Mutex
+	maxEntries  int
+	ttl         time.Duration
+	enabled     bool
+	items       map[string]*list.Element
+	evictList   *list.List
+	metrics     CacheMetrics
+	promMetrics *Metrics
 }
 
 // ---------------------------------------------------------------------------
@@ -63,18 +64,20 @@ type Cache struct {
 
 // NewCache creates a new Cache with the given configuration.
 // If cfg.MaxEntries is <= 0, DefaultCacheMaxEntries is used.
-func NewCache(cfg CacheConfig) *Cache {
+// The metrics parameter is optional (nil disables Prometheus counter updates).
+func NewCache(cfg CacheConfig, metrics *Metrics) *Cache {
 	maxEntries := cfg.MaxEntries
 	if maxEntries <= 0 {
 		maxEntries = DefaultCacheMaxEntries
 	}
 
 	return &Cache{
-		maxEntries: maxEntries,
-		ttl:        cfg.TTL,
-		enabled:    cfg.Enabled,
-		items:      make(map[string]*list.Element),
-		evictList:  list.New(),
+		maxEntries:  maxEntries,
+		ttl:         cfg.TTL,
+		enabled:     cfg.Enabled,
+		items:       make(map[string]*list.Element),
+		evictList:   list.New(),
+		promMetrics: metrics,
 	}
 }
 
@@ -127,6 +130,7 @@ func (c *Cache) Get(key string) (*SearchResult, bool) {
 	elem, ok := c.items[key]
 	if !ok {
 		c.metrics.Misses++
+		c.promMetrics.RecordCacheMiss()
 		return nil, false
 	}
 
@@ -137,12 +141,14 @@ func (c *Cache) Get(key string) (*SearchResult, bool) {
 		delete(c.items, key)
 		c.metrics.Misses++
 		c.metrics.Evictions++
+		c.promMetrics.RecordCacheMiss()
 		return nil, false
 	}
 
 	// Cache hit: move to front (most-recently used).
 	c.evictList.MoveToFront(elem)
 	c.metrics.Hits++
+	c.promMetrics.RecordCacheHit()
 	return entry.value, true
 }
 

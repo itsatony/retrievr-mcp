@@ -29,6 +29,7 @@ const (
 	logMsgPluginsInit    = "plugins initialized"
 	logMsgPluginInitFail = "plugin initialization failed"
 	logMsgRateLimitsInit = "rate limits initialized"
+	logMsgMetricsInit    = "prometheus metrics initialized"
 	logMsgRouterCreated  = "router created"
 	logMsgServerCreated  = "server created"
 	logMsgShutdownSignal = "received shutdown signal"
@@ -189,28 +190,32 @@ func run() int {
 	// Step 3: Create credential resolver.
 	resolver := &internal.CredentialResolver{}
 
-	// Step 4: Create cache (if enabled).
+	// Step 4: Create Prometheus metrics.
+	metrics := internal.NewMetrics()
+	logger.Info(logMsgMetricsInit)
+
+	// Step 5: Create cache (if enabled).
 	var cache *internal.Cache
 	if cfg.Router.CacheEnabled {
 		cache = internal.NewCache(internal.CacheConfig{
 			MaxEntries: cfg.Router.CacheMaxEntries,
 			TTL:        cfg.Router.CacheTTL.Duration,
 			Enabled:    cfg.Router.CacheEnabled,
-		})
+		}, metrics)
 	}
 
-	// Step 5: Build server defaults map (sourceID → API key from config).
+	// Step 6: Build server defaults map (sourceID → API key from config).
 	serverDefaults := make(map[string]string, len(cfg.Sources))
 	for id, src := range cfg.Sources {
 		serverDefaults[id] = src.APIKey
 	}
 
-	// Step 6: Create router.
-	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, logger)
+	// Step 7: Create router.
+	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, metrics, logger)
 	logger.Info(logMsgRouterCreated)
 
-	// Step 7: Create MCP server.
-	srv := internal.NewServer(cfg, router, rateLimits, logger)
+	// Step 8: Create MCP server.
+	srv := internal.NewServer(cfg, router, rateLimits, metrics, logger)
 	logger.Info(logMsgServerCreated)
 
 	// Step 8: Signal handling — graceful shutdown on SIGTERM/SIGINT.

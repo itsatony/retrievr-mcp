@@ -130,22 +130,6 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// HuggingFace BibTeX constants
-// ---------------------------------------------------------------------------
-
-const hfBibTeXTemplate = `@misc{%s,
-  title  = {%s},
-  author = {%s},
-  year   = {%s},
-  url    = {%s}
-}`
-
-const (
-	hfBibTeXAuthorSeparator = " and "
-	hfBibTeXKeyPrefix       = "HF-"
-)
-
-// ---------------------------------------------------------------------------
 // HuggingFace categories hint
 // ---------------------------------------------------------------------------
 
@@ -158,7 +142,6 @@ const hfCategoriesHint = "text-generation, text-classification, question-answeri
 const (
 	hfDateLayout       = "2006-01-02T15:04:05.000Z"
 	hfDateOutputLayout = "2006-01-02"
-	hfYearOnlyLength   = 4
 )
 
 // ---------------------------------------------------------------------------
@@ -1041,15 +1024,6 @@ func parseHFDate(isoDate string) string {
 // convertHFFormat converts the publication to the requested format.
 func convertHFFormat(pub *Publication, format ContentFormat) error {
 	switch format {
-	case FormatBibTeX:
-		bibtex := assembleHFBibTeX(pub)
-		pub.FullText = &FullTextContent{
-			Content:       bibtex,
-			ContentFormat: FormatBibTeX,
-			ContentLength: len(bibtex),
-			Truncated:     false,
-		}
-		return nil
 	case FormatMarkdown:
 		// Markdown is only available if already fetched for papers.
 		if pub.FullText != nil && pub.FullText.ContentFormat == FormatMarkdown {
@@ -1061,30 +1035,3 @@ func convertHFFormat(pub *Publication, format ContentFormat) error {
 	}
 }
 
-// assembleHFBibTeX assembles a BibTeX entry from publication metadata.
-func assembleHFBibTeX(pub *Publication) string {
-	year := ""
-	if len(pub.Published) >= hfYearOnlyLength {
-		year = pub.Published[:hfYearOnlyLength]
-	}
-
-	authorNames := make([]string, 0, len(pub.Authors))
-	for _, a := range pub.Authors {
-		authorNames = append(authorNames, a.Name)
-	}
-	authorStr := strings.Join(authorNames, hfBibTeXAuthorSeparator)
-
-	// Extract a short key from the ID (strip source prefix).
-	key := hfBibTeXKeyPrefix
-	if idx := strings.Index(pub.ID, prefixedIDSeparator); idx >= 0 {
-		key += pub.ID[idx+len(prefixedIDSeparator):]
-	}
-
-	return fmt.Sprintf(hfBibTeXTemplate,
-		key,
-		pub.Title,
-		authorStr,
-		year,
-		pub.URL,
-	)
-}

@@ -359,7 +359,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	searchParams := SearchParams{
 		Query:       "attention mechanism",
@@ -490,7 +490,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	rateLimits.Start(DefaultCleanupInterval)
@@ -580,7 +580,7 @@ sources:
 	}
 
 	// Step 4: Create router with all real infrastructure.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
 
 	// Step 5: Test Search — verify full pipeline.
 	ctx := context.Background()
@@ -757,7 +757,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -825,8 +825,8 @@ sources:
 	}
 
 	// Step 4: Create router + server with all real infrastructure.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	// Step 5: Start httptest.Server for testing.
 	ts := httptest.NewServer(srv.Handler())
@@ -1115,7 +1115,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -1144,8 +1144,8 @@ sources:
 	}
 
 	// Step 5: Create router + server.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -1246,7 +1246,7 @@ sources:
 	require.NotNil(t, bibPub.FullText)
 	assert.Equal(t, FormatBibTeX, bibPub.FullText.ContentFormat)
 	assert.Contains(t, bibPub.FullText.Content, "@article{")
-	assert.Contains(t, bibPub.FullText.Content, "archivePrefix = {arXiv}")
+	assert.Contains(t, bibPub.FullText.Content, "archiveprefix = {arXiv}")
 
 	// Step 10: Test rtv_list_sources — ArXiv should appear with correct capabilities.
 	listHandler := NewListSourcesHandler(router)
@@ -1534,7 +1534,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -1563,8 +1563,8 @@ sources:
 	}
 
 	// Step 6: Create router + server.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -2061,7 +2061,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -2090,8 +2090,8 @@ sources:
 	}
 
 	// Step 7: Create router + server.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -2665,7 +2665,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -2694,8 +2694,8 @@ sources:
 	}
 
 	// Step 8: Create router + server.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -3315,7 +3315,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -3344,8 +3344,8 @@ sources:
 	}
 
 	// Step 9: Create router + server.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -3712,7 +3712,7 @@ sources:
 		MaxEntries: cfg.Router.CacheMaxEntries,
 		TTL:        cfg.Router.CacheTTL.Duration,
 		Enabled:    cfg.Router.CacheEnabled,
-	})
+	}, nil)
 
 	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -3741,8 +3741,8 @@ sources:
 	}
 
 	// Step 5: Create router + server.
-	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
-	srv := NewServer(cfg, router, rateLimits, nil)
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil, nil)
+	srv := NewServer(cfg, router, rateLimits, nil, nil)
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()

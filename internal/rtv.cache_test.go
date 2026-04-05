@@ -38,7 +38,7 @@ func defaultEnabledCache(maxEntries int, ttl time.Duration) *Cache {
 		MaxEntries: maxEntries,
 		TTL:        ttl,
 		Enabled:    true,
-	})
+	}, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ func TestCacheDisabled(t *testing.T) {
 		MaxEntries: DefaultCacheMaxEntries,
 		TTL:        DefaultCacheTTL,
 		Enabled:    false,
-	})
+	}, nil)
 
 	// Set must be a no-op.
 	c.Set("key1", testSearchResult(1))

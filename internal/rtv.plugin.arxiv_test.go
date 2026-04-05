@@ -537,12 +537,11 @@ func TestArXivGet(t *testing.T) {
 			wantFT:    false, // JSON is native to Publication struct
 		},
 		{
-			name:      "get_format_bibtex",
-			id:        testArxivID1,
-			format:    FormatBibTeX,
-			feedXML:   buildArxivTestFeedXML(1, 0, []arxivTestEntry{defaultTestEntry1()}),
-			wantTitle: testArxivTitle1,
-			wantFT:    true,
+			name:    "get_format_bibtex_unsupported_at_plugin",
+			id:      testArxivID1,
+			format:  FormatBibTeX,
+			feedXML: buildArxivTestFeedXML(1, 0, []arxivTestEntry{defaultTestEntry1()}),
+			wantErr: ErrFormatUnsupported,
 		},
 		{
 			name:    "get_format_unsupported",
@@ -994,60 +993,6 @@ func TestArXivHTTPErrors(t *testing.T) {
 		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
-	})
-}
-
-// ---------------------------------------------------------------------------
-// BibTeX assembly tests
-// ---------------------------------------------------------------------------
-
-func TestArXivBibTeXAssembly(t *testing.T) {
-	t.Parallel()
-
-	t.Run("single_author", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ArXivID:    testArxivID1,
-			Title:      testArxivTitle1,
-			Authors:    []Author{{Name: testArxivAuthor1}},
-			Published:  "2024-01-15",
-			Categories: []string{testArxivCategory1},
-			URL:        arxivAbsURLPrefix + testArxivID1,
-		}
-		bibtex := assembleBibTeX(pub)
-		assert.Contains(t, bibtex, "@article{"+testArxivID1)
-		assert.Contains(t, bibtex, testArxivTitle1)
-		assert.Contains(t, bibtex, testArxivAuthor1)
-		assert.Contains(t, bibtex, "year          = {2024}")
-		assert.Contains(t, bibtex, testArxivCategory1)
-		assert.Contains(t, bibtex, "archivePrefix = {arXiv}")
-	})
-
-	t.Run("multiple_authors", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ArXivID:    testArxivID1,
-			Title:      testArxivTitle1,
-			Authors:    []Author{{Name: testArxivAuthor1}, {Name: testArxivAuthor2}},
-			Published:  "2024-01-15",
-			Categories: []string{testArxivCategory1},
-			URL:        arxivAbsURLPrefix + testArxivID1,
-		}
-		bibtex := assembleBibTeX(pub)
-		assert.Contains(t, bibtex, testArxivAuthor1+arxivBibTeXAuthorSeparator+testArxivAuthor2)
-	})
-
-	t.Run("no_categories", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ArXivID:   testArxivID1,
-			Title:     testArxivTitle1,
-			Authors:   []Author{{Name: testArxivAuthor1}},
-			Published: "2024-01-15",
-			URL:       arxivAbsURLPrefix + testArxivID1,
-		}
-		bibtex := assembleBibTeX(pub)
-		assert.Contains(t, bibtex, "primaryClass  = {}")
 	})
 }
 

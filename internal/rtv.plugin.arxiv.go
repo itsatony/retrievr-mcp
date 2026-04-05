@@ -120,22 +120,6 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// ArXiv BibTeX constants
-// ---------------------------------------------------------------------------
-
-const arxivBibTeXTemplate = `@article{%s,
-  title         = {%s},
-  author        = {%s},
-  year          = {%s},
-  eprint        = {%s},
-  archivePrefix = {arXiv},
-  primaryClass  = {%s},
-  url           = {%s}
-}`
-
-const arxivBibTeXAuthorSeparator = " and "
-
-// ---------------------------------------------------------------------------
 // ArXiv HTTP constants
 // ---------------------------------------------------------------------------
 
@@ -652,44 +636,7 @@ func convertArxivFormat(pub *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil // Publication is natively JSON-serializable
-	case FormatBibTeX:
-		bibtex := assembleBibTeX(pub)
-		pub.FullText = &FullTextContent{
-			Content:       bibtex,
-			ContentFormat: FormatBibTeX,
-			ContentLength: len(bibtex),
-			Truncated:     false,
-		}
-		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
-}
-
-// assembleBibTeX creates a BibTeX entry from Publication metadata.
-func assembleBibTeX(pub *Publication) string {
-	authorNames := make([]string, len(pub.Authors))
-	for i, a := range pub.Authors {
-		authorNames[i] = a.Name
-	}
-
-	year := ""
-	if len(pub.Published) >= arxivYearOnlyLength {
-		year = pub.Published[:arxivYearOnlyLength]
-	}
-
-	primaryCat := ""
-	if len(pub.Categories) > 0 {
-		primaryCat = pub.Categories[0]
-	}
-
-	return fmt.Sprintf(arxivBibTeXTemplate,
-		pub.ArXivID,
-		pub.Title,
-		strings.Join(authorNames, arxivBibTeXAuthorSeparator),
-		year,
-		pub.ArXivID,
-		primaryCat,
-		pub.URL,
-	)
 }

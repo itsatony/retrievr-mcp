@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -91,23 +90,6 @@ const (
 	s2MetaKeyCorpusID         = "s2_corpus_id"
 	s2MetaKeyReferenceCount   = "s2_reference_count"
 	s2MetaKeyIsOpenAccess     = "s2_is_open_access"
-)
-
-// ---------------------------------------------------------------------------
-// S2 BibTeX constants
-// ---------------------------------------------------------------------------
-
-const s2BibTeXTemplate = `@article{%s,
-  title  = {%s},
-  author = {%s},
-  year   = {%s},
-  doi    = {%s},
-  url    = {%s}
-}`
-
-const (
-	s2BibTeXAuthorSeparator = " and "
-	s2BibTeXKeyPrefix       = "S2-"
 )
 
 // ---------------------------------------------------------------------------
@@ -673,40 +655,7 @@ func convertS2Format(pub *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil // Publication is natively JSON-serializable
-	case FormatBibTeX:
-		bibtex := assembleS2BibTeX(pub)
-		pub.FullText = &FullTextContent{
-			Content:       bibtex,
-			ContentFormat: FormatBibTeX,
-			ContentLength: len(bibtex),
-			Truncated:     false,
-		}
-		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
-}
-
-// assembleS2BibTeX creates a BibTeX entry from Publication metadata.
-func assembleS2BibTeX(pub *Publication) string {
-	authorNames := make([]string, len(pub.Authors))
-	for i, a := range pub.Authors {
-		authorNames[i] = a.Name
-	}
-
-	year := ""
-	if len(pub.Published) >= s2YearOnlyLength {
-		year = pub.Published[:s2YearOnlyLength]
-	}
-
-	citeKey := s2BibTeXKeyPrefix + pub.ID
-
-	return fmt.Sprintf(s2BibTeXTemplate,
-		citeKey,
-		pub.Title,
-		strings.Join(authorNames, s2BibTeXAuthorSeparator),
-		year,
-		pub.DOI,
-		pub.URL,
-	)
 }

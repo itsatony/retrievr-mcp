@@ -468,12 +468,11 @@ func TestEuropePMCGet(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		id         string
-		format     ContentFormat
-		wantErr    error
-		wantTitle  string
-		wantBibTeX bool
+		name      string
+		id        string
+		format    ContentFormat
+		wantErr   error
+		wantTitle string
 	}{
 		{
 			name:      "get_by_id",
@@ -488,11 +487,10 @@ func TestEuropePMCGet(t *testing.T) {
 			wantErr: ErrEuropePMCNotFound,
 		},
 		{
-			name:       "get_with_bibtex_format",
-			id:         testEMCPMID1,
-			format:     FormatBibTeX,
-			wantTitle:  testEMCTitle1,
-			wantBibTeX: true,
+			name:    "get_bibtex_format_unsupported",
+			id:      testEMCPMID1,
+			format:  FormatBibTeX,
+			wantErr: ErrFormatUnsupported,
 		},
 		{
 			name:    "get_unsupported_format",
@@ -533,14 +531,6 @@ func TestEuropePMCGet(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, pub)
 			assert.Equal(t, tt.wantTitle, pub.Title)
-
-			if tt.wantBibTeX {
-				require.NotNil(t, pub.FullText)
-				assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
-				assert.Contains(t, pub.FullText.Content, "@article{")
-				assert.Contains(t, pub.FullText.Content, testEMCTitle1)
-				assert.Contains(t, pub.FullText.Content, testEMCDOI1)
-			}
 		})
 	}
 }
@@ -1056,39 +1046,6 @@ func TestEuropePMCInitialize(t *testing.T) {
 		require.NoError(t, err)
 		assert.InDelta(t, expectedRPS, plugin.rateLimit, 0.001)
 	})
-}
-
-// ---------------------------------------------------------------------------
-// BibTeX assembly test
-// ---------------------------------------------------------------------------
-
-func TestEuropePMCBibTeXAssembly(t *testing.T) {
-	t.Parallel()
-
-	pub := &Publication{
-		Title:     testEMCTitle1,
-		Published: testEMCDate1,
-		DOI:       testEMCDOI1,
-		URL:       "https://europepmc.org/article/MED/" + testEMCPMID1,
-		Authors: []Author{
-			{Name: "Smith J"},
-			{Name: "Chen W"},
-		},
-		SourceMetadata: map[string]any{
-			emcMetaKeyPMID:    testEMCPMID1,
-			emcMetaKeyJournal: testEMCJournal1,
-		},
-	}
-
-	bibtex := assembleEMCBibTeX(pub)
-
-	assert.Contains(t, bibtex, "@article{"+emcBibTeXKeyPrefix+testEMCPMID1)
-	assert.Contains(t, bibtex, testEMCTitle1)
-	assert.Contains(t, bibtex, "Smith J"+emcBibTeXAuthorSeparator+"Chen W")
-	assert.Contains(t, bibtex, "2024")
-	assert.Contains(t, bibtex, testEMCJournal1)
-	assert.Contains(t, bibtex, testEMCDOI1)
-	assert.Contains(t, bibtex, testEMCPMID1)
 }
 
 // ---------------------------------------------------------------------------

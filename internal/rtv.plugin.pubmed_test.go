@@ -807,13 +807,12 @@ func TestPubMedGet(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		id         string
-		format     ContentFormat
-		efetchXML  string
-		wantErr    error
-		wantTitle  string
-		wantBibTeX bool
+		name      string
+		id        string
+		format    ContentFormat
+		efetchXML string
+		wantErr   error
+		wantTitle string
 	}{
 		{
 			name:      "get_by_pmid_native",
@@ -823,12 +822,11 @@ func TestPubMedGet(t *testing.T) {
 			wantTitle: testPMTitle1,
 		},
 		{
-			name:       "get_bibtex_format",
-			id:         testPMPMID1,
-			format:     FormatBibTeX,
-			efetchXML:  buildPMTestEFetchXML([]pmTestArticle{defaultPMTestArticle1()}),
-			wantTitle:  testPMTitle1,
-			wantBibTeX: true,
+			name:      "get_bibtex_format_unsupported",
+			id:        testPMPMID1,
+			format:    FormatBibTeX,
+			efetchXML: buildPMTestEFetchXML([]pmTestArticle{defaultPMTestArticle1()}),
+			wantErr:   ErrFormatUnsupported,
 		},
 		{
 			name:      "get_json_format",
@@ -876,14 +874,6 @@ func TestPubMedGet(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, pub)
 			assert.Equal(t, tc.wantTitle, pub.Title)
-
-			if tc.wantBibTeX {
-				require.NotNil(t, pub.FullText)
-				assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
-				assert.Contains(t, pub.FullText.Content, "@article{")
-				assert.Contains(t, pub.FullText.Content, testPMTitle1)
-				assert.Contains(t, pub.FullText.Content, testPMDOI1)
-			}
 		})
 	}
 }
@@ -1492,38 +1482,6 @@ func TestPubMedInitialize(t *testing.T) {
 		assert.Equal(t, pmDefaultTool, plugin.toolName)
 		assert.Empty(t, plugin.email)
 	})
-}
-
-// ---------------------------------------------------------------------------
-// BibTeX assembly test
-// ---------------------------------------------------------------------------
-
-func TestPubMedBibTeXAssembly(t *testing.T) {
-	t.Parallel()
-
-	pub := &Publication{
-		Title:     testPMTitle1,
-		Published: testPMDate1Year + "-01-" + testPMDate1Day,
-		DOI:       testPMDOI1,
-		URL:       pmAbsURLPrefix + testPMPMID1,
-		Authors: []Author{
-			{Name: testPMAuthorFirst1 + " " + testPMAuthorLast1},
-			{Name: testPMAuthorFirst2 + " " + testPMAuthorLast2},
-		},
-		SourceMetadata: map[string]any{
-			pmMetaKeyPMID:    testPMPMID1,
-			pmMetaKeyJournal: testPMJournal1,
-		},
-	}
-
-	bibtex := assemblePMBibTeX(pub)
-	assert.Contains(t, bibtex, "@article{"+pmBibTeXKeyPrefix+testPMPMID1)
-	assert.Contains(t, bibtex, testPMTitle1)
-	assert.Contains(t, bibtex, testPMDOI1)
-	assert.Contains(t, bibtex, testPMJournal1)
-	assert.Contains(t, bibtex, testPMPMID1)
-	assert.Contains(t, bibtex, testPMAuthorFirst1+" "+testPMAuthorLast1+pmBibTeXAuthorSeparator+testPMAuthorFirst2+" "+testPMAuthorLast2)
-	assert.Contains(t, bibtex, testPMDate1Year)
 }
 
 // ---------------------------------------------------------------------------

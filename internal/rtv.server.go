@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // ---------------------------------------------------------------------------
@@ -63,6 +64,7 @@ type Server struct {
 	mcpHTTPHandler *server.StreamableHTTPServer
 	httpServer     *http.Server
 	rateLimits     *SourceRateLimitManager
+	metrics        *Metrics
 	logger         *slog.Logger
 }
 
@@ -78,6 +80,7 @@ func NewServer(
 	cfg *Config,
 	router *Router,
 	rateLimits *SourceRateLimitManager,
+	metrics *Metrics,
 	logger *slog.Logger,
 ) *Server {
 	// Create MCP server with tool capabilities.
@@ -105,6 +108,7 @@ func NewServer(
 		mcpServer:      mcpSrv,
 		mcpHTTPHandler: mcpHTTP,
 		rateLimits:     rateLimits,
+		metrics:        metrics,
 		logger:         logger,
 	}
 
@@ -112,6 +116,14 @@ func NewServer(
 	mux.HandleFunc(healthEndpointPath, s.handleHealth)
 	mux.HandleFunc(versionEndpointPath, s.handleVersion)
 	mux.Handle(mcpEndpointPath, mcpHTTP)
+
+	// Prometheus metrics endpoint (only if metrics are enabled).
+	if metrics != nil {
+		mux.Handle(metricsEndpointPath, promhttp.HandlerFor(
+			metrics.Registry,
+			promhttp.HandlerOpts{},
+		))
+	}
 
 	s.httpServer = &http.Server{
 		Addr:              cfg.Server.HTTPAddr,

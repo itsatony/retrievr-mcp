@@ -36,7 +36,7 @@ func TestNewServer(t *testing.T) {
 	router := testRouter(plugins)
 	rateLimits := testRateLimits(plugins)
 
-	srv := NewServer(cfg, router, rateLimits, discardLogger())
+	srv := NewServer(cfg, router, rateLimits, nil, discardLogger())
 	require.NotNil(t, srv)
 	require.NotNil(t, srv.mcpServer)
 	require.NotNil(t, srv.mcpHTTPHandler)
@@ -50,7 +50,7 @@ func TestServerHandler(t *testing.T) {
 
 	cfg := testServerConfig()
 	router := testRouter(nil)
-	srv := NewServer(cfg, router, nil, discardLogger())
+	srv := NewServer(cfg, router, nil, nil, discardLogger())
 
 	handler := srv.Handler()
 	require.NotNil(t, handler, "Handler() should return the HTTP mux")
@@ -67,7 +67,7 @@ func TestHealthEndpoint(t *testing.T) {
 
 	cfg := testServerConfig()
 	router := testRouter(nil)
-	srv := NewServer(cfg, router, nil, discardLogger())
+	srv := NewServer(cfg, router, nil, nil, discardLogger())
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -97,7 +97,7 @@ func TestVersionEndpoint(t *testing.T) {
 
 	cfg := testServerConfig()
 	router := testRouter(nil)
-	srv := NewServer(cfg, router, nil, discardLogger())
+	srv := NewServer(cfg, router, nil, nil, discardLogger())
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
@@ -128,7 +128,7 @@ func TestMCPEndpointReachable(t *testing.T) {
 
 	cfg := testServerConfig()
 	router := testRouter(nil)
-	srv := NewServer(cfg, router, nil, discardLogger())
+	srv := NewServer(cfg, router, nil, nil, discardLogger())
 
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()

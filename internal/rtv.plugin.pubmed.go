@@ -133,25 +133,6 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// PubMed BibTeX constants
-// ---------------------------------------------------------------------------
-
-const pmBibTeXTemplate = `@article{%s,
-  title   = {%s},
-  author  = {%s},
-  year    = {%s},
-  journal = {%s},
-  doi     = {%s},
-  pmid    = {%s},
-  url     = {%s}
-}`
-
-const (
-	pmBibTeXAuthorSeparator = " and "
-	pmBibTeXKeyPrefix       = "PMID-"
-)
-
-// ---------------------------------------------------------------------------
 // PubMed config extra key constants
 // ---------------------------------------------------------------------------
 
@@ -1051,60 +1032,8 @@ func convertPMFormat(pub *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil // Publication is natively JSON-serializable
-	case FormatBibTeX:
-		bibtex := assemblePMBibTeX(pub)
-		pub.FullText = &FullTextContent{
-			Content:       bibtex,
-			ContentFormat: FormatBibTeX,
-			ContentLength: len(bibtex),
-			Truncated:     false,
-		}
-		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
 }
 
-// assemblePMBibTeX creates a BibTeX entry from Publication metadata.
-func assemblePMBibTeX(pub *Publication) string {
-	authorNames := make([]string, len(pub.Authors))
-	for i, a := range pub.Authors {
-		authorNames[i] = a.Name
-	}
-
-	year := ""
-	if len(pub.Published) >= pmYearOnlyLength {
-		year = pub.Published[:pmYearOnlyLength]
-	}
-
-	pmid := ""
-	if pub.SourceMetadata != nil {
-		if v, ok := pub.SourceMetadata[pmMetaKeyPMID]; ok {
-			if s, ok := v.(string); ok {
-				pmid = s
-			}
-		}
-	}
-
-	journal := ""
-	if pub.SourceMetadata != nil {
-		if v, ok := pub.SourceMetadata[pmMetaKeyJournal]; ok {
-			if s, ok := v.(string); ok {
-				journal = s
-			}
-		}
-	}
-
-	citeKey := pmBibTeXKeyPrefix + pmid
-
-	return fmt.Sprintf(pmBibTeXTemplate,
-		citeKey,
-		pub.Title,
-		strings.Join(authorNames, pmBibTeXAuthorSeparator),
-		year,
-		journal,
-		pub.DOI,
-		pmid,
-		pub.URL,
-	)
-}

@@ -172,7 +172,7 @@ func TestSearchHandler_WithCredentials(t *testing.T) {
 
 	cfg := testRouterConfig()
 	cfg.DefaultSources = []string{SourceS2}
-	router := NewRouter(cfg, plugins, nil, nil, testRateLimits(plugins), &CredentialResolver{}, discardLogger())
+	router := NewRouter(cfg, plugins, nil, nil, testRateLimits(plugins), &CredentialResolver{}, nil, discardLogger())
 	handler := NewSearchHandler(router)
 
 	req := mcp.CallToolRequest{}

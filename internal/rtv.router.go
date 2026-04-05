@@ -75,11 +75,13 @@ type Router struct {
 	cache          *Cache
 	rateLimits     *SourceRateLimitManager
 	credentials    *CredentialResolver
+	metrics        *Metrics
 	logger         *slog.Logger
 }
 
 // NewRouter creates a Router wired to the given plugins and infrastructure.
 // The plugins map is defensively copied. A nil logger is replaced with a discard logger.
+// The metrics parameter is optional (nil disables Prometheus instrumentation).
 func NewRouter(
 	cfg RouterConfig,
 	plugins map[string]SourcePlugin,
@@ -87,6 +89,7 @@ func NewRouter(
 	cache *Cache,
 	rateLimits *SourceRateLimitManager,
 	creds *CredentialResolver,
+	metrics *Metrics,
 	logger *slog.Logger,
 ) *Router {
 	// Defensive copy of plugins map.
@@ -110,6 +113,7 @@ func NewRouter(
 		cache:          cache,
 		rateLimits:     rateLimits,
 		credentials:    creds,
+		metrics:        metrics,
 		logger:         logger,
 	}
 }
@@ -150,6 +154,7 @@ type sourceResult struct {
 	sourceID string
 	result   *SearchResult
 	err      error
+	duration time.Duration
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +257,7 @@ func (r *Router) Search(
 		sourcesQueried = append(sourcesQueried, sr.sourceID)
 		if sr.err != nil {
 			sourcesFailed = append(sourcesFailed, sr.sourceID)
+			r.metrics.RecordSearch(sr.sourceID, metricStatusError, sr.duration)
 			r.logger.Warn(logMsgSourceSearchFailed,
 				slog.String(LogKeyRequestID, requestID),
 				slog.String(LogKeySource, sr.sourceID),
@@ -259,6 +265,7 @@ func (r *Router) Search(
 			)
 			continue
 		}
+		r.metrics.RecordSearch(sr.sourceID, metricStatusSuccess, sr.duration)
 		if sr.result != nil {
 			allResults = append(allResults, sr.result.Results...)
 		}
@@ -320,6 +327,7 @@ func (r *Router) searchOneSource(
 	params SearchParams,
 	creds *CallCredentials,
 ) sourceResult {
+	start := time.Now()
 	plugin := r.plugins[sourceID]
 
 	// Credential resolution. The resolved credential string is not used here —
@@ -333,8 +341,9 @@ func (r *Router) searchOneSource(
 	// matches both the sentinel (ErrSearchFailed) and the underlying cause.
 	if r.rateLimits != nil {
 		if err := r.rateLimits.Wait(ctx, sourceID, bucketKey); err != nil {
-			return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err)}
+			return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err), duration: time.Since(start)}
 		}
+		r.metrics.RecordRateLimitWait(sourceID)
 	}
 
 	// Per-source timeout.
@@ -343,10 +352,10 @@ func (r *Router) searchOneSource(
 
 	result, err := plugin.Search(childCtx, params, creds)
 	if err != nil {
-		return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err)}
+		return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err), duration: time.Since(start)}
 	}
 
-	return sourceResult{sourceID: sourceID, result: result}
+	return sourceResult{sourceID: sourceID, result: result, duration: time.Since(start)}
 }
 
 // resolveSources returns the list of source IDs to query, filtered to only
@@ -410,18 +419,45 @@ func (r *Router) Get(
 
 	if r.rateLimits != nil {
 		if err := r.rateLimits.Wait(ctx, sourceID, bucketKey); err != nil {
+			r.metrics.RecordGet(sourceID, metricStatusError)
 			return nil, fmt.Errorf("%w: %w", ErrGetFailed, err)
 		}
+		r.metrics.RecordRateLimitWait(sourceID)
 	}
 
 	// Step 5: Per-source timeout + plugin call.
+	// When BibTeX is requested, call the plugin with FormatNative and generate
+	// BibTeX centrally after retrieval. This avoids per-plugin BibTeX duplication.
+	pluginFormat := format
+	if format == FormatBibTeX {
+		pluginFormat = FormatNative
+	}
+
 	childCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
-	pub, err := plugin.Get(childCtx, rawID, include, format, creds)
+	pub, err := plugin.Get(childCtx, rawID, include, pluginFormat, creds)
 	if err != nil {
+		r.metrics.RecordGet(sourceID, metricStatusError)
 		return nil, fmt.Errorf("%w: %s: %w", ErrGetFailed, sourceID, err)
 	}
+
+	// Step 5.5: Central BibTeX generation.
+	if format == FormatBibTeX {
+		bibtex, bibErr := GenerateBibTeX(pub)
+		if bibErr != nil {
+			r.metrics.RecordGet(sourceID, metricStatusError)
+			return nil, fmt.Errorf("%w: %s: %w", ErrGetFailed, sourceID, bibErr)
+		}
+		pub.FullText = &FullTextContent{
+			Content:       bibtex,
+			ContentFormat: FormatBibTeX,
+			ContentLength: len(bibtex),
+			Truncated:     false,
+		}
+	}
+
+	r.metrics.RecordGet(sourceID, metricStatusSuccess)
 
 	// Step 6: Log completion.
 	r.logger.Info(logMsgGetComplete,

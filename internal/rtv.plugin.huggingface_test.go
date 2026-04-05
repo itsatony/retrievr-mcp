@@ -966,7 +966,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		assert.Contains(t, modelIDs, testHFModelID1)
 	})
 
-	t.Run("get_paper_bibtex", func(t *testing.T) {
+	t.Run("get_paper_bibtex_unsupported", func(t *testing.T) {
 		t.Parallel()
 		paper := defaultHFTestPaper1()
 
@@ -977,15 +977,10 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		pub, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatBibTeX, nil)
+		_, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatBibTeX, nil)
 
-		require.NoError(t, err)
-		require.NotNil(t, pub)
-		require.NotNil(t, pub.FullText)
-		assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
-		assert.Contains(t, pub.FullText.Content, testHFTitle1)
-		assert.Contains(t, pub.FullText.Content, testHFAuthor1)
-		assert.Contains(t, pub.FullText.Content, "2024")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrFormatUnsupported))
 	})
 
 	t.Run("get_model_native", func(t *testing.T) {
@@ -1310,56 +1305,6 @@ func TestHuggingFaceHTTPErrors(t *testing.T) {
 		}, nil)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSearchFailed))
-	})
-}
-
-// ---------------------------------------------------------------------------
-// Test: BibTeX assembly
-// ---------------------------------------------------------------------------
-
-func TestHuggingFaceBibTeXAssembly(t *testing.T) {
-	t.Parallel()
-
-	t.Run("paper_with_multiple_authors", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceHuggingFace + prefixedIDSeparator + hfSubTypePaper + testHFPaperID1,
-			Title:     testHFTitle1,
-			Authors:   []Author{{Name: testHFAuthor1}, {Name: testHFAuthor2}},
-			Published: testHFDate1Short,
-			URL:       hfPaperURLPrefix + testHFPaperID1,
-		}
-		bibtex := assembleHFBibTeX(pub)
-		assert.Contains(t, bibtex, testHFTitle1)
-		assert.Contains(t, bibtex, testHFAuthor1+hfBibTeXAuthorSeparator+testHFAuthor2)
-		assert.Contains(t, bibtex, "2024")
-		assert.Contains(t, bibtex, hfPaperURLPrefix+testHFPaperID1)
-	})
-
-	t.Run("model_with_no_authors", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceHuggingFace + prefixedIDSeparator + hfSubTypeModel + testHFModelID1,
-			Title:     testHFModelID1,
-			Published: "2024-07-23",
-			URL:       hfModelURLPrefix + testHFModelID1,
-		}
-		bibtex := assembleHFBibTeX(pub)
-		assert.Contains(t, bibtex, testHFModelID1)
-		assert.Contains(t, bibtex, "2024")
-	})
-
-	t.Run("no_year", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceHuggingFace + prefixedIDSeparator + hfSubTypePaper + testHFPaperID1,
-			Title:     testHFTitle1,
-			Published: "",
-			URL:       hfPaperURLPrefix + testHFPaperID1,
-		}
-		bibtex := assembleHFBibTeX(pub)
-		assert.Contains(t, bibtex, testHFTitle1)
-		assert.Contains(t, bibtex, `year   = {}`)
 	})
 }
 
@@ -1870,7 +1815,7 @@ func TestResolveHFToken(t *testing.T) {
 func TestConvertHFFormat(t *testing.T) {
 	t.Parallel()
 
-	t.Run("bibtex_sets_full_text", func(t *testing.T) {
+	t.Run("bibtex_unsupported", func(t *testing.T) {
 		t.Parallel()
 		pub := &Publication{
 			ID:        SourceHuggingFace + prefixedIDSeparator + hfSubTypePaper + testHFPaperID1,
@@ -1880,10 +1825,8 @@ func TestConvertHFFormat(t *testing.T) {
 			URL:       hfPaperURLPrefix + testHFPaperID1,
 		}
 		err := convertHFFormat(pub, FormatBibTeX)
-		require.NoError(t, err)
-		require.NotNil(t, pub.FullText)
-		assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
-		assert.Contains(t, pub.FullText.Content, testHFTitle1)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrFormatUnsupported))
 	})
 
 	t.Run("markdown_noop_when_already_present", func(t *testing.T) {
@@ -1918,10 +1861,10 @@ func TestConvertHFFormat(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test: Get dataset + BibTeX and error paths
+// Test: Get dataset format and error paths
 // ---------------------------------------------------------------------------
 
-func TestHuggingFaceGetDatasetBibTeX(t *testing.T) {
+func TestHuggingFaceGetDatasetBibTeXUnsupported(t *testing.T) {
 	t.Parallel()
 	dataset := defaultHFTestDataset1()
 
@@ -1940,14 +1883,10 @@ func TestHuggingFaceGetDatasetBibTeX(t *testing.T) {
 	defer server.Close()
 
 	plugin := newHFTestPlugin(t, server.URL)
-	pub, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatBibTeX, nil)
+	_, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatBibTeX, nil)
 
-	require.NoError(t, err)
-	require.NotNil(t, pub)
-	require.NotNil(t, pub.FullText)
-	assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
-	assert.Contains(t, pub.FullText.Content, testHFDatasetID1)
-	assert.Contains(t, pub.FullText.Content, "2022")
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFormatUnsupported))
 }
 
 func TestHuggingFaceGetDatasetServerError(t *testing.T) {

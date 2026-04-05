@@ -105,23 +105,6 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// OpenAlex BibTeX constants
-// ---------------------------------------------------------------------------
-
-const oaBibTeXTemplate = `@article{%s,
-  title  = {%s},
-  author = {%s},
-  year   = {%s},
-  doi    = {%s},
-  url    = {%s}
-}`
-
-const (
-	oaBibTeXAuthorSeparator = " and "
-	oaBibTeXKeyPrefix       = "OA-"
-)
-
-// ---------------------------------------------------------------------------
 // OpenAlex categories hint
 // ---------------------------------------------------------------------------
 
@@ -870,40 +853,7 @@ func convertOAFormat(pub *Publication, format ContentFormat) error {
 	switch format {
 	case FormatJSON:
 		return nil
-	case FormatBibTeX:
-		bibtex := assembleOABibTeX(pub)
-		pub.FullText = &FullTextContent{
-			Content:       bibtex,
-			ContentFormat: FormatBibTeX,
-			ContentLength: len(bibtex),
-			Truncated:     false,
-		}
-		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
-}
-
-// assembleOABibTeX creates a BibTeX entry from Publication metadata.
-func assembleOABibTeX(pub *Publication) string {
-	authorNames := make([]string, len(pub.Authors))
-	for i, a := range pub.Authors {
-		authorNames[i] = a.Name
-	}
-
-	year := ""
-	if len(pub.Published) >= oaYearOnlyLength {
-		year = pub.Published[:oaYearOnlyLength]
-	}
-
-	citeKey := oaBibTeXKeyPrefix + pub.ID
-
-	return fmt.Sprintf(oaBibTeXTemplate,
-		citeKey,
-		pub.Title,
-		strings.Join(authorNames, oaBibTeXAuthorSeparator),
-		year,
-		pub.DOI,
-		pub.URL,
-	)
 }

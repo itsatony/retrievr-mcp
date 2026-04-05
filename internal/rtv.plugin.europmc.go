@@ -126,25 +126,6 @@ const (
 )
 
 // ---------------------------------------------------------------------------
-// EuropePMC BibTeX constants
-// ---------------------------------------------------------------------------
-
-const emcBibTeXTemplate = `@article{%s,
-  title   = {%s},
-  author  = {%s},
-  year    = {%s},
-  journal = {%s},
-  doi     = {%s},
-  pmid    = {%s},
-  url     = {%s}
-}`
-
-const (
-	emcBibTeXAuthorSeparator = " and "
-	emcBibTeXKeyPrefix       = "EPMC-"
-)
-
-// ---------------------------------------------------------------------------
 // EuropePMC URL constants
 // ---------------------------------------------------------------------------
 
@@ -801,65 +782,8 @@ func parseEMCAuthors(authorString string) []Author {
 // convertEMCFormat converts the publication to the requested format.
 func convertEMCFormat(pub *Publication, format ContentFormat) error {
 	switch format {
-	case FormatBibTeX:
-		bibtex := assembleEMCBibTeX(pub)
-		pub.FullText = &FullTextContent{
-			Content:       bibtex,
-			ContentFormat: FormatBibTeX,
-			ContentLength: len(bibtex),
-			Truncated:     false,
-		}
-		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}
 }
 
-// assembleEMCBibTeX assembles a BibTeX entry from publication metadata.
-func assembleEMCBibTeX(pub *Publication) string {
-	// Extract year from published date.
-	year := ""
-	if len(pub.Published) >= emcYearOnlyLength {
-		year = pub.Published[:emcYearOnlyLength]
-	}
-
-	// Build author string.
-	authorNames := make([]string, 0, len(pub.Authors))
-	for _, a := range pub.Authors {
-		authorNames = append(authorNames, a.Name)
-	}
-	authorStr := strings.Join(authorNames, emcBibTeXAuthorSeparator)
-
-	// Extract journal from metadata.
-	journal := ""
-	if pub.SourceMetadata != nil {
-		if j, ok := pub.SourceMetadata[emcMetaKeyJournal]; ok {
-			if js, ok := j.(string); ok {
-				journal = js
-			}
-		}
-	}
-
-	// Extract PMID for the key.
-	pmid := ""
-	if pub.SourceMetadata != nil {
-		if p, ok := pub.SourceMetadata[emcMetaKeyPMID]; ok {
-			if ps, ok := p.(string); ok {
-				pmid = ps
-			}
-		}
-	}
-
-	key := emcBibTeXKeyPrefix + pmid
-
-	return fmt.Sprintf(emcBibTeXTemplate,
-		key,
-		pub.Title,
-		authorStr,
-		year,
-		journal,
-		pub.DOI,
-		pmid,
-		pub.URL,
-	)
-}

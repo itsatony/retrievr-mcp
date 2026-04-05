@@ -768,7 +768,6 @@ func TestOAGet(t *testing.T) {
 	tests := []struct {
 		name         string
 		format       ContentFormat
-		wantBibTeX   bool
 		wantErr      error
 		wantErrIs    error
 		responseCode int
@@ -784,9 +783,9 @@ func TestOAGet(t *testing.T) {
 			responseCode: http.StatusOK,
 		},
 		{
-			name:         "get_format_bibtex",
+			name:         "get_format_bibtex_unsupported_at_plugin",
 			format:       FormatBibTeX,
-			wantBibTeX:   true,
+			wantErrIs:    ErrFormatUnsupported,
 			responseCode: http.StatusOK,
 		},
 		{
@@ -831,13 +830,6 @@ func TestOAGet(t *testing.T) {
 			assert.Equal(t, testOATitle1, pub.Title)
 			assert.Equal(t, SourceOpenAlex, pub.Source)
 			assert.Equal(t, testOADOIBare1, pub.DOI)
-
-			if tc.wantBibTeX {
-				require.NotNil(t, pub.FullText)
-				assert.Equal(t, FormatBibTeX, pub.FullText.ContentFormat)
-				assert.Contains(t, pub.FullText.Content, "@article{")
-				assert.Contains(t, pub.FullText.Content, testOADOIBare1)
-			}
 		})
 	}
 }
@@ -1400,57 +1392,6 @@ func TestOAHTTPErrors(t *testing.T) {
 		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
-	})
-}
-
-// ---------------------------------------------------------------------------
-// BibTeX assembly tests
-// ---------------------------------------------------------------------------
-
-func TestAssembleOABibTeX(t *testing.T) {
-	t.Parallel()
-
-	t.Run("single_author_with_doi", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceOpenAlex + prefixedIDSeparator + testOAWorkID1,
-			Title:     testOATitle1,
-			Authors:   []Author{{Name: testOAAuthor1}},
-			Published: testOADate1,
-			DOI:       testOADOIBare1,
-			URL:       testOAWorkURL1,
-		}
-		bib := assembleOABibTeX(pub)
-		assert.Contains(t, bib, "@article{OA-")
-		assert.Contains(t, bib, testOATitle1)
-		assert.Contains(t, bib, testOAAuthor1)
-		assert.Contains(t, bib, "2024")
-		assert.Contains(t, bib, testOADOIBare1)
-	})
-
-	t.Run("multiple_authors", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceOpenAlex + prefixedIDSeparator + testOAWorkID1,
-			Title:     testOATitle1,
-			Authors:   []Author{{Name: testOAAuthor1}, {Name: testOAAuthor2}},
-			Published: testOADate1,
-		}
-		bib := assembleOABibTeX(pub)
-		assert.Contains(t, bib, testOAAuthor1+" and "+testOAAuthor2)
-	})
-
-	t.Run("no_doi", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceOpenAlex + prefixedIDSeparator + testOAWorkID1,
-			Title:     testOATitle1,
-			Authors:   []Author{{Name: testOAAuthor1}},
-			Published: testOADate1,
-		}
-		bib := assembleOABibTeX(pub)
-		assert.Contains(t, bib, "@article{")
-		assert.Contains(t, bib, `doi    = {}`)
 	})
 }
 

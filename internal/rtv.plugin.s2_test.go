@@ -652,12 +652,11 @@ func TestS2Get(t *testing.T) {
 			wantFT:    false,
 		},
 		{
-			name:      "get_format_bibtex",
+			name:      "get_format_bibtex_unsupported_at_plugin",
 			id:        testS2PaperID1,
 			format:    FormatBibTeX,
 			paperJSON: buildS2TestPaperJSON(defaultS2TestPaper1()),
-			wantTitle: testS2Title1,
-			wantFT:    true,
+			wantErr:   ErrFormatUnsupported,
 		},
 		{
 			name:      "get_format_unsupported",
@@ -1058,55 +1057,6 @@ func TestS2HTTPErrors(t *testing.T) {
 // ---------------------------------------------------------------------------
 // BibTeX assembly tests
 // ---------------------------------------------------------------------------
-
-func TestS2BibTeXAssembly(t *testing.T) {
-	t.Parallel()
-
-	t.Run("single_author_with_doi", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceS2 + prefixedIDSeparator + testS2PaperID1,
-			Title:     testS2Title1,
-			Authors:   []Author{{Name: testS2Author1}},
-			Published: testS2Date1,
-			DOI:       testS2DOI1,
-			URL:       testS2URL1,
-		}
-		bibtex := assembleS2BibTeX(pub)
-		assert.Contains(t, bibtex, "@article{"+s2BibTeXKeyPrefix)
-		assert.Contains(t, bibtex, testS2Title1)
-		assert.Contains(t, bibtex, testS2Author1)
-		assert.Contains(t, bibtex, "year   = {2024}")
-		assert.Contains(t, bibtex, testS2DOI1)
-		assert.Contains(t, bibtex, testS2URL1)
-	})
-
-	t.Run("multiple_authors", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceS2 + prefixedIDSeparator + testS2PaperID1,
-			Title:     testS2Title1,
-			Authors:   []Author{{Name: testS2Author1}, {Name: testS2Author2}},
-			Published: testS2Date1,
-			URL:       testS2URL1,
-		}
-		bibtex := assembleS2BibTeX(pub)
-		assert.Contains(t, bibtex, testS2Author1+s2BibTeXAuthorSeparator+testS2Author2)
-	})
-
-	t.Run("no_doi", func(t *testing.T) {
-		t.Parallel()
-		pub := &Publication{
-			ID:        SourceS2 + prefixedIDSeparator + testS2PaperID1,
-			Title:     testS2Title1,
-			Authors:   []Author{{Name: testS2Author1}},
-			Published: testS2Date1,
-			URL:       testS2URL1,
-		}
-		bibtex := assembleS2BibTeX(pub)
-		assert.Contains(t, bibtex, "doi    = {}")
-	})
-}
 
 // ---------------------------------------------------------------------------
 // Initialize tests

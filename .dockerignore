@@ -1,0 +1,12 @@
+.git
+.gitignore
+.claude
+CLAUDE.md
+project_plan/
+retrievr-mcp
+*.test
+*.out
+coverage.*
+*.coverprofile
+.env
+configs/*.local.yaml

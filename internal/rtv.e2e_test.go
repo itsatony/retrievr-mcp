@@ -78,9 +78,8 @@ sources:
 	assert.Equal(t, "retrievr-mcp", cfg.Server.Name)
 
 	// Step 3: Load version from a temp versions.yaml.
-	originalVersion := Version
-	t.Cleanup(func() { Version = originalVersion })
-	Version = "dev"
+	ResetVersionForTesting()
+	t.Cleanup(ResetVersionForTesting)
 
 	versionPath := filepath.Join(dir, "versions.yaml")
 	err = os.WriteFile(versionPath, []byte("version: \"0.1.0\"\n"), 0o644)
@@ -88,7 +87,7 @@ sources:
 
 	err = LoadVersion(versionPath)
 	require.NoError(t, err)
-	assert.Equal(t, "0.1.0", Version)
+	assert.Equal(t, "0.1.0", GetVersion())
 
 	// Step 4: Build a realistic MergedSearchResult and verify JSON matches spec shape.
 	citations := 42

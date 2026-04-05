@@ -107,19 +107,21 @@ func TestSourceIDConstants(t *testing.T) {
 	}
 }
 
-func TestValidSourceIDs(t *testing.T) {
-	expectedCount := 6
-	assert.Len(t, ValidSourceIDs, expectedCount)
-
+func TestIsValidSourceID(t *testing.T) {
 	expectedSources := []string{
 		SourceArXiv, SourcePubMed, SourceS2,
 		SourceOpenAlex, SourceHuggingFace, SourceEuropePMC,
 	}
 	for _, src := range expectedSources {
-		assert.True(t, ValidSourceIDs[src], "expected %q in ValidSourceIDs", src)
+		assert.True(t, IsValidSourceID(src), "expected %q to be valid", src)
 	}
 
-	assert.False(t, ValidSourceIDs["nonexistent"])
+	assert.False(t, IsValidSourceID("nonexistent"))
+}
+
+func TestAllSourceIDs(t *testing.T) {
+	ids := AllSourceIDs()
+	assert.Len(t, ids, SourceCount)
 }
 
 // ---------------------------------------------------------------------------

@@ -175,7 +175,7 @@ func TestNewMCPErrorFromErr(t *testing.T) {
 		err := json.Unmarshal([]byte(result), &parsed)
 		require.NoError(t, err)
 
-		assert.Equal(t, "unknown error", parsed.Error)
+		assert.Equal(t, ErrMsgUnknownError, parsed.Error)
 	})
 
 	t.Run("deeply_wrapped", func(t *testing.T) {

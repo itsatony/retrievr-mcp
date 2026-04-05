@@ -35,6 +35,7 @@ const (
 	ErrMsgConfigValidation = "config validation failed"
 	ErrMsgVersionLoad      = "failed to load version"
 	ErrMsgDurationParse    = "failed to parse duration"
+	ErrMsgUnknownError     = "unknown error"
 )
 
 // ---------------------------------------------------------------------------
@@ -94,7 +95,7 @@ func NewMCPError(msg, source, detail string) string {
 // NewMCPErrorFromErr creates a JSON-encoded MCP error string from a Go error.
 func NewMCPErrorFromErr(err error, source string) string {
 	if err == nil {
-		return NewMCPError("unknown error", source, "")
+		return NewMCPError(ErrMsgUnknownError, source, "")
 	}
 
 	// Unwrap to find the root sentinel error for the message field.

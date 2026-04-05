@@ -33,13 +33,9 @@ func buildBinary(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	binary := filepath.Join(dir, "retrievr-mcp")
-	cmd := exec.Command("go", "build", "-o", binary, ".")
+	cmd := exec.Command("go", "build", "-o", binary, "./cmd/retrievr-mcp")
 	cmd.Dir = filepath.Join("..", "..")
 	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-
-	// Build from the cmd/retrievr-mcp directory context.
-	cmd = exec.Command("go", "build", "-o", binary, "./cmd/retrievr-mcp")
-	cmd.Dir = filepath.Join("..", "..")
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "build failed: %s", string(out))
 	return binary
@@ -92,7 +88,7 @@ func TestMainBinaryMissingConfig(t *testing.T) {
 	cmd.Dir = workDir
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, "expected non-zero exit for missing config")
-	assert.Contains(t, string(out), "failed to load config")
+	assert.Contains(t, string(out), logMsgConfigFail)
 }
 
 func TestMainBinaryHelp(t *testing.T) {

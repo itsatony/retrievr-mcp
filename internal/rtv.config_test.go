@@ -417,3 +417,92 @@ sources:
 	assert.Empty(t, cfg.Sources["arxiv"].BaseURL)
 	assert.Nil(t, cfg.Sources["arxiv"].Extra)
 }
+
+// ---------------------------------------------------------------------------
+// Duration JSON marshal/unmarshal tests
+// ---------------------------------------------------------------------------
+
+func TestDurationJSONRoundTrip(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+		json     string
+	}{
+		{"seconds", 10 * time.Second, `"10s"`},
+		{"minutes", 5 * time.Minute, `"5m0s"`},
+		{"zero", 0, `"0s"`},
+		{"milliseconds", 500 * time.Millisecond, `"500ms"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := Duration{Duration: tt.duration}
+
+			// Marshal
+			data, err := d.MarshalJSON()
+			require.NoError(t, err)
+			assert.Equal(t, tt.json, string(data))
+
+			// Unmarshal
+			var parsed Duration
+			err = parsed.UnmarshalJSON(data)
+			require.NoError(t, err)
+			assert.Equal(t, tt.duration, parsed.Duration)
+		})
+	}
+}
+
+func TestDurationUnmarshalJSONErrors(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"empty", ""},
+		{"single_char", "x"},
+		{"not_quoted", "10s"},
+		{"number", "10"},
+		{"invalid_duration", `"notaduration"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var d Duration
+			err := d.UnmarshalJSON([]byte(tt.input))
+			require.Error(t, err)
+			assert.ErrorIs(t, err, ErrDurationParse)
+		})
+	}
+}
+
+func TestDurationMarshalYAML(t *testing.T) {
+	d := Duration{Duration: 15 * time.Second}
+	val, err := d.MarshalYAML()
+	require.NoError(t, err)
+	assert.Equal(t, "15s", val)
+}
+
+// ---------------------------------------------------------------------------
+// Config validation: default_sources must exist in sources map
+// ---------------------------------------------------------------------------
+
+func TestLoadConfigDefaultSourceNotInSourcesMap(t *testing.T) {
+	yaml := `
+server:
+  name: "test"
+  http_addr: ":8099"
+  log_level: "info"
+  log_format: "json"
+router:
+  default_sources: ["arxiv", "s2"]
+  per_source_timeout: "10s"
+sources:
+  arxiv:
+    enabled: true
+`
+	path := writeConfigFile(t, yaml)
+	cfg, err := LoadConfig(path)
+	assert.Nil(t, cfg)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrConfigValidation)
+	assert.Contains(t, err.Error(), "not configured in sources")
+}

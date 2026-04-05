@@ -74,8 +74,9 @@ const (
 	SourceEuropePMC   = "europmc"
 )
 
-// ValidSourceIDs contains all known source identifiers.
-var ValidSourceIDs = map[string]bool{
+// validSourceIDs is the internal immutable lookup set.
+// Access via IsValidSourceID().
+var validSourceIDs = map[string]bool{
 	SourceArXiv:       true,
 	SourcePubMed:      true,
 	SourceS2:          true,
@@ -83,6 +84,23 @@ var ValidSourceIDs = map[string]bool{
 	SourceHuggingFace: true,
 	SourceEuropePMC:   true,
 }
+
+// IsValidSourceID returns true if the given ID is a known source.
+func IsValidSourceID(id string) bool {
+	return validSourceIDs[id]
+}
+
+// AllSourceIDs returns a fresh slice of all known source identifiers.
+func AllSourceIDs() []string {
+	ids := make([]string, 0, len(validSourceIDs))
+	for id := range validSourceIDs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// SourceCount is the number of known source plugins.
+const SourceCount = 6
 
 // ---------------------------------------------------------------------------
 // Domain structs
@@ -255,7 +273,7 @@ type PluginConfig struct {
 	Enabled bool              `yaml:"enabled" json:"enabled"`
 	APIKey  string            `yaml:"api_key,omitempty" json:"api_key,omitempty"`
 	BaseURL string            `yaml:"base_url,omitempty" json:"base_url,omitempty"`
-	Timeout Duration          `yaml:"timeout,omitempty" json:"timeout,omitzero"`
+	Timeout Duration          `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	Extra   map[string]string `yaml:"extra,omitempty" json:"extra,omitempty"`
 }
 

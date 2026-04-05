@@ -16,24 +16,38 @@ import (
 const (
 	DefaultServerName       = "retrievr-mcp"
 	DefaultHTTPAddr         = ":8099"
-	DefaultLogLevel         = "info"
-	DefaultLogFormat        = "json"
 	DefaultPerSourceTimeout = 10 * time.Second
 	DefaultCacheTTL         = 5 * time.Minute
 	DefaultCacheMaxEntries  = 1000
 	DefaultPluginTimeout    = 10 * time.Second
 )
 
+// Log level constants — used in config validation and logger setup.
+const (
+	LogLevelDebug = "debug"
+	LogLevelInfo  = "info"
+	LogLevelWarn  = "warn"
+	LogLevelError = "error"
+)
+
+// Log format constants — used in config validation and logger setup.
+const (
+	LogFormatJSON = "json"
+	LogFormatText = "text"
+)
+
 // Log field key constants used across the application.
 const (
-	LogKeyService   = "service"
-	LogKeyRequestID = "request_id"
-	LogKeyTool      = "tool"
-	LogKeySources   = "sources"
-	LogKeyDuration  = "duration"
-	LogKeyResultCnt = "result_count"
-	LogKeyAddr      = "addr"
-	LogKeyConfig    = "config"
+	LogKeyService    = "service"
+	LogKeyInstanceID = "instance_id"
+	LogKeyRequestID  = "request_id"
+	LogKeyTool       = "tool"
+	LogKeySources    = "sources"
+	LogKeyDuration   = "duration"
+	LogKeyResultCnt  = "result_count"
+	LogKeyAddr       = "addr"
+	LogKeyConfig     = "config"
+	LogKeyError      = "error"
 )
 
 // ---------------------------------------------------------------------------
@@ -66,7 +80,7 @@ type RouterConfig struct {
 }
 
 // ---------------------------------------------------------------------------
-// Duration YAML unmarshaling
+// Duration YAML/JSON marshaling
 // ---------------------------------------------------------------------------
 
 // UnmarshalYAML parses a duration string (e.g. "10s", "5m") from YAML.
@@ -95,9 +109,12 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON parses a JSON duration string (e.g. "10s").
 func (d *Duration) UnmarshalJSON(b []byte) error {
-	// Strip quotes
-	if len(b) < 2 { //nolint:mnd // minimum for quoted string: `""`
+	const minQuotedLen = 2 // minimum for quoted string: `""`
+	if len(b) < minQuotedLen {
 		return fmt.Errorf("%w: empty value", ErrDurationParse)
+	}
+	if b[0] != '"' || b[len(b)-1] != '"' {
+		return fmt.Errorf("%w: expected quoted string, got %s", ErrDurationParse, string(b))
 	}
 	s := string(b[1 : len(b)-1])
 	parsed, err := time.ParseDuration(s)
@@ -111,6 +128,9 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 // ---------------------------------------------------------------------------
 // Config loading
 // ---------------------------------------------------------------------------
+
+// configValidator is a singleton — safe for concurrent use.
+var configValidator = validator.New()
 
 // LoadConfig reads and validates a YAML config file.
 func LoadConfig(path string) (*Config, error) {
@@ -133,15 +153,21 @@ func LoadConfig(path string) (*Config, error) {
 
 // validateConfig runs struct validation and custom business rules.
 func validateConfig(cfg *Config) error {
-	validate := validator.New()
-	if err := validate.Struct(cfg); err != nil {
+	if err := configValidator.Struct(cfg); err != nil {
 		return fmt.Errorf("%w: %w", ErrConfigValidation, err)
 	}
 
 	// Custom: all default_sources must be valid source IDs.
 	for _, src := range cfg.Router.DefaultSources {
-		if !ValidSourceIDs[src] {
+		if !IsValidSourceID(src) {
 			return fmt.Errorf("%w: unknown source in default_sources: %q", ErrConfigValidation, src)
+		}
+	}
+
+	// Custom: all default_sources must exist in the sources config map.
+	for _, src := range cfg.Router.DefaultSources {
+		if _, exists := cfg.Sources[src]; !exists {
+			return fmt.Errorf("%w: default source %q not configured in sources", ErrConfigValidation, src)
 		}
 	}
 

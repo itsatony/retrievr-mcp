@@ -98,6 +98,65 @@ func TestRateLimiterPerCredentialIsolation(t *testing.T) {
 		"cred-b should not be blocked by cred-a's exhaustion")
 }
 
+func TestRateLimiterThrottledReturnValue(t *testing.T) {
+	t.Parallel()
+
+	const (
+		rps     = 0.5 // slow refill so second call must wait
+		burst   = 1
+		timeout = 5 * time.Second
+	)
+
+	rl := NewRateLimiter(RateLimiterConfig{
+		SourceID:          SourceArXiv,
+		RequestsPerSecond: rps,
+		Burst:             burst,
+	}, DefaultCredentialBucketTTL)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// First call: burst token is available immediately → throttled must be false.
+	throttled, err := rl.Wait(ctx, "throttle-key")
+	require.NoError(t, err)
+	assert.False(t, throttled, "first call should not be throttled (burst token available)")
+
+	// Second call: burst exhausted, must wait for refill → throttled must be true.
+	throttled, err = rl.Wait(ctx, "throttle-key")
+	require.NoError(t, err)
+	assert.True(t, throttled, "second call should be throttled (burst exhausted)")
+}
+
+func TestSourceRateLimitManagerThrottledReturnValue(t *testing.T) {
+	t.Parallel()
+
+	const (
+		rps     = 0.5
+		burst   = 1
+		timeout = 5 * time.Second
+	)
+
+	mgr := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	mgr.Register(RateLimiterConfig{
+		SourceID:          SourceArXiv,
+		RequestsPerSecond: rps,
+		Burst:             burst,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	// First call: immediate → throttled=false.
+	throttled, err := mgr.Wait(ctx, SourceArXiv, "mgr-throttle-key")
+	require.NoError(t, err)
+	assert.False(t, throttled, "first call through manager should not be throttled")
+
+	// Second call: must wait → throttled=true.
+	throttled, err = mgr.Wait(ctx, SourceArXiv, "mgr-throttle-key")
+	require.NoError(t, err)
+	assert.True(t, throttled, "second call through manager should be throttled")
+}
+
 func TestRateLimiterContextCancellation(t *testing.T) {
 	t.Parallel()
 

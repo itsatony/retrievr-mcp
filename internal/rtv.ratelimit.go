@@ -17,6 +17,9 @@ const (
 	// RateLimitMinRPS is the minimum sane rate to prevent misconfiguration.
 	// Exported for use by cmd/retrievr-mcp when applying rate limit defaults.
 	RateLimitMinRPS = 0.01
+
+	rateLimitErrDetailBurstExceeded = "burst exceeded"
+	rateLimitErrDetailUnknownSource = "source %q"
 )
 
 // ---------------------------------------------------------------------------
@@ -91,7 +94,7 @@ func (rl *RateLimiter) Wait(ctx context.Context, bucketKey string) (throttled bo
 	// Reserve a token and check whether we need to wait.
 	r := bucket.limiter.Reserve()
 	if !r.OK() {
-		return false, fmt.Errorf("%w: burst exceeded", ErrRateLimitExceeded)
+		return false, fmt.Errorf("%w: %s", ErrRateLimitExceeded, rateLimitErrDetailBurstExceeded)
 	}
 
 	delay := r.Delay()
@@ -209,7 +212,7 @@ func (m *SourceRateLimitManager) Wait(ctx context.Context, sourceID, bucketKey s
 	m.mu.RUnlock()
 
 	if !exists {
-		return false, fmt.Errorf("%w: source %q", ErrSourceNotFound, sourceID)
+		return false, fmt.Errorf("%w: "+rateLimitErrDetailUnknownSource, ErrSourceNotFound, sourceID)
 	}
 
 	return limiter.Wait(ctx, bucketKey)

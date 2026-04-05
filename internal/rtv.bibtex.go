@@ -60,10 +60,10 @@ const (
 	bibtexMonthEnd      = 7
 	bibtexDateMinLenMon = 7 // YYYY-MM minimum length to extract month
 
-	bibtexCiteKeyFallback      = "unknown"
-	bibtexCiteKeySuffixMaxLen  = 8
-	bibtexErrDetailNilPub      = "publication is nil"
-	bibtexErrDetailEmptyTitle  = "publication title is empty"
+	bibtexCiteKeyFallback     = "unknown"
+	bibtexCiteKeySuffixMaxLen = 8
+	bibtexErrDetailNilPub     = "publication is nil"
+	bibtexErrDetailEmptyTitle = "publication title is empty"
 )
 
 // ---------------------------------------------------------------------------

@@ -25,6 +25,13 @@ const (
 	// prefixedIDSeparator is the delimiter between source ID and raw ID
 	// in prefixed publication identifiers (e.g., "arxiv:2401.12345").
 	prefixedIDSeparator = ":"
+
+	// Error detail strings for ParsePrefixedID and router operations.
+	errDetailMissingSeparator = "missing separator in %q"
+	errDetailEmptySource      = "empty source in %q"
+	errDetailEmptyID          = "empty id in %q"
+	errDetailUnknownSource    = "unknown source %q"
+	errDetailAllSourcesFailed = "queried %d sources"
 )
 
 // ---------------------------------------------------------------------------
@@ -129,17 +136,17 @@ func ParsePrefixedID(prefixedID string) (sourceID, rawID string, err error) {
 	var found bool
 	sourceID, rawID, found = strings.Cut(prefixedID, prefixedIDSeparator)
 	if !found {
-		return "", "", fmt.Errorf("%w: missing separator in %q", ErrInvalidID, prefixedID)
+		return "", "", fmt.Errorf("%w: "+errDetailMissingSeparator, ErrInvalidID, prefixedID)
 	}
 
 	if sourceID == "" {
-		return "", "", fmt.Errorf("%w: empty source in %q", ErrInvalidID, prefixedID)
+		return "", "", fmt.Errorf("%w: "+errDetailEmptySource, ErrInvalidID, prefixedID)
 	}
 	if rawID == "" {
-		return "", "", fmt.Errorf("%w: empty id in %q", ErrInvalidID, prefixedID)
+		return "", "", fmt.Errorf("%w: "+errDetailEmptyID, ErrInvalidID, prefixedID)
 	}
 	if !IsValidSourceID(sourceID) {
-		return "", "", fmt.Errorf("%w: unknown source %q", ErrSourceNotFound, sourceID)
+		return "", "", fmt.Errorf("%w: "+errDetailUnknownSource, ErrSourceNotFound, sourceID)
 	}
 
 	return sourceID, rawID, nil
@@ -273,7 +280,7 @@ func (r *Router) Search(
 
 	// All sources failed.
 	if len(sourcesFailed) == len(resolved) {
-		return nil, fmt.Errorf("%w: queried %d sources", ErrAllSourcesFailed, len(resolved))
+		return nil, fmt.Errorf("%w: "+errDetailAllSourcesFailed, ErrAllSourcesFailed, len(resolved))
 	}
 
 	// Step 6-7: Dedup.

@@ -2861,3 +2861,659 @@ sources:
 	assert.True(t, pmHealth.Healthy)
 	assert.Empty(t, pmHealth.LastError)
 }
+
+// ---------------------------------------------------------------------------
+// DC-09: EuropePMC quint-source E2E test constants
+// ---------------------------------------------------------------------------
+
+// e2e EMC + PM + OA + S2 + ArXiv quint-source test constants.
+const (
+	e2eEMCVersion           = "0.9.0-e2e"
+	e2eEMCSharedDOI         = "10.1234/e2e-quint-source-doi"
+	e2eEMCSharedArXivID     = "2401.99999"
+	e2eEMCOAWorkID          = "W9999999999"
+	e2eEMCS2PaperID         = "s2paper001quint12345678901234567890abcdef"
+	e2eEMCPubMedPMID        = "99999999"
+	e2eEMCEuropePMCID       = "33333333"
+	e2eEMCSearchResultCount = 6  // 10 total (2+2+2+2+2) - 4 DOI dedup = 6
+	e2eEMCExpectedCitations = 250
+	e2eEMCExpectedSources   = 5
+)
+
+// TestE2EEuropePMCPluginQuintSourcePipeline exercises the full DC-09 pipeline:
+// config loading → real ArXivPlugin + S2Plugin + OpenAlexPlugin + PubMedPlugin + EuropePMCPlugin →
+// httptest servers → real Router → real Cache → real RateLimitManager →
+// real CredentialResolver → MCP tool handlers. Validates quint-source search,
+// dedup by DOI across five sources, and EuropePMC JSON workflow.
+func TestE2EEuropePMCPluginQuintSourcePipeline(t *testing.T) {
+	// Not parallel: mutates global version state.
+	SetVersionForTesting(e2eEMCVersion, "e2e-commit", "2024-04-09")
+	t.Cleanup(ResetVersionForTesting)
+
+	// Step 1: Create httptest ArXiv server.
+	arxivServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml")
+
+		if idList := r.URL.Query().Get("id_list"); idList != "" {
+			entry := arxivTestEntry{
+				ID:              e2eEMCSharedArXivID,
+				Title:           "E2E Quint-Source Paper",
+				Summary:         "Abstract for quint-source test.",
+				Published:       "2024-01-15T08:00:00Z",
+				Updated:         "2024-01-20T10:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.CL", "cs.AI"},
+				DOI:             e2eEMCSharedDOI,
+				PrimaryCategory: "cs.CL",
+			}
+			fmt.Fprint(w, buildArxivTestFeedXML(1, 0, []arxivTestEntry{entry}))
+			return
+		}
+
+		entries := []arxivTestEntry{
+			{
+				ID:              e2eEMCSharedArXivID,
+				Title:           "E2E Quint-Source Paper",
+				Summary:         "Abstract for quint-source test.",
+				Published:       "2024-01-15T08:00:00Z",
+				Updated:         "2024-01-20T10:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Alice E2E", Affiliation: "MIT"}},
+				Categories:      []string{"cs.CL", "cs.AI"},
+				DOI:             e2eEMCSharedDOI,
+				PrimaryCategory: "cs.CL",
+			},
+			{
+				ID:              "2401.88888",
+				Title:           "E2E ArXiv-Only Paper (quint)",
+				Summary:         "Only found on ArXiv in quint test.",
+				Published:       "2024-02-01T08:00:00Z",
+				Updated:         "2024-02-01T08:00:00Z",
+				Authors:         []arxivTestAuthor{{Name: "Bob E2E"}},
+				Categories:      []string{"cs.LG"},
+				PrimaryCategory: "cs.LG",
+			},
+		}
+		fmt.Fprint(w, buildArxivTestFeedXML(2, 0, entries))
+	}))
+	defer arxivServer.Close()
+
+	// Step 2: Create httptest S2 server.
+	s2Server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		path := r.URL.Path
+		switch {
+		case strings.HasSuffix(path, "/citations"):
+			fmt.Fprint(w, `{"offset":0,"next":null,"data":[]}`)
+		case strings.HasSuffix(path, "/references"):
+			fmt.Fprint(w, `{"offset":0,"next":null,"data":[]}`)
+		case strings.Contains(path, "/paper/search"):
+			papers := []string{
+				fmt.Sprintf(`{
+					"paperId":%q,
+					"externalIds":{"DOI":%q,"ArXiv":%q,"PMID":"","CorpusId":99999},
+					"title":"E2E Quint-Source Paper (S2 copy)",
+					"abstract":"S2 abstract for quint-source test.",
+					"year":2024,
+					"authors":[{"authorId":"a1","name":"Alice E2E"}],
+					"citationCount":180,
+					"referenceCount":20,
+					"publicationDate":"2024-01-15",
+					"journal":{"name":"Nature","volume":"625","pages":"1-10"},
+					"openAccessPdf":{"url":"https://example.com/quint.pdf"},
+					"fieldsOfStudy":["Computer Science"],
+					"url":"https://www.semanticscholar.org/paper/s2quint",
+					"isOpenAccess":true,
+					"publicationTypes":["JournalArticle"]
+				}`, e2eEMCS2PaperID, e2eEMCSharedDOI, e2eEMCSharedArXivID),
+				`{
+					"paperId":"s2paper002uniqueQNT",
+					"externalIds":null,
+					"title":"E2E S2-Only Paper (quint)",
+					"abstract":"Only found on S2 in quint test.",
+					"year":2024,
+					"authors":[{"authorId":"a2","name":"Carol E2E"}],
+					"citationCount":10,
+					"referenceCount":5,
+					"publicationDate":"2024-03-01",
+					"journal":null,
+					"openAccessPdf":null,
+					"fieldsOfStudy":["Computer Science"],
+					"url":"https://www.semanticscholar.org/paper/s2paper002",
+					"isOpenAccess":false,
+					"publicationTypes":["Conference"]
+				}`,
+			}
+			fmt.Fprintf(w, `{"total":2,"offset":0,"next":null,"data":[%s]}`,
+				strings.Join(papers, ","))
+		default:
+			// Single-paper GET.
+			fmt.Fprintf(w, `{
+				"paperId":%q,
+				"externalIds":{"DOI":%q,"ArXiv":%q},
+				"title":"E2E Quint-Source Paper (S2 copy)",
+				"abstract":"S2 abstract for quint-source test.",
+				"year":2024,
+				"authors":[{"authorId":"a1","name":"Alice E2E"}],
+				"citationCount":180,
+				"referenceCount":20,
+				"publicationDate":"2024-01-15",
+				"journal":{"name":"Nature","volume":"625","pages":"1-10"},
+				"openAccessPdf":{"url":"https://example.com/quint.pdf"},
+				"fieldsOfStudy":["Computer Science"],
+				"url":"https://www.semanticscholar.org/paper/s2quint",
+				"isOpenAccess":true,
+				"publicationTypes":["JournalArticle"]
+			}`, e2eEMCS2PaperID, e2eEMCSharedDOI, e2eEMCSharedArXivID)
+		}
+	}))
+	defer s2Server.Close()
+
+	// Step 3: Create httptest OpenAlex server.
+	oaServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		path := r.URL.Path
+		if strings.Contains(path, "/works/") {
+			// Single work GET.
+			fmt.Fprintf(w, `{
+				"id":"https://openalex.org/%s",
+				"doi":"https://doi.org/%s",
+				"title":"E2E Quint-Source Paper (OA copy)",
+				"publication_year":2024,
+				"publication_date":"2024-01-15",
+				"type":"article",
+				"cited_by_count":%d,
+				"authorships":[{"author_position":"first","author":{"id":"A1","display_name":"Alice E2E","orcid":""},"institutions":[{"id":"I1","display_name":"MIT"}]}],
+				"primary_location":{"source":{"id":"S1","display_name":"Nature","type":"journal","issn_l":"0028-0836"},"pdf_url":"https://example.com/quint-oa.pdf","landing_page_url":"https://doi.org/%s","is_oa":true},
+				"open_access":{"is_oa":true,"oa_url":"https://example.com/quint-oa.pdf","oa_status":"gold"},
+				"abstract_inverted_index":{"OA":[],"abstract":[1],"for":[2],"quint-source":[3],"test.":[4]},
+				"concepts":[{"id":"C1","display_name":"Computer Science","level":0,"score":0.9}],
+				"topics":[{"id":"T1","display_name":"NLP"}],
+				"biblio":null,
+				"ids":{"openalex":"https://openalex.org/%s","doi":"https://doi.org/%s"},
+				"referenced_works":[],
+				"related_works":[]
+			}`, e2eEMCOAWorkID, e2eEMCSharedDOI, e2eEMCExpectedCitations, e2eEMCSharedDOI, e2eEMCOAWorkID, e2eEMCSharedDOI)
+			return
+		}
+
+		// Search.
+		fmt.Fprintf(w, `{"meta":{"count":2,"page":1,"per_page":25},"results":[
+			{
+				"id":"https://openalex.org/%s",
+				"doi":"https://doi.org/%s",
+				"title":"E2E Quint-Source Paper (OA copy)",
+				"publication_year":2024,
+				"publication_date":"2024-01-15",
+				"type":"article",
+				"cited_by_count":%d,
+				"authorships":[{"author_position":"first","author":{"id":"A1","display_name":"Alice E2E","orcid":""},"institutions":[{"id":"I1","display_name":"MIT"}]}],
+				"primary_location":{"source":{"id":"S1","display_name":"Nature","type":"journal","issn_l":"0028-0836"},"pdf_url":"https://example.com/quint-oa.pdf","landing_page_url":"","is_oa":true},
+				"open_access":{"is_oa":true,"oa_url":"https://example.com/quint-oa.pdf","oa_status":"gold"},
+				"abstract_inverted_index":{"OA":[],"abstract":[1],"for":[2],"quint-source":[3],"test.":[4]},
+				"concepts":[{"id":"C1","display_name":"Computer Science","level":0,"score":0.9}],
+				"topics":[],"biblio":null,"ids":{},"referenced_works":[],"related_works":[]
+			},
+			{
+				"id":"https://openalex.org/W1111111111",
+				"doi":"",
+				"title":"E2E OA-Only Paper (quint)",
+				"publication_year":2024,
+				"publication_date":"2024-04-01",
+				"type":"article",
+				"cited_by_count":5,
+				"authorships":[{"author_position":"first","author":{"id":"A3","display_name":"Dave E2E","orcid":""},"institutions":[]}],
+				"primary_location":null,
+				"open_access":null,
+				"abstract_inverted_index":{"Only":[0],"found":[1],"in":[2],"OpenAlex":[3],"quint":[4],"test.":[5]},
+				"concepts":[],"topics":[],"biblio":null,"ids":{},"referenced_works":[],"related_works":[]
+			}
+		]}`, e2eEMCOAWorkID, e2eEMCSharedDOI, e2eEMCExpectedCitations)
+	}))
+	defer oaServer.Close()
+
+	// Step 4: Create httptest PubMed server (two-phase: esearch + efetch).
+	pmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		if strings.HasSuffix(path, pmESearchPath) {
+			w.Header().Set("Content-Type", "application/xml")
+			pmids := []string{e2eEMCPubMedPMID, "88887777"}
+			fmt.Fprint(w, buildPMTestESearchXML(2, 0, 2, testPMQueryKey, testPMWebEnv, pmids))
+			return
+		}
+
+		if strings.HasSuffix(path, pmEFetchPath) {
+			w.Header().Set("Content-Type", "application/xml")
+
+			articles := []pmTestArticle{
+				{
+					PMID:         e2eEMCPubMedPMID,
+					Title:        "E2E Quint-Source Paper (PM copy)",
+					Abstract:     "PubMed abstract for quint-source test.",
+					Authors:      []pmTestAuthor{{LastName: "Alice", ForeName: "E2E", Initials: "E"}},
+					DOI:          e2eEMCSharedDOI,
+					PMCID:        "PMC99999999",
+					JournalTitle: "Nature",
+					Volume:       "625",
+					Issue:        "1",
+					ISSN:         "0028-0836",
+					PubYear:      "2024",
+					PubMonth:     "Jan",
+					PubDay:       "15",
+					MeSHTerms:    []string{"CRISPR-Cas Systems"},
+					PubTypes:     []string{"Journal Article"},
+					Language:     "eng",
+				},
+				{
+					PMID:         "88887777",
+					Title:        "E2E PM-Only Paper (quint)",
+					Abstract:     "Only found on PubMed in quint test.",
+					Authors:      []pmTestAuthor{{LastName: "Eve", ForeName: "E2E", Initials: "E"}},
+					JournalTitle: "Science",
+					PubYear:      "2024",
+					PubMonth:     "Mar",
+					PubDay:       "20",
+					PubTypes:     []string{"Journal Article"},
+					Language:     "eng",
+				},
+			}
+
+			if id := r.URL.Query().Get(pmParamID); id != "" {
+				for _, a := range articles {
+					if a.PMID == id {
+						fmt.Fprint(w, buildPMTestEFetchXML([]pmTestArticle{a}))
+						return
+					}
+				}
+				fmt.Fprint(w, buildPMTestEFetchXML([]pmTestArticle{}))
+				return
+			}
+
+			fmt.Fprint(w, buildPMTestEFetchXML(articles))
+			return
+		}
+	}))
+	defer pmServer.Close()
+
+	// Step 5: Create httptest EuropePMC server.
+	emcServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+
+		// Full text XML request.
+		if strings.HasSuffix(path, emcFullTextXMLPath) {
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, "<article><body><p>E2E EPMC full text.</p></body></article>")
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		query := r.URL.Query().Get(emcParamQuery)
+
+		// Single-ID lookup (Get request).
+		if strings.Contains(query, emcFieldExtID) {
+			result := emcTestResult{
+				ID:                   e2eEMCEuropePMCID,
+				Source:               "MED",
+				PMID:                 e2eEMCEuropePMCID,
+				DOI:                  e2eEMCSharedDOI,
+				Title:                "E2E Quint-Source Paper (EPMC copy)",
+				AuthorString:         "Alice E2E.",
+				AbstractText:         "EPMC abstract for quint-source test.",
+				FirstPublicationDate: "2024-01-15",
+				IsOpenAccess:         emcOpenAccessYes,
+				CitedByCount:         200,
+				JournalTitle:         "Nature Medicine",
+				JournalISSN:          "1078-8956",
+				Volume:               "30",
+				Issue:                "1",
+				MeSHTerms:            []string{"CRISPR-Cas Systems"},
+			}
+			fmt.Fprint(w, buildEMCTestSearchJSON(1, []emcTestResult{result}))
+			return
+		}
+
+		// Search request — return 2 results (1 shared DOI, 1 unique).
+		results := []emcTestResult{
+			{
+				ID:                   e2eEMCEuropePMCID,
+				Source:               "MED",
+				PMID:                 e2eEMCEuropePMCID,
+				DOI:                  e2eEMCSharedDOI,
+				Title:                "E2E Quint-Source Paper (EPMC copy)",
+				AuthorString:         "Alice E2E.",
+				AbstractText:         "EPMC abstract for quint-source test.",
+				FirstPublicationDate: "2024-01-15",
+				IsOpenAccess:         emcOpenAccessYes,
+				CitedByCount:         200,
+				JournalTitle:         "Nature Medicine",
+				JournalISSN:          "1078-8956",
+				Volume:               "30",
+				Issue:                "1",
+				MeSHTerms:            []string{"CRISPR-Cas Systems"},
+			},
+			{
+				ID:                   "44444444",
+				Source:               "MED",
+				PMID:                 "44444444",
+				DOI:                  "10.5678/e2e-emc-unique",
+				Title:                "E2E EPMC-Only Paper (quint)",
+				AuthorString:         "Frank E2E.",
+				AbstractText:         "Only found on EPMC in quint test.",
+				FirstPublicationDate: "2024-05-01",
+				IsOpenAccess:         "N",
+				CitedByCount:         3,
+			},
+		}
+		fmt.Fprint(w, buildEMCTestSearchJSON(2, results))
+	}))
+	defer emcServer.Close()
+
+	// Step 6: Load config from temp YAML.
+	configYAML := fmt.Sprintf(`
+server:
+  name: "retrievr-mcp"
+  http_addr: ":0"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv", "s2", "openalex", "pubmed", "europmc"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 500
+
+sources:
+  arxiv:
+    enabled: true
+    base_url: "%s"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  pubmed:
+    enabled: true
+    base_url: "%s"
+    api_key: "e2e-server-pm-key"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+    extra:
+      tool: "retrievr-mcp"
+      email: "e2e@test.com"
+  s2:
+    enabled: true
+    base_url: "%s"
+    api_key: "e2e-server-s2-key"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  openalex:
+    enabled: true
+    base_url: "%s"
+    api_key: "e2e-server-oa-key"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+    extra:
+      mailto: "e2e@test.com"
+  huggingface:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  europmc:
+    enabled: true
+    base_url: "%s"
+    timeout: "5s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+`, arxivServer.URL, pmServer.URL+"/", s2Server.URL, oaServer.URL, emcServer.URL+"/")
+
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.yaml")
+	err := os.WriteFile(configPath, []byte(configYAML), 0o644)
+	require.NoError(t, err)
+
+	cfg, err := LoadConfig(configPath)
+	require.NoError(t, err)
+
+	// Step 7: Create real plugins.
+	arxivPlugin := &ArXivPlugin{}
+	err = arxivPlugin.Initialize(context.Background(), cfg.Sources[SourceArXiv])
+	require.NoError(t, err)
+
+	s2Plugin := &S2Plugin{}
+	err = s2Plugin.Initialize(context.Background(), cfg.Sources[SourceS2])
+	require.NoError(t, err)
+
+	oaPlugin := &OpenAlexPlugin{}
+	err = oaPlugin.Initialize(context.Background(), cfg.Sources[SourceOpenAlex])
+	require.NoError(t, err)
+
+	pmPlugin := &PubMedPlugin{}
+	err = pmPlugin.Initialize(context.Background(), cfg.Sources[SourcePubMed])
+	require.NoError(t, err)
+
+	emcPlugin := &EuropePMCPlugin{}
+	err = emcPlugin.Initialize(context.Background(), cfg.Sources[SourceEuropePMC])
+	require.NoError(t, err)
+
+	plugins := map[string]SourcePlugin{
+		SourceArXiv:    arxivPlugin,
+		SourceS2:       s2Plugin,
+		SourceOpenAlex: oaPlugin,
+		SourcePubMed:   pmPlugin,
+		SourceEuropePMC: emcPlugin,
+	}
+
+	// Step 8: Create real infrastructure.
+	cache := NewCache(CacheConfig{
+		MaxEntries: cfg.Router.CacheMaxEntries,
+		TTL:        cfg.Router.CacheTTL.Duration,
+		Enabled:    cfg.Router.CacheEnabled,
+	})
+
+	rateLimits := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
+	for sourceID, sourceCfg := range cfg.Sources {
+		rps := sourceCfg.RateLimit
+		if rps < RateLimitMinRPS {
+			rps = DefaultRateLimitRPS
+		}
+		burst := sourceCfg.RateLimitBurst
+		if burst <= 0 {
+			burst = DefaultRateLimitBurst
+		}
+		rateLimits.Register(RateLimiterConfig{
+			SourceID:          sourceID,
+			RequestsPerSecond: rps,
+			Burst:             burst,
+		})
+	}
+	rateLimits.Start(DefaultCleanupInterval)
+	t.Cleanup(rateLimits.Stop)
+
+	resolver := &CredentialResolver{}
+
+	serverDefaults := make(map[string]string, len(cfg.Sources))
+	for id, src := range cfg.Sources {
+		serverDefaults[id] = src.APIKey
+	}
+
+	// Step 9: Create router + server.
+	router := NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, nil)
+	srv := NewServer(cfg, router, rateLimits, nil)
+
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	// Step 10: Test quint-source search via MCP tool handler.
+	ctx := context.Background()
+	searchHandler := NewSearchHandler(router)
+
+	searchReq := mcp.CallToolRequest{}
+	searchReq.Params.Name = ToolNameSearch
+	searchReq.Params.Arguments = map[string]any{
+		FieldQuery:   "quint-source test",
+		FieldSources: []any{SourceArXiv, SourceS2, SourceOpenAlex, SourcePubMed, SourceEuropePMC},
+		FieldSort:    string(SortCitations),
+		FieldLimit:   float64(10),
+	}
+
+	searchResult, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult)
+	assert.False(t, searchResult.IsError, "search should succeed")
+
+	searchText := extractTextContent(t, searchResult)
+	var merged MergedSearchResult
+	err = json.Unmarshal([]byte(searchText), &merged)
+	require.NoError(t, err)
+
+	// 10 total results (2 ArXiv + 2 S2 + 2 OA + 2 PubMed + 2 EPMC) - 4 DOI dedup = 6.
+	assert.Len(t, merged.Results, e2eEMCSearchResultCount, "10 pubs minus 4 DOI dedup = 6")
+	assert.Len(t, merged.SourcesQueried, e2eEMCExpectedSources)
+	assert.Contains(t, merged.SourcesQueried, SourceArXiv)
+	assert.Contains(t, merged.SourcesQueried, SourceS2)
+	assert.Contains(t, merged.SourcesQueried, SourceOpenAlex)
+	assert.Contains(t, merged.SourcesQueried, SourcePubMed)
+	assert.Contains(t, merged.SourcesQueried, SourceEuropePMC)
+	assert.Empty(t, merged.SourcesFailed)
+
+	// Step 11: Verify DOI-based dedup across all five sources.
+	var sharedPaper *Publication
+	for i := range merged.Results {
+		if merged.Results[i].DOI == e2eEMCSharedDOI {
+			sharedPaper = &merged.Results[i]
+			break
+		}
+	}
+	require.NotNil(t, sharedPaper, "shared DOI paper should be in results")
+	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in from multiple sources")
+
+	// Highest citation count should win (OA has 250, EPMC has 200, S2 has 180, ArXiv nil, PM nil).
+	require.NotNil(t, sharedPaper.CitationCount)
+	assert.Equal(t, e2eEMCExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
+
+	// Step 12: Test EuropePMC Get via MCP tool handler.
+	getHandler := NewGetHandler(router)
+	getReq := mcp.CallToolRequest{}
+	getReq.Params.Name = ToolNameGet
+	getReq.Params.Arguments = map[string]any{
+		FieldID: SourceEuropePMC + prefixedIDSeparator + e2eEMCEuropePMCID,
+	}
+
+	getResult, err := getHandler(ctx, getReq)
+	require.NoError(t, err)
+	require.NotNil(t, getResult)
+	assert.False(t, getResult.IsError)
+
+	getText := extractTextContent(t, getResult)
+	var pub Publication
+	err = json.Unmarshal([]byte(getText), &pub)
+	require.NoError(t, err)
+	assert.Contains(t, pub.Title, "Quint-Source")
+	assert.Equal(t, SourceEuropePMC, pub.Source)
+	assert.Equal(t, e2eEMCSharedDOI, pub.DOI)
+	assert.NotEmpty(t, pub.Abstract)
+	assert.NotEmpty(t, pub.Authors)
+
+	// Step 13: Test EuropePMC Get with BibTeX format.
+	getBibReq := mcp.CallToolRequest{}
+	getBibReq.Params.Name = ToolNameGet
+	getBibReq.Params.Arguments = map[string]any{
+		FieldID:     SourceEuropePMC + prefixedIDSeparator + e2eEMCEuropePMCID,
+		FieldFormat: string(FormatBibTeX),
+	}
+
+	getBibResult, err := getHandler(ctx, getBibReq)
+	require.NoError(t, err)
+	require.NotNil(t, getBibResult)
+	assert.False(t, getBibResult.IsError)
+
+	getBibText := extractTextContent(t, getBibResult)
+	var bibPub Publication
+	err = json.Unmarshal([]byte(getBibText), &bibPub)
+	require.NoError(t, err)
+	require.NotNil(t, bibPub.FullText)
+	assert.Equal(t, FormatBibTeX, bibPub.FullText.ContentFormat)
+	assert.Contains(t, bibPub.FullText.Content, "@article{")
+	assert.Contains(t, bibPub.FullText.Content, e2eEMCSharedDOI)
+
+	// Step 14: Test list_sources — all five should appear.
+	listHandler := NewListSourcesHandler(router)
+	listReq := mcp.CallToolRequest{}
+	listReq.Params.Name = ToolNameListSources
+
+	listResult, err := listHandler(ctx, listReq)
+	require.NoError(t, err)
+	require.NotNil(t, listResult)
+	assert.False(t, listResult.IsError)
+
+	listText := extractTextContent(t, listResult)
+	var infos []SourceInfo
+	err = json.Unmarshal([]byte(listText), &infos)
+	require.NoError(t, err)
+	require.Len(t, infos, e2eEMCExpectedSources)
+
+	// Verify EuropePMC appears and has correct capabilities.
+	var emcInfo *SourceInfo
+	for i := range infos {
+		if infos[i].ID == SourceEuropePMC {
+			emcInfo = &infos[i]
+			break
+		}
+	}
+	require.NotNil(t, emcInfo, "EuropePMC should appear in list_sources")
+	assert.Equal(t, emcPluginName, emcInfo.Name)
+	assert.True(t, emcInfo.Enabled)
+	assert.Contains(t, emcInfo.ContentTypes, ContentTypePaper)
+	assert.Equal(t, FormatJSON, emcInfo.NativeFormat)
+	assert.True(t, emcInfo.SupportsDateFilter)
+	assert.True(t, emcInfo.SupportsAuthorFilter)
+	assert.True(t, emcInfo.SupportsCategoryFilter)
+	assert.True(t, emcInfo.SupportsFullText)
+	assert.True(t, emcInfo.SupportsCitations)
+	assert.False(t, emcInfo.AcceptsCredentials, "EuropePMC does not accept per-call credentials")
+
+	// Step 15: Verify cache — second search should be a cache hit.
+	searchResult2, err := searchHandler(ctx, searchReq)
+	require.NoError(t, err)
+	require.NotNil(t, searchResult2)
+	assert.False(t, searchResult2.IsError)
+
+	cacheMetrics := cache.Metrics()
+	assert.Equal(t, uint64(1), cacheMetrics.Hits, "second search should be a cache hit")
+
+	// Step 16: Run contract tests on all five real plugins.
+	PluginContractTest(t, arxivPlugin)
+	PluginContractTest(t, s2Plugin)
+	PluginContractTest(t, oaPlugin)
+	PluginContractTest(t, pmPlugin)
+	PluginContractTest(t, emcPlugin)
+
+	// Step 17: Verify all five plugins are healthy.
+	arxivHealth := arxivPlugin.Health(ctx)
+	assert.True(t, arxivHealth.Enabled)
+	assert.True(t, arxivHealth.Healthy)
+
+	s2Health := s2Plugin.Health(ctx)
+	assert.True(t, s2Health.Enabled)
+	assert.True(t, s2Health.Healthy)
+
+	oaHealth := oaPlugin.Health(ctx)
+	assert.True(t, oaHealth.Enabled)
+	assert.True(t, oaHealth.Healthy)
+
+	pmHealth := pmPlugin.Health(ctx)
+	assert.True(t, pmHealth.Enabled)
+	assert.True(t, pmHealth.Healthy)
+
+	emcHealth := emcPlugin.Health(ctx)
+	assert.True(t, emcHealth.Enabled)
+	assert.True(t, emcHealth.Healthy)
+	assert.Empty(t, emcHealth.LastError)
+}

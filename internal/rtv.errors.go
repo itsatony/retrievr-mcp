@@ -167,6 +167,24 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: EuropePMC
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgEuropePMCJSONParse   = "failed to parse europepmc json response"
+	ErrMsgEuropePMCHTTPRequest = "europepmc http request failed"
+	ErrMsgEuropePMCNotFound    = "europepmc article not found"
+	ErrMsgEuropePMCEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrEuropePMCJSONParse   = errors.New(ErrMsgEuropePMCJSONParse)
+	ErrEuropePMCHTTPRequest = errors.New(ErrMsgEuropePMCHTTPRequest)
+	ErrEuropePMCNotFound    = errors.New(ErrMsgEuropePMCNotFound)
+	ErrEuropePMCEmptyQuery  = errors.New(ErrMsgEuropePMCEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

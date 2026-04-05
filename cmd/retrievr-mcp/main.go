@@ -137,6 +137,18 @@ func run() int {
 		plugins[internal.SourcePubMed] = pmPlugin
 	}
 
+	if emcCfg, ok := cfg.Sources[internal.SourceEuropePMC]; ok && emcCfg.Enabled {
+		emcPlugin := &internal.EuropePMCPlugin{}
+		if err := emcPlugin.Initialize(context.Background(), emcCfg); err != nil {
+			logger.Error(logMsgPluginInitFail,
+				slog.String(internal.LogKeySource, internal.SourceEuropePMC),
+				slog.String(internal.LogKeyError, err.Error()),
+			)
+			return exitCodeStartup
+		}
+		plugins[internal.SourceEuropePMC] = emcPlugin
+	}
+
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
 
 	// Step 2: Create rate limit manager and register all enabled sources.

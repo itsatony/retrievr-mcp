@@ -5,7 +5,7 @@ server:
   log_format: "json"
 
 router:
-  default_sources: ["arxiv", "s2", "openalex", "pubmed", "huggingface"]
+  default_sources: ["arxiv", "s2", "openalex", "pubmed", "huggingface", "europmc"]
   per_source_timeout: "10s"
   dedup_enabled: true
   cache_enabled: true

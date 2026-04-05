@@ -39,6 +39,18 @@ func TestSentinelErrorMessages(t *testing.T) {
 		{"VersionLoad", ErrVersionLoad, ErrMsgVersionLoad},
 		{"DurationParse", ErrDurationParse, ErrMsgDurationParse},
 		{"CacheKeyGeneration", ErrCacheKeyGeneration, ErrMsgCacheKeyGeneration},
+
+		// Plugin: ArXiv
+		{"ArxivXMLParse", ErrArxivXMLParse, ErrMsgArxivXMLParse},
+		{"ArxivHTTPRequest", ErrArxivHTTPRequest, ErrMsgArxivHTTPRequest},
+		{"ArxivNotFound", ErrArxivNotFound, ErrMsgArxivNotFound},
+		{"ArxivEmptyQuery", ErrArxivEmptyQuery, ErrMsgArxivEmptyQuery},
+
+		// Plugin: S2 (Semantic Scholar)
+		{"S2JSONParse", ErrS2JSONParse, ErrMsgS2JSONParse},
+		{"S2HTTPRequest", ErrS2HTTPRequest, ErrMsgS2HTTPRequest},
+		{"S2NotFound", ErrS2NotFound, ErrMsgS2NotFound},
+		{"S2EmptyQuery", ErrS2EmptyQuery, ErrMsgS2EmptyQuery},
 	}
 
 	for _, tt := range tests {

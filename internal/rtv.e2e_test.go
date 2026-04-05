@@ -1372,7 +1372,7 @@ func TestE2ES2PluginMultiSourcePipeline(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Check for API key header.
-		apiKey := r.Header.Get("x-api-key")
+		apiKey := r.Header.Get(s2APIKeyHeader)
 
 		// Route based on path.
 		path := r.URL.Path

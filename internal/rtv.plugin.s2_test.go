@@ -42,6 +42,7 @@ const (
 	testS2Journal1   = "Nature"
 	testS2Volume1    = "625"
 	testS2Pages1     = "123-130"
+	testS2PubType1   = "JournalArticle"
 	testS2Year1      = 2024
 	testS2Year2      = 2023
 	testS2Citations1 = 42
@@ -254,7 +255,7 @@ func defaultS2TestPaper1() s2TestPaper {
 		FieldsOfStudy:   []string{testS2Category1, testS2Category2},
 		URL:             testS2URL1,
 		IsOpenAccess:    true,
-		PubTypes:        []string{"JournalArticle"},
+		PubTypes:        []string{testS2PubType1},
 	}
 }
 
@@ -612,7 +613,7 @@ func TestS2SearchResultMapping(t *testing.T) {
 	require.NotNil(t, pub.SourceMetadata)
 	assert.Equal(t, testS2Journal1, pub.SourceMetadata[s2MetaKeyJournal])
 	assert.Equal(t, []string{testS2Category1, testS2Category2}, pub.SourceMetadata[s2MetaKeyFieldsOfStudy])
-	assert.Equal(t, []string{"JournalArticle"}, pub.SourceMetadata[s2MetaKeyPublicationTypes])
+	assert.Equal(t, []string{testS2PubType1}, pub.SourceMetadata[s2MetaKeyPublicationTypes])
 	assert.Equal(t, testS2CorpusID1, pub.SourceMetadata[s2MetaKeyCorpusID])
 	assert.Equal(t, testS2RefCount1, pub.SourceMetadata[s2MetaKeyReferenceCount])
 	assert.Equal(t, true, pub.SourceMetadata[s2MetaKeyIsOpenAccess])

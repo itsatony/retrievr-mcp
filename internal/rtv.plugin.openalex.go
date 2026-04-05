@@ -84,9 +84,9 @@ const oaHTTPStatusErrFmt = "status %d"
 // ---------------------------------------------------------------------------
 
 const (
-	oaYearOnlyLength  = 4
-	oaYearEndPad      = "-12-31"
-	oaFilterMaxParts  = 4 // typical max filter count for pre-allocation
+	oaYearOnlyLength = 4
+	oaYearEndPad     = "-12-31"
+	oaFilterMaxParts = 4 // typical max filter count for pre-allocation
 )
 
 // ---------------------------------------------------------------------------

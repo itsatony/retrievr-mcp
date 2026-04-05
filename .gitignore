@@ -27,6 +27,13 @@ go.work.sum
 # env file
 .env
 
+# Local config overrides
+configs/*.local.yaml
+
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Claude Code / project planning
+CLAUDE.md
+project_plan/

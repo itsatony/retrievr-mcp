@@ -1,0 +1,51 @@
+server:
+  name: "retrievr-mcp"
+  http_addr: ":8099"
+  log_level: "info"
+  log_format: "json"
+
+router:
+  default_sources: ["arxiv", "s2", "openalex", "huggingface"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 1000
+
+sources:
+  arxiv:
+    enabled: true
+    timeout: "15s"
+
+  pubmed:
+    enabled: true
+    api_key: ""
+    timeout: "10s"
+    extra:
+      tool: "retrievr-mcp"
+      email: "contact@example.com"
+
+  s2:
+    enabled: true
+    api_key: ""
+    timeout: "10s"
+
+  openalex:
+    enabled: true
+    api_key: ""
+    timeout: "10s"
+    extra:
+      mailto: "contact@example.com"
+
+  huggingface:
+    enabled: true
+    api_key: ""
+    timeout: "10s"
+    extra:
+      include_models: "true"
+      include_datasets: "true"
+      include_papers: "true"
+
+  europmc:
+    enabled: true
+    timeout: "10s"

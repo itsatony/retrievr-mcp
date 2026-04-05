@@ -57,6 +57,12 @@ func TestSentinelErrorMessages(t *testing.T) {
 		{"OAHTTPRequest", ErrOAHTTPRequest, ErrMsgOAHTTPRequest},
 		{"OANotFound", ErrOANotFound, ErrMsgOANotFound},
 		{"OAEmptyQuery", ErrOAEmptyQuery, ErrMsgOAEmptyQuery},
+
+		// Plugin: PubMed
+		{"PubMedXMLParse", ErrPubMedXMLParse, ErrMsgPubMedXMLParse},
+		{"PubMedHTTPRequest", ErrPubMedHTTPRequest, ErrMsgPubMedHTTPRequest},
+		{"PubMedNotFound", ErrPubMedNotFound, ErrMsgPubMedNotFound},
+		{"PubMedEmptyQuery", ErrPubMedEmptyQuery, ErrMsgPubMedEmptyQuery},
 	}
 
 	for _, tt := range tests {

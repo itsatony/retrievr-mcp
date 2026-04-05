@@ -89,10 +89,13 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	pmDateSeparator  = "/"
-	pmYearOnlyLength = 4
-	pmYearStartPad   = "/01/01"
-	pmYearEndPad     = "/12/31"
+	pmDateSeparator     = "/"
+	pmISODateSeparator  = "-"
+	pmYearOnlyLength    = 4
+	pmYearStartPad      = "/01/01"
+	pmYearEndPad        = "/12/31"
+	pmDayZeroPad        = "0"
+	pmSingleDigitDayLen = 1
 )
 
 // ---------------------------------------------------------------------------
@@ -123,7 +126,6 @@ const (
 	pmMetaKeyJournal  = "pubmed_journal"
 	pmMetaKeyVolume   = "pubmed_volume"
 	pmMetaKeyIssue    = "pubmed_issue"
-	pmMetaKeyPages    = "pubmed_pages"
 	pmMetaKeyMeSH     = "pubmed_mesh_terms"
 	pmMetaKeyPubTypes = "pubmed_publication_types"
 	pmMetaKeyLanguage = "pubmed_language"
@@ -190,7 +192,8 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	pmAuthorNameSeparator = " "
+	pmAuthorNameSeparator      = " "
+	pmAbstractSectionSeparator = "\n"
 )
 
 // ---------------------------------------------------------------------------
@@ -834,7 +837,7 @@ func convertPMDate(date string, isEndDate bool) string {
 		}
 		return date + pmYearStartPad
 	}
-	return strings.ReplaceAll(date, "-", pmDateSeparator)
+	return strings.ReplaceAll(date, pmISODateSeparator, pmDateSeparator)
 }
 
 // mapPMSortOrder maps unified sort orders to PubMed sort parameter values.
@@ -933,7 +936,7 @@ func assemblePMAbstract(abstract pmAbstract) string {
 	if len(abstract.Texts) == 0 {
 		return ""
 	}
-	return strings.Join(abstract.Texts, "\n")
+	return strings.Join(abstract.Texts, pmAbstractSectionSeparator)
 }
 
 // mapPMAuthors converts PubMed authors to the unified Author type.
@@ -977,13 +980,13 @@ func assemblePMDate(pubDate pmPubDate) string {
 
 		if month != "" && pubDate.Day != "" {
 			day := pubDate.Day
-			if len(day) == 1 {
-				day = "0" + day
+			if len(day) == pmSingleDigitDayLen {
+				day = pmDayZeroPad + day
 			}
-			return pubDate.Year + "-" + month + "-" + day
+			return pubDate.Year + pmISODateSeparator + month + pmISODateSeparator + day
 		}
 		if month != "" {
-			return pubDate.Year + "-" + month
+			return pubDate.Year + pmISODateSeparator + month
 		}
 		return pubDate.Year
 	}

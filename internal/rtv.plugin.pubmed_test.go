@@ -48,7 +48,6 @@ const (
 	testPMJournal2     = "The Lancet"
 	testPMVolume1      = "390"
 	testPMIssue1       = "1"
-	testPMPages1       = "45-58"
 	testPMISSN1        = "0028-4793"
 	testPMMeSH1        = "CRISPR-Cas Systems"
 	testPMMeSH2        = "Gene Editing"
@@ -924,6 +923,97 @@ func TestPubMedGetWithFullText(t *testing.T) {
 	assert.Equal(t, FormatXML, pub.FullText.ContentFormat)
 	assert.Contains(t, pub.FullText.Content, "Full text content here.")
 	assert.Equal(t, len(testPMCFullText), pub.FullText.ContentLength)
+}
+
+// ---------------------------------------------------------------------------
+// PMC full text error tests
+// ---------------------------------------------------------------------------
+
+func TestPubMedFetchPMCFullTextErrors(t *testing.T) {
+	t.Parallel()
+
+	const testPMCBlockDuration = 2 * time.Second
+	const testPMCShortTimeout = 50 * time.Millisecond
+
+	tests := []struct {
+		name      string
+		handler   http.HandlerFunc
+		timeout   time.Duration
+		cancelCtx bool
+		wantFT    bool // expect full text on result
+	}{
+		{
+			name: "pmc_http_500_graceful_degradation",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/xml")
+				db := r.URL.Query().Get(pmParamDB)
+				if db == pmDBPMC {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+				fmt.Fprint(w, buildPMTestEFetchXML([]pmTestArticle{defaultPMTestArticle1()}))
+			}),
+			wantFT: false,
+		},
+		{
+			name: "pmc_http_404_graceful_degradation",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/xml")
+				db := r.URL.Query().Get(pmParamDB)
+				if db == pmDBPMC {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				fmt.Fprint(w, buildPMTestEFetchXML([]pmTestArticle{defaultPMTestArticle1()}))
+			}),
+			wantFT: false,
+		},
+		{
+			name: "pmc_timeout_graceful_degradation",
+			handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/xml")
+				db := r.URL.Query().Get(pmParamDB)
+				if db == pmDBPMC {
+					time.Sleep(testPMCBlockDuration)
+					return
+				}
+				fmt.Fprint(w, buildPMTestEFetchXML([]pmTestArticle{defaultPMTestArticle1()}))
+			}),
+			timeout: testPMCShortTimeout,
+			wantFT:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := httptest.NewServer(tc.handler)
+			defer ts.Close()
+
+			plugin := newPMTestPlugin(t, ts.URL+"/")
+
+			ctx := context.Background()
+			if tc.timeout > 0 {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, tc.timeout)
+				defer cancel()
+			}
+
+			pub, err := plugin.Get(ctx, testPMPMID1, []IncludeField{IncludeFullText}, FormatNative, nil)
+
+			// Get should succeed — PMC full text failure is non-fatal.
+			require.NoError(t, err)
+			require.NotNil(t, pub)
+			assert.Equal(t, testPMTitle1, pub.Title)
+
+			if tc.wantFT {
+				assert.NotNil(t, pub.FullText)
+			} else {
+				assert.Nil(t, pub.FullText, "PMC failure should not produce full text")
+			}
+		})
+	}
 }
 
 // ---------------------------------------------------------------------------

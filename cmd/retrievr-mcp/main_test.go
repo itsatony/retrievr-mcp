@@ -33,8 +33,11 @@ sources:
     rate_limit_burst: 5
 `
 
-const testVersionsYAML = `version: "0.4.0"
+const (
+	testExpectedVersion = "0.4.0"
+	testVersionsYAML    = `version: "0.4.0"
 `
+)
 
 const (
 	healthPollInterval = 100 * time.Millisecond
@@ -130,7 +133,7 @@ func TestMainBinaryStartsAndServesHealth(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&health)
 	require.NoError(t, err)
 	assert.Equal(t, "ok", health["status"])
-	assert.Equal(t, "0.4.0", health["version"])
+	assert.Equal(t, testExpectedVersion, health["version"])
 
 	// Verify /version response.
 	versionURL := fmt.Sprintf("http://localhost:%d/version", port)

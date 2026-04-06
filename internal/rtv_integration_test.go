@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -29,14 +30,17 @@ const (
 
 	integrationArxivRPS   = 0.33
 	integrationArxivBurst = 1
-	integrationS2RPS      = 1.0
-	integrationS2Burst    = 3
+	integrationS2RPS      = 5.0
+	integrationS2Burst    = 5
 	integrationOARPS      = 10.0
 	integrationOABurst    = 5
 	integrationEMCRPS     = 10.0
 	integrationEMCBurst   = 5
 
-	integrationOAEmail = "test@example.com"
+	integrationOAEmail = "contact@vaudience.ai"
+
+	// Environment variable names for optional API keys.
+	integrationEnvS2APIKey = "RETRIEVR_S2_API_KEY"
 )
 
 // NOTE: Integration tests intentionally omit t.Parallel() because they hit live
@@ -119,6 +123,7 @@ func TestIntegrationS2Search(t *testing.T) {
 	plugin := &S2Plugin{}
 	require.NoError(t, plugin.Initialize(ctx, PluginConfig{
 		Enabled:   true,
+		APIKey:    os.Getenv(integrationEnvS2APIKey),
 		RateLimit: integrationS2RPS,
 	}))
 
@@ -128,6 +133,14 @@ func TestIntegrationS2Search(t *testing.T) {
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
 	}, nil)
+
+	// S2 has very aggressive anonymous rate limits. If we get a rate limit
+	// or auth error, skip rather than fail — this is expected without a
+	// valid API key.
+	if err != nil && (strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "403")) {
+		t.Skipf("S2 rate limited or API key invalid (expected without key): %v", err)
+	}
+
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -314,33 +327,34 @@ func TestIntegrationMultiSourceSearch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
 	defer cancel()
 
-	// Initialize S2 and OpenAlex (free, fast sources).
-	s2Plugin := &S2Plugin{}
-	require.NoError(t, s2Plugin.Initialize(ctx, PluginConfig{
-		Enabled:   true,
-		RateLimit: integrationS2RPS,
-	}))
-
+	// Use OpenAlex + EuropePMC for multi-source test — both are free and
+	// have generous rate limits, unlike S2 which aggressively 429s.
 	oaPlugin := &OpenAlexPlugin{}
 	require.NoError(t, oaPlugin.Initialize(ctx, PluginConfig{
 		Enabled:   true,
 		RateLimit: integrationOARPS,
-		Extra:     map[string]string{"email": integrationOAEmail},
+		Extra:     map[string]string{oaExtraKeyMailto: integrationOAEmail},
+	}))
+
+	emcPlugin := &EuropePMCPlugin{}
+	require.NoError(t, emcPlugin.Initialize(ctx, PluginConfig{
+		Enabled:   true,
+		RateLimit: integrationEMCRPS,
 	}))
 
 	plugins := map[string]SourcePlugin{
-		SourceS2:       s2Plugin,
-		SourceOpenAlex: oaPlugin,
+		SourceOpenAlex:  oaPlugin,
+		SourceEuropePMC: emcPlugin,
 	}
 
 	mgr := NewSourceRateLimitManager(DefaultCredentialBucketTTL)
-	mgr.Register(RateLimiterConfig{SourceID: SourceS2, RequestsPerSecond: integrationS2RPS, Burst: integrationS2Burst})
 	mgr.Register(RateLimiterConfig{SourceID: SourceOpenAlex, RequestsPerSecond: integrationOARPS, Burst: integrationOABurst})
+	mgr.Register(RateLimiterConfig{SourceID: SourceEuropePMC, RequestsPerSecond: integrationEMCRPS, Burst: integrationEMCBurst})
 	mgr.Start(DefaultCleanupInterval)
 	defer mgr.Stop()
 
 	cfg := RouterConfig{
-		DefaultSources:   []string{SourceS2, SourceOpenAlex},
+		DefaultSources:   []string{SourceOpenAlex, SourceEuropePMC},
 		PerSourceTimeout: Duration{Duration: integrationTimeout},
 		DedupEnabled:     true,
 		CacheEnabled:     false,
@@ -357,8 +371,8 @@ func TestIntegrationMultiSourceSearch(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 	assert.GreaterOrEqual(t, len(merged.Results), 1)
-	assert.Contains(t, merged.SourcesQueried, SourceS2)
 	assert.Contains(t, merged.SourcesQueried, SourceOpenAlex)
+	assert.Contains(t, merged.SourcesQueried, SourceEuropePMC)
 	assert.Empty(t, merged.SourcesFailed)
 
 	// Verify results come from multiple sources.

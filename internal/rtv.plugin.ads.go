@@ -91,11 +91,11 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	adsAbsURLPrefix        = "https://ui.adsabs.harvard.edu/abs/"
-	adsQueryBibcodePrefix  = "bibcode:"
-	adsGetRowCount         = 1
-	adsEmptyFieldMarker    = "-"
-	adsQuerySeparator      = " "
+	adsAbsURLPrefix       = "https://ui.adsabs.harvard.edu/abs/"
+	adsQueryBibcodePrefix = "bibcode:"
+	adsGetRowCount        = 1
+	adsEmptyFieldMarker   = "-"
+	adsQuerySeparator     = " "
 )
 
 // ---------------------------------------------------------------------------

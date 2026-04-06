@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,7 +49,11 @@ const (
 // DBLP get key prefix
 // ---------------------------------------------------------------------------
 
-const dblpGetKeyPrefix = "key:"
+// dblpRecPath is the direct record lookup endpoint (XML only, JSON not supported).
+const dblpRecPath = "/rec/"
+
+// dblpRecXMLSuffix is appended to the key for XML format.
+const dblpRecXMLSuffix = ".xml"
 
 // ---------------------------------------------------------------------------
 // DBLP HTTP constants
@@ -79,13 +84,62 @@ const dblpCategoriesHint = "Computer Science — conferences (NeurIPS, ICML, ACL
 // ---------------------------------------------------------------------------
 
 const (
-	dblpFirstOffset  = 0
-	dblpGetHitsCount = 1
+	dblpFirstOffset = 0
 )
 
 // ---------------------------------------------------------------------------
 // DBLP JSON response struct definitions
 // ---------------------------------------------------------------------------
+
+// dblpRecXMLResponse represents the XML response from /rec/{key}.xml.
+// The root <dblp> element contains one article/inproceedings/etc child.
+type dblpRecXMLResponse struct {
+	XMLName       xml.Name         `xml:"dblp"`
+	Article       *dblpRecXMLEntry `xml:"article"`
+	InProceedings *dblpRecXMLEntry `xml:"inproceedings"`
+	Proceedings   *dblpRecXMLEntry `xml:"proceedings"`
+	Book          *dblpRecXMLEntry `xml:"book"`
+	Incollection  *dblpRecXMLEntry `xml:"incollection"`
+	PhdThesis     *dblpRecXMLEntry `xml:"phdthesis"`
+	MastersThesis *dblpRecXMLEntry `xml:"mastersthesis"`
+}
+
+// dblpRecXMLEntry holds the fields common to all DBLP record types.
+type dblpRecXMLEntry struct {
+	Key       string   `xml:"key,attr"`
+	Title     string   `xml:"title"`
+	Authors   []string `xml:"author"`
+	Year      string   `xml:"year"`
+	Journal   string   `xml:"journal"`
+	Booktitle string   `xml:"booktitle"`
+	Volume    string   `xml:"volume"`
+	Pages     string   `xml:"pages"`
+	EE        string   `xml:"ee"`
+	URL       string   `xml:"url"`
+	DOI       string   `xml:"doi"`
+}
+
+// entry returns the first non-nil entry from the XML response.
+func (r *dblpRecXMLResponse) entry() *dblpRecXMLEntry {
+	switch {
+	case r.Article != nil:
+		return r.Article
+	case r.InProceedings != nil:
+		return r.InProceedings
+	case r.Proceedings != nil:
+		return r.Proceedings
+	case r.Book != nil:
+		return r.Book
+	case r.Incollection != nil:
+		return r.Incollection
+	case r.PhdThesis != nil:
+		return r.PhdThesis
+	case r.MastersThesis != nil:
+		return r.MastersThesis
+	default:
+		return nil
+	}
+}
 
 // dblpSearchResponse represents the top-level search response from the DBLP API.
 type dblpSearchResponse struct {
@@ -317,26 +371,26 @@ func (p *DBLPPlugin) Search(ctx context.Context, params SearchParams, _ *CallCre
 // SourcePlugin interface: Get
 // ---------------------------------------------------------------------------
 
-// Get retrieves a single publication by its DBLP key.
+// Get retrieves a single publication by its DBLP key using the direct /rec/ endpoint.
 // The ID will already have the source prefix stripped (e.g., "journals/corr/abs-2401-12345").
 func (p *DBLPPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
 	reqURL := buildDBLPGetURL(p.baseURL, id)
 
-	var response dblpSearchResponse
-	if err := p.doRequest(ctx, reqURL, &response); err != nil {
+	var xmlResp dblpRecXMLResponse
+	if err := p.doXMLRequest(ctx, reqURL, &xmlResp); err != nil {
 		p.recordError(err)
 		return nil, fmt.Errorf("%w: %w", ErrGetFailed, err)
 	}
 
-	if len(response.Result.Hits.Hit) == 0 {
+	entry := xmlResp.entry()
+	if entry == nil {
 		return nil, fmt.Errorf("%w: %s", ErrDBLPNotFound, id)
 	}
 
 	p.recordSuccess()
 
-	pub := mapDBLPHitToPublication(&response.Result.Hits.Hit[0].Info)
+	pub := mapDBLPXMLEntryToPublication(entry)
 
-	// Apply format conversion if not native JSON.
 	if format != FormatNative && format != FormatJSON {
 		if err := convertDBLPFormat(&pub, format); err != nil {
 			return nil, err
@@ -378,6 +432,48 @@ func (p *DBLPPlugin) doRequest(ctx context.Context, reqURL string, target any) e
 
 	limitedBody := io.LimitReader(resp.Body, int64(dblpMaxResponseBytes))
 	if err := json.NewDecoder(limitedBody).Decode(target); err != nil {
+		return fmt.Errorf("%w: %w", ErrDBLPJSONParse, err)
+	}
+
+	return nil
+}
+
+// doXMLRequest executes an HTTP GET and decodes the XML response.
+// Used for the /rec/{key}.xml endpoint (DBLP does not support JSON for direct records).
+func (p *DBLPPlugin) doXMLRequest(ctx context.Context, reqURL string, target any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrDBLPHTTPRequest, err)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		if ctx.Err() != nil {
+			return fmt.Errorf("%w: %w", ErrUpstreamTimeout, ctx.Err())
+		}
+		return fmt.Errorf("%w: %w", ErrDBLPHTTPRequest, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return ErrDBLPNotFound
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return fmt.Errorf("%w: "+dblpHTTPStatusErrFmt, ErrDBLPHTTPRequest, resp.StatusCode)
+	}
+
+	limitedBody := io.LimitReader(resp.Body, int64(dblpMaxResponseBytes))
+	decoder := xml.NewDecoder(limitedBody)
+	// DBLP returns US-ASCII encoding declaration. Go's xml package requires a
+	// CharsetReader for non-UTF-8 encodings. US-ASCII is a subset of UTF-8,
+	// so we can safely pass through the reader unchanged.
+	decoder.CharsetReader = func(charset string, input io.Reader) (io.Reader, error) {
+		return input, nil
+	}
+	if err := decoder.Decode(target); err != nil {
 		return fmt.Errorf("%w: %w", ErrDBLPJSONParse, err)
 	}
 
@@ -429,14 +525,10 @@ func buildDBLPSearchURL(baseURL string, params SearchParams) string {
 	return baseURL + dblpSearchPath + "?" + qParams.Encode()
 }
 
-// buildDBLPGetURL assembles the URL for fetching a single publication by key.
+// buildDBLPGetURL assembles the direct record URL for fetching by key.
+// Uses /rec/{key}.xml since DBLP does not support JSON for direct record access.
 func buildDBLPGetURL(baseURL, key string) string {
-	qParams := url.Values{}
-	qParams.Set(dblpParamQuery, dblpGetKeyPrefix+key)
-	qParams.Set(dblpParamFormat, dblpFormatJSON)
-	qParams.Set(dblpParamHits, strconv.Itoa(dblpGetHitsCount))
-
-	return baseURL + dblpSearchPath + "?" + qParams.Encode()
+	return baseURL + dblpRecPath + key + dblpRecXMLSuffix
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +585,49 @@ func mapDBLPAuthors(authors *dblpAuthors) []Author {
 		result[i] = Author{Name: a.Text}
 	}
 	return result
+}
+
+// mapDBLPXMLEntryToPublication converts a DBLP XML record to Publication.
+func mapDBLPXMLEntryToPublication(entry *dblpRecXMLEntry) Publication {
+	pub := Publication{
+		ID:          SourceDBLP + prefixedIDSeparator + entry.Key,
+		Source:      SourceDBLP,
+		ContentType: ContentTypePaper,
+		Title:       entry.Title,
+		Published:   entry.Year,
+		DOI:         entry.DOI,
+		URL:         entry.EE,
+	}
+
+	authors := make([]Author, 0, len(entry.Authors))
+	for _, name := range entry.Authors {
+		if name != "" {
+			authors = append(authors, Author{Name: name})
+		}
+	}
+	pub.Authors = authors
+
+	metadata := make(map[string]any)
+	metadata[dblpMetaKeyKey] = entry.Key
+
+	venue := entry.Journal
+	if venue == "" {
+		venue = entry.Booktitle
+	}
+	if venue != "" {
+		metadata[dblpMetaKeyVenue] = venue
+	}
+
+	if entry.EE != "" {
+		metadata[dblpMetaKeyEE] = entry.EE
+	}
+
+	dblpURL := dblpDefaultBaseURL + dblpRecPath + entry.Key
+	metadata[dblpMetaKeyDBLPURL] = dblpURL
+
+	pub.SourceMetadata = metadata
+
+	return pub
 }
 
 // ---------------------------------------------------------------------------

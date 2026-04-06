@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -401,98 +402,101 @@ func TestDBLPSearchResultMapping(t *testing.T) {
 // Get tests
 // ---------------------------------------------------------------------------
 
+// buildDBLPTestRecXML builds an XML response matching DBLP's /rec/{key}.xml format.
+func buildDBLPTestRecXML() string {
+	return `<?xml version="1.0" encoding="US-ASCII"?>
+<dblp>
+<article key="` + testDBLPKey1 + `">
+<author>` + testDBLPAuthor1 + `</author>
+<author>` + testDBLPAuthor2 + `</author>
+<title>` + testDBLPTitle1 + `</title>
+<year>` + testDBLPYear1 + `</year>
+<journal>` + testDBLPVenue1 + `</journal>
+<ee>` + testDBLPEE1 + `</ee>
+<doi>` + testDBLPDOI1 + `</doi>
+</article>
+</dblp>`
+}
+
 func TestDBLPGet(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name         string
-		format       ContentFormat
-		responseJSON string
-		responseCode int
-		wantErr      error
-		wantErrIs    error
-	}{
-		{
-			name:         "get_by_key_native",
-			format:       FormatNative,
-			responseJSON: buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}),
-			responseCode: http.StatusOK,
-		},
-		{
-			name:         "get_format_json",
-			format:       FormatJSON,
-			responseJSON: buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}),
-			responseCode: http.StatusOK,
-		},
-		{
-			name:         "get_format_bibtex_unsupported_at_plugin",
-			format:       FormatBibTeX,
-			responseJSON: buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}),
-			responseCode: http.StatusOK,
-			wantErrIs:    ErrFormatUnsupported,
-		},
-		{
-			name:         "get_format_unsupported",
-			format:       FormatXML,
-			responseJSON: buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}),
-			responseCode: http.StatusOK,
-			wantErrIs:    ErrFormatUnsupported,
-		},
-		{
-			name:         "get_not_found_empty_results",
-			format:       FormatNative,
-			responseJSON: buildDBLPTestSearchJSON(0, []dblpTestHit{}),
-			responseCode: http.StatusOK,
-			wantErrIs:    ErrDBLPNotFound,
-		},
-		{
-			name:         "get_not_found_nil_hits",
-			format:       FormatNative,
-			responseJSON: `{"result":{"hits":{"@total":"0","hit":null}}}`,
-			responseCode: http.StatusOK,
-			wantErrIs:    ErrDBLPNotFound,
-		},
-		{
-			name:         "get_http_500",
-			format:       FormatNative,
-			responseCode: http.StatusInternalServerError,
-			wantErrIs:    ErrGetFailed,
-		},
-	}
+	t.Run("get_by_key_native", func(t *testing.T) {
+		t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Contains(t, r.URL.Path, testDBLPKey1)
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, buildDBLPTestRecXML())
+		}))
+		t.Cleanup(ts.Close)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+		plugin := newDBLPTestPlugin(t, ts.URL)
+		pub, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
 
-			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if tc.responseCode != http.StatusOK {
-					w.WriteHeader(tc.responseCode)
-					return
-				}
-				// Validate that key: prefix is used in query.
-				q := r.URL.Query().Get(dblpParamQuery)
-				assert.Contains(t, q, dblpGetKeyPrefix)
-				w.Header().Set("Content-Type", "application/json")
-				fmt.Fprint(w, tc.responseJSON)
-			}))
-			t.Cleanup(ts.Close)
+		require.NoError(t, err)
+		require.NotNil(t, pub)
+		assert.Equal(t, testDBLPTitle1, pub.Title)
+		assert.Equal(t, SourceDBLP, pub.Source)
+		assert.Equal(t, testDBLPDOI1, pub.DOI)
+		assert.Equal(t, testDBLPEE1, pub.URL)
+		assert.Len(t, pub.Authors, 2)
+		assert.Equal(t, testDBLPAuthor1, pub.Authors[0].Name)
+		assert.Equal(t, testDBLPVenue1, pub.SourceMetadata[dblpMetaKeyVenue])
+	})
 
-			plugin := newDBLPTestPlugin(t, ts.URL)
-			pub, err := plugin.Get(context.Background(), testDBLPKey1, nil, tc.format, nil)
+	t.Run("get_format_unsupported", func(t *testing.T) {
+		t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, buildDBLPTestRecXML())
+		}))
+		t.Cleanup(ts.Close)
 
-			if tc.wantErrIs != nil {
-				require.Error(t, err)
-				assert.True(t, errors.Is(err, tc.wantErrIs), "expected %v, got %v", tc.wantErrIs, err)
-				return
-			}
+		plugin := newDBLPTestPlugin(t, ts.URL)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatXML, nil)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrFormatUnsupported))
+	})
 
-			require.NoError(t, err)
-			require.NotNil(t, pub)
-			assert.Equal(t, testDBLPTitle1, pub.Title)
-			assert.Equal(t, SourceDBLP, pub.Source)
-			assert.Equal(t, testDBLPDOI1, pub.DOI)
-		})
-	}
+	t.Run("get_not_found_404", func(t *testing.T) {
+		t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		t.Cleanup(ts.Close)
+
+		plugin := newDBLPTestPlugin(t, ts.URL)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrGetFailed))
+	})
+
+	t.Run("get_http_500", func(t *testing.T) {
+		t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(ts.Close)
+
+		plugin := newDBLPTestPlugin(t, ts.URL)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrGetFailed))
+	})
+
+	t.Run("get_empty_xml", func(t *testing.T) {
+		t.Parallel()
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, `<?xml version="1.0"?><dblp></dblp>`)
+		}))
+		t.Cleanup(ts.Close)
+
+		plugin := newDBLPTestPlugin(t, ts.URL)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, ErrDBLPNotFound))
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -502,13 +506,11 @@ func TestDBLPGet(t *testing.T) {
 func TestDBLPGetURLConstruction(t *testing.T) {
 	t.Parallel()
 
+	// Verify Get uses /rec/{key}.xml path, not search API.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query().Get(dblpParamQuery)
-		assert.Equal(t, dblpGetKeyPrefix+testDBLPKey1, q)
-		assert.Equal(t, "1", r.URL.Query().Get(dblpParamHits))
-		assert.Equal(t, dblpFormatJSON, r.URL.Query().Get(dblpParamFormat))
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}))
+		assert.Contains(t, r.URL.Path, dblpRecPath+testDBLPKey1+dblpRecXMLSuffix)
+		w.Header().Set("Content-Type", "application/xml")
+		fmt.Fprint(w, buildDBLPTestRecXML())
 	}))
 	t.Cleanup(ts.Close)
 
@@ -840,9 +842,15 @@ func TestDBLPInitialize(t *testing.T) {
 func TestDBLPConcurrentSafety(t *testing.T) {
 	t.Parallel()
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}))
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Route: /rec/ paths get XML, /search/ paths get JSON.
+		if strings.Contains(r.URL.Path, dblpRecPath) {
+			w.Header().Set("Content-Type", "application/xml")
+			fmt.Fprint(w, buildDBLPTestRecXML())
+		} else {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, buildDBLPTestSearchJSON(1, []dblpTestHit{defaultDBLPTestHit1()}))
+		}
 	}))
 	t.Cleanup(ts.Close)
 
@@ -917,11 +925,9 @@ func TestBuildDBLPGetURL(t *testing.T) {
 	t.Parallel()
 
 	u := buildDBLPGetURL(dblpDefaultBaseURL, testDBLPKey1)
-	assert.Contains(t, u, dblpSearchPath)
-	// key: is URL-encoded as %3A, slashes in key as %2F.
-	assert.Contains(t, u, "q=key%3Ajournals%2Fcorr%2Fabs-2401-12345")
-	assert.Contains(t, u, "h=1")
-	assert.Contains(t, u, "format=json")
+	// Should use /rec/{key}.xml path, not search API.
+	assert.Contains(t, u, dblpRecPath+testDBLPKey1+dblpRecXMLSuffix)
+	assert.NotContains(t, u, dblpSearchPath)
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Step 1: Verify go.mod/go.sum are tidy (no drift)
+      - name: go mod tidy check
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      # Step 2: Build
+      - name: Build
+        run: go build ./...
+
+      # Step 3: Vet
+      - name: Vet
+        run: go vet ./...
+
+      # Step 4: Format check
+      - name: gofmt check
+        run: |
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "Files not formatted:"
+            echo "$UNFORMATTED"
+            exit 1
+          fi
+
+      # Step 5: Lint (golangci-lint)
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      # Step 6: Tests with race detector and coverage
+      - name: Test
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      # Step 7: Coverage threshold (fail if below 80%)
+      - name: Coverage check
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | tr -d '%')
+          echo "Total coverage: ${COVERAGE}%"
+          if [ "$(echo "$COVERAGE < 80" | bc -l)" -eq 1 ]; then
+            echo "FAIL: Coverage ${COVERAGE}% is below 80% threshold"
+            exit 1
+          fi

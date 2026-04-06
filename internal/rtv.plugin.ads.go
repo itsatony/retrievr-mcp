@@ -87,6 +87,18 @@ const (
 )
 
 // ---------------------------------------------------------------------------
+// ADS URL and query constants
+// ---------------------------------------------------------------------------
+
+const (
+	adsAbsURLPrefix        = "https://ui.adsabs.harvard.edu/abs/"
+	adsQueryBibcodePrefix  = "bibcode:"
+	adsGetRowCount         = 1
+	adsEmptyFieldMarker    = "-"
+	adsQuerySeparator      = " "
+)
+
+// ---------------------------------------------------------------------------
 // ADS HTTP error format
 // ---------------------------------------------------------------------------
 
@@ -385,8 +397,8 @@ func (p *ADSPlugin) recordError(err error) {
 // ---------------------------------------------------------------------------
 
 func resolveADSAPIKey(creds *CallCredentials, serverDefault string) string {
-	if creds != nil && creds.ADSAPIKey != "" {
-		return creds.ADSAPIKey
+	if creds != nil {
+		return creds.ResolveForSource(SourceADS, serverDefault)
 	}
 	return serverDefault
 }
@@ -402,13 +414,23 @@ func buildADSSearchURL(baseURL string, params SearchParams) string {
 	query := params.Query
 	if params.Filters.DateFrom != "" || params.Filters.DateTo != "" {
 		dateFilter := buildADSDateFilter(params.Filters.DateFrom, params.Filters.DateTo)
-		query = query + " " + dateFilter
+		query = query + adsQuerySeparator + dateFilter
 	}
 	qParams.Set(adsParamQuery, query)
 
 	qParams.Set(adsParamFields, adsDefaultFields)
-	qParams.Set(adsParamRows, strconv.Itoa(params.Limit))
-	qParams.Set(adsParamStart, strconv.Itoa(params.Offset))
+
+	rows := params.Limit
+	if rows <= 0 || rows > adsMaxResultsPerPage {
+		rows = adsMaxResultsPerPage
+	}
+	qParams.Set(adsParamRows, strconv.Itoa(rows))
+
+	offset := params.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	qParams.Set(adsParamStart, strconv.Itoa(offset))
 
 	sortStr := mapADSSortOrder(params.Sort)
 	if sortStr != "" {
@@ -420,9 +442,9 @@ func buildADSSearchURL(baseURL string, params SearchParams) string {
 
 func buildADSGetURL(baseURL, bibcode string) string {
 	qParams := url.Values{}
-	qParams.Set(adsParamQuery, "bibcode:"+bibcode)
+	qParams.Set(adsParamQuery, adsQueryBibcodePrefix+bibcode)
 	qParams.Set(adsParamFields, adsDefaultFields)
-	qParams.Set(adsParamRows, "1")
+	qParams.Set(adsParamRows, strconv.Itoa(adsGetRowCount))
 
 	return baseURL + adsSearchPath + "?" + qParams.Encode()
 }
@@ -462,8 +484,8 @@ func mapADSSortOrder(sort SortOrder) string {
 
 func mapADSDocToPublication(doc *adsDoc) Publication {
 	pub := Publication{
-		ID:          adsPluginID + prefixedIDSeparator + doc.Bibcode,
-		Source:      adsPluginID,
+		ID:          SourceADS + prefixedIDSeparator + doc.Bibcode,
+		Source:      SourceADS,
 		ContentType: ContentTypePaper,
 		Abstract:    doc.Abstract,
 	}
@@ -486,7 +508,7 @@ func mapADSDocToPublication(doc *adsDoc) Publication {
 	pub.CitationCount = &citCount
 
 	// URL — construct from bibcode.
-	pub.URL = "https://ui.adsabs.harvard.edu/abs/" + doc.Bibcode
+	pub.URL = adsAbsURLPrefix + doc.Bibcode
 
 	// Authors — zip author[], aff[], orcid_pub[] parallel arrays.
 	pub.Authors = mapADSAuthors(doc.Author, doc.Aff, doc.OrcidPub)
@@ -522,11 +544,11 @@ func mapADSAuthors(names, affs, orcids []string) []Author {
 	for i, name := range names {
 		authors[i] = Author{Name: name}
 
-		if i < len(affs) && affs[i] != "" && affs[i] != "-" {
+		if i < len(affs) && affs[i] != "" && affs[i] != adsEmptyFieldMarker {
 			authors[i].Affiliation = affs[i]
 		}
 
-		if i < len(orcids) && orcids[i] != "" && orcids[i] != "-" {
+		if i < len(orcids) && orcids[i] != "" && orcids[i] != adsEmptyFieldMarker {
 			authors[i].ORCID = strings.TrimPrefix(orcids[i], adsOrcidPrefix)
 		}
 	}

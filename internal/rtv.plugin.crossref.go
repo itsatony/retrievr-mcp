@@ -551,7 +551,7 @@ func mapCrossRefSortOrder(sort SortOrder) (string, string) {
 // mapCrossRefWorkToPublication converts a CrossRef work to the unified Publication type.
 func mapCrossRefWorkToPublication(work *crossrefWork) Publication {
 	pub := Publication{
-		ID:          crossrefPluginID + prefixedIDSeparator + work.DOI,
+		ID:          SourceCrossRef + prefixedIDSeparator + work.DOI,
 		Source:      SourceCrossRef,
 		ContentType: ContentTypePaper,
 		DOI:         work.DOI,

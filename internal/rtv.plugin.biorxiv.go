@@ -72,6 +72,15 @@ const (
 const biorxivHTTPStatusErrFmt = "status %d"
 
 // ---------------------------------------------------------------------------
+// bioRxiv URL constants
+// ---------------------------------------------------------------------------
+
+const (
+	biorxivURLPrefix      = "https://www."
+	biorxivURLContentPath = ".org/content/"
+)
+
+// ---------------------------------------------------------------------------
 // bioRxiv author separator
 // ---------------------------------------------------------------------------
 
@@ -409,8 +418,8 @@ func buildBiorxivGetURL(baseURL, server, doi string) string {
 
 func mapBiorxivArticleToPublication(article *biorxivArticle) Publication {
 	pub := Publication{
-		ID:          biorxivPluginID + prefixedIDSeparator + article.DOI,
-		Source:      biorxivPluginID,
+		ID:          SourceBioRxiv + prefixedIDSeparator + article.DOI,
+		Source:      SourceBioRxiv,
 		ContentType: ContentTypePaper,
 		Title:       article.Title,
 		Abstract:    article.Abstract,
@@ -423,7 +432,7 @@ func mapBiorxivArticleToPublication(article *biorxivArticle) Publication {
 	if server == "" {
 		server = biorxivServerBiorxiv
 	}
-	pub.URL = "https://www." + server + ".org/content/" + article.DOI
+	pub.URL = biorxivURLPrefix + server + biorxivURLContentPath + article.DOI
 
 	// Authors — semicolon-separated.
 	pub.Authors = parseBiorxivAuthors(article.Authors)

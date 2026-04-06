@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-retrievr-mcp exposes three MCP tools that give agents unified access to academic publications, AI research, models, and datasets across six upstream sources (ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC).
+retrievr-mcp exposes three MCP tools that give agents unified access to academic publications, AI research, models, and datasets across ten upstream sources (ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv/medRxiv).
 
 The server speaks the MCP protocol (spec 2025-11-25) over **Streamable HTTP** on path `/mcp`, port **8099**. All tool inputs and outputs are JSON-encoded. Tool results are returned as MCP text content (a JSON string). Error responses follow the structured `MCPError` format described in section 5.
 
@@ -13,6 +13,21 @@ Available tools:
 | `rtv_search` | Fan-out search across one or more sources, returns merged and deduplicated results |
 | `rtv_get` | Retrieve a single publication by its prefixed ID |
 | `rtv_list_sources` | List all configured sources with their capabilities and rate-limit status |
+
+### Source summary
+
+| Source ID | Name | Content types | Auth required | Rate limit | Coverage |
+|---|---|---|---|---|---|
+| `arxiv` | ArXiv | papers | no | 3 req/s | Open-access preprints for physics, math, CS, and more |
+| `pubmed` | PubMed | papers | optional API key | 10 req/s (3 without key) | 36M+ biomedical literature citations |
+| `s2` | Semantic Scholar | papers | optional API key | 1 req/s (10 with key) | AI-powered discovery with citation graph |
+| `openalex` | OpenAlex | papers | optional API key | 10 req/s | 250M+ scholarly works with open metadata |
+| `huggingface` | HuggingFace | models, datasets | optional token | 10 req/s | ML models and datasets hub |
+| `europmc` | Europe PMC | papers | no | 10 req/s | 40M+ biomedical and life sciences records |
+| `crossref` | CrossRef | papers | no | 10 req/s polite pool | DOI-centric metadata for 150M+ works |
+| `dblp` | DBLP | papers | no | 5 req/s | CS bibliography with 7M+ publications (no abstracts) |
+| `ads` | NASA ADS | papers | API key required | 5000/day | Astronomy/astrophysics 16M+ records |
+| `biorxiv` | bioRxiv/medRxiv | papers | no | 5 req/s | Biology/health preprints (date-range search only, no keyword search) |
 
 ---
 
@@ -25,7 +40,7 @@ Search academic publications across multiple sources. Results are merged, cross-
 | Name | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `query` | string | yes | — | Search query string |
-| `sources` | array of string | no | server-configured sources | List of source IDs to search. Valid values: `arxiv`, `pubmed`, `s2`, `openalex`, `huggingface`, `europmc` |
+| `sources` | array of string | no | server-configured sources | List of source IDs to search. Valid values: `arxiv`, `pubmed`, `s2`, `openalex`, `huggingface`, `europmc`, `crossref`, `dblp`, `ads`, `biorxiv` |
 | `content_type` | string | no | `paper` | Type of content to search for. Enum: `paper`, `model`, `dataset`, `any` |
 | `sort` | string | no | `relevance` | Sort order for results. Enum: `relevance`, `date_desc`, `date_asc`, `citations` |
 | `limit` | number | no | `10` | Maximum number of results to return (1–100) |
@@ -47,6 +62,8 @@ Search academic publications across multiple sources. Results are merged, cross-
 
 All filter fields are optional. Omit any field that should not be applied. Not every source supports every filter; unsupported filters are silently ignored by that source.
 
+> **Note on bioRxiv:** bioRxiv search requires a `date_from` filter. It does not support keyword search. Use other sources for keyword discovery, then bioRxiv for direct preprint retrieval by DOI.
+
 ### credentials sub-fields
 
 | Field | Type | Applies to source |
@@ -55,6 +72,7 @@ All filter fields are optional. Omit any field that should not be applied. Not e
 | `s2_api_key` | string | `s2` |
 | `openalex_api_key` | string | `openalex` |
 | `hf_token` | string | `huggingface` |
+| `ads_api_key` | string | `ads` |
 
 Per-call credentials take precedence over server-configured defaults. Resolution order: per-call value > server config value > anonymous (unauthenticated).
 
@@ -180,7 +198,7 @@ Retrieve a single publication by its prefixed ID. Returns full metadata and, opt
 
 | Name | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `id` | string | yes | — | Prefixed publication ID, e.g. `arxiv:2401.12345`, `s2:abc123`, `pubmed:38123456` |
+| `id` | string | yes | — | Prefixed publication ID, e.g. `arxiv:2401.12345`, `s2:abc123`, `pubmed:38123456`, `crossref:10.1038/s41586-024-07487-w`, `dblp:journals/corr/abs-2401-12345`, `ads:2024ApJ...123..456A`, `biorxiv:10.1101/2024.01.15.575123` |
 | `include` | array of string | no | `["abstract"]` | Additional data to include. Enum values: `abstract`, `full_text`, `references`, `citations`, `related`, `metadata` |
 | `format` | string | no | `native` | Desired content format. Enum: `native`, `json`, `xml`, `markdown`, `bibtex` |
 | `credentials` | object | no | — | Optional per-call API credentials (same sub-fields as `rtv_search`) |

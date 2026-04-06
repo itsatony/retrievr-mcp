@@ -40,7 +40,8 @@ const (
 	integrationOAEmail = "contact@vaudience.ai"
 
 	// Environment variable names for optional API keys.
-	integrationEnvS2APIKey = "RETRIEVR_S2_API_KEY"
+	integrationEnvS2APIKey  = "RETRIEVR_S2_API_KEY"
+	integrationEnvADSAPIKey = "RETRIEVR_ADS_API_KEY"
 )
 
 // NOTE: Integration tests intentionally omit t.Parallel() because they hit live
@@ -450,4 +451,142 @@ func TestIntegrationMetricsEndpoint(t *testing.T) {
 	var health healthResponse
 	require.NoError(t, json.NewDecoder(healthResp.Body).Decode(&health))
 	assert.Equal(t, healthStatusOK, health.Status)
+}
+
+// ---------------------------------------------------------------------------
+// TestIntegrationCrossRefSearch
+// ---------------------------------------------------------------------------
+
+func TestIntegrationCrossRefSearch(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &CrossRefPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{
+		Enabled:   true,
+		RateLimit: integrationOARPS,
+	}))
+
+	result, err := plugin.Search(ctx, SearchParams{
+		Query:       integrationSearchQuery,
+		ContentType: ContentTypePaper,
+		Sort:        SortRelevance,
+		Limit:       integrationSearchLimit,
+	}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.GreaterOrEqual(t, len(result.Results), 1)
+
+	for _, pub := range result.Results {
+		assert.NotEmpty(t, pub.ID)
+		assert.True(t, strings.HasPrefix(pub.ID, SourceCrossRef+prefixedIDSeparator))
+		assert.NotEmpty(t, pub.Title)
+		assert.Equal(t, SourceCrossRef, pub.Source)
+		assert.NotEmpty(t, pub.DOI)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestIntegrationDBLPSearch
+// ---------------------------------------------------------------------------
+
+func TestIntegrationDBLPSearch(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &DBLPPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{
+		Enabled:   true,
+		RateLimit: integrationOARPS,
+	}))
+
+	result, err := plugin.Search(ctx, SearchParams{
+		Query:       integrationSearchQuery,
+		ContentType: ContentTypePaper,
+		Sort:        SortRelevance,
+		Limit:       integrationSearchLimit,
+	}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.GreaterOrEqual(t, len(result.Results), 1)
+
+	for _, pub := range result.Results {
+		assert.NotEmpty(t, pub.ID)
+		assert.True(t, strings.HasPrefix(pub.ID, SourceDBLP+prefixedIDSeparator))
+		assert.NotEmpty(t, pub.Title)
+		assert.Equal(t, SourceDBLP, pub.Source)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestIntegrationADSSearch
+// ---------------------------------------------------------------------------
+
+func TestIntegrationADSSearch(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvADSAPIKey)
+	if apiKey == "" {
+		t.Skipf("ADS API key not set (%s), skipping", integrationEnvADSAPIKey)
+	}
+
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &ADSPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{
+		Enabled:   true,
+		APIKey:    apiKey,
+		RateLimit: integrationOARPS,
+	}))
+
+	result, err := plugin.Search(ctx, SearchParams{
+		Query:       "dark matter halo formation",
+		ContentType: ContentTypePaper,
+		Sort:        SortRelevance,
+		Limit:       integrationSearchLimit,
+	}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.GreaterOrEqual(t, len(result.Results), 1)
+
+	for _, pub := range result.Results {
+		assert.NotEmpty(t, pub.ID)
+		assert.True(t, strings.HasPrefix(pub.ID, SourceADS+prefixedIDSeparator))
+		assert.NotEmpty(t, pub.Title)
+		assert.Equal(t, SourceADS, pub.Source)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// TestIntegrationBioRxivGet
+// ---------------------------------------------------------------------------
+
+func TestIntegrationBioRxivGet(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &BioRxivPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{
+		Enabled:   true,
+		RateLimit: integrationOARPS,
+		Extra:     map[string]string{biorxivExtraKeyServers: biorxivServerBiorxiv},
+	}))
+
+	// Use a known bioRxiv DOI.
+	pub, err := plugin.Get(ctx, "10.1101/2024.01.03.574089", nil, FormatNative, nil)
+	if err != nil {
+		t.Skipf("bioRxiv get failed (may be rate limited): %v", err)
+	}
+
+	require.NotNil(t, pub)
+	assert.NotEmpty(t, pub.Title)
+	assert.NotEmpty(t, pub.Authors)
+	assert.Equal(t, SourceBioRxiv, pub.Source)
 }

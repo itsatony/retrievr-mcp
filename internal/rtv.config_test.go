@@ -523,3 +523,64 @@ sources:
 	assert.ErrorIs(t, err, ErrConfigValidation)
 	assert.Contains(t, err.Error(), "not configured in sources")
 }
+
+// ---------------------------------------------------------------------------
+// Env var override tests
+// ---------------------------------------------------------------------------
+
+const (
+	testEnvVarOverrideKey   = "test-env-override-api-key"
+	testEnvVarSourceID      = "s2"
+	testEnvVarName          = "RETRIEVR_S2_API_KEY"
+	testEnvVarADSName       = "RETRIEVR_ADS_API_KEY"
+	testEnvVarADSKey        = "test-ads-env-key"
+	testEnvVarOriginalS2Key = "original-s2-key"
+)
+
+func TestApplyEnvOverrides(t *testing.T) {
+	t.Run("env_var_overrides_config_key", func(t *testing.T) {
+		t.Setenv(testEnvVarName, testEnvVarOverrideKey)
+
+		cfg := &Config{
+			Sources: map[string]PluginConfig{
+				testEnvVarSourceID: {Enabled: true, APIKey: testEnvVarOriginalS2Key},
+			},
+		}
+		applyEnvOverrides(cfg)
+		assert.Equal(t, testEnvVarOverrideKey, cfg.Sources[testEnvVarSourceID].APIKey)
+	})
+
+	t.Run("env_var_overrides_empty_key", func(t *testing.T) {
+		t.Setenv(testEnvVarADSName, testEnvVarADSKey)
+
+		cfg := &Config{
+			Sources: map[string]PluginConfig{
+				SourceADS: {Enabled: true, APIKey: ""},
+			},
+		}
+		applyEnvOverrides(cfg)
+		assert.Equal(t, testEnvVarADSKey, cfg.Sources[SourceADS].APIKey)
+	})
+
+	t.Run("no_env_var_preserves_config", func(t *testing.T) {
+		cfg := &Config{
+			Sources: map[string]PluginConfig{
+				testEnvVarSourceID: {Enabled: true, APIKey: testEnvVarOriginalS2Key},
+			},
+		}
+		applyEnvOverrides(cfg)
+		assert.Equal(t, testEnvVarOriginalS2Key, cfg.Sources[testEnvVarSourceID].APIKey)
+	})
+
+	t.Run("empty_env_var_preserves_config", func(t *testing.T) {
+		t.Setenv(testEnvVarName, "")
+
+		cfg := &Config{
+			Sources: map[string]PluginConfig{
+				testEnvVarSourceID: {Enabled: true, APIKey: testEnvVarOriginalS2Key},
+			},
+		}
+		applyEnvOverrides(cfg)
+		assert.Equal(t, testEnvVarOriginalS2Key, cfg.Sources[testEnvVarSourceID].APIKey)
+	})
+}

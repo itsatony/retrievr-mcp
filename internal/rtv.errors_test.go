@@ -92,6 +92,14 @@ func TestErrorWrapping(t *testing.T) {
 		{"SearchFailed", ErrSearchFailed},
 		{"ConfigLoad", ErrConfigLoad},
 		{"RateLimitExceeded", ErrRateLimitExceeded},
+		{"CrossRefHTTPRequest", ErrCrossRefHTTPRequest},
+		{"CrossRefNotFound", ErrCrossRefNotFound},
+		{"DBLPHTTPRequest", ErrDBLPHTTPRequest},
+		{"DBLPNotFound", ErrDBLPNotFound},
+		{"ADSHTTPRequest", ErrADSHTTPRequest},
+		{"ADSNotFound", ErrADSNotFound},
+		{"BiorxivHTTPRequest", ErrBiorxivHTTPRequest},
+		{"BiorxivDateRequired", ErrBiorxivDateRequired},
 	}
 
 	for _, tt := range tests {

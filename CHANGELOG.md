@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-04-06
+
+### Added
+- GitHub Actions CI workflow (build, vet, gofmt, golangci-lint, test -race, coverage >= 80%)
+
+### Changed
+- README rewritten for public release — fixed response field names, added Claude Code setup section, tighter structure
+- MCP tool descriptions rewritten for LLM consumption — now mention concrete output fields
+- Integration tests use OpenAlex+EuropePMC for multi-source test (S2 rate limits too aggressive without key)
+- S2 integration test skips gracefully on 429/403 instead of failing
+
 ## [1.0.1] - 2026-04-06
 
 ### Added

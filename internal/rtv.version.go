@@ -32,6 +32,9 @@ type versionState struct {
 }
 
 var (
+	// versionMu protects versionOnce and currentVersion from concurrent
+	// mutation by test helpers (SetVersionForTesting / ResetVersionForTesting).
+	versionMu      sync.Mutex
 	versionOnce    sync.Once
 	currentVersion = versionState{
 		Version:   VersionDev,
@@ -107,8 +110,10 @@ func doLoadVersion(path string) error {
 }
 
 // ResetVersionForTesting resets the version state so LoadVersion can be called
-// again. Only for use in tests.
+// again. Only for use in tests. Protected by versionMu for race safety.
 func ResetVersionForTesting() {
+	versionMu.Lock()
+	defer versionMu.Unlock()
 	versionOnce = sync.Once{}
 	currentVersion = versionState{
 		Version:   VersionDev,
@@ -118,7 +123,10 @@ func ResetVersionForTesting() {
 }
 
 // SetVersionForTesting sets version state directly. Only for use in tests.
+// Protected by versionMu for race safety.
 func SetVersionForTesting(version, gitCommit, buildDate string) {
+	versionMu.Lock()
+	defer versionMu.Unlock()
 	versionOnce = sync.Once{}
 	currentVersion = versionState{
 		Version:   version,

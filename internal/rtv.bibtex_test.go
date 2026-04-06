@@ -631,3 +631,141 @@ func TestBibTeXMonth(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// bibtexJournal — cross-source key lookup
+// ---------------------------------------------------------------------------
+
+func TestBibTeXJournalCrossSource(t *testing.T) {
+	t.Parallel()
+
+	const (
+		testJournalPM  = "PubMed Central Journal"
+		testJournalS2  = "Semantic Scholar Venue"
+		testJournalEMC = "Europe PMC Journal"
+		testJournalOA  = "OpenAlex Venue"
+		testJournalRef = "Phys. Rev. Lett. 123, 456 (2024)"
+		testJournalGen = "Generic Journal"
+	)
+
+	tests := []struct {
+		name     string
+		metadata map[string]any
+		want     string
+	}{
+		{
+			name:     "nil metadata",
+			metadata: nil,
+			want:     "",
+		},
+		{
+			name:     "empty metadata",
+			metadata: map[string]any{},
+			want:     "",
+		},
+		{
+			name:     "pubmed journal key",
+			metadata: map[string]any{pmMetaKeyJournal: testJournalPM},
+			want:     testJournalPM,
+		},
+		{
+			name:     "s2 journal key",
+			metadata: map[string]any{s2MetaKeyJournal: testJournalS2},
+			want:     testJournalS2,
+		},
+		{
+			name:     "europmc journal key",
+			metadata: map[string]any{emcMetaKeyJournal: testJournalEMC},
+			want:     testJournalEMC,
+		},
+		{
+			name:     "openalex venue key",
+			metadata: map[string]any{oaMetaKeyVenue: testJournalOA},
+			want:     testJournalOA,
+		},
+		{
+			name:     "arxiv journal ref key",
+			metadata: map[string]any{arxivMetaKeyJournalRef: testJournalRef},
+			want:     testJournalRef,
+		},
+		{
+			name:     "generic fallback key",
+			metadata: map[string]any{bibtexMetaKeyJournal: testJournalGen},
+			want:     testJournalGen,
+		},
+		{
+			name: "priority order pubmed wins over generic",
+			metadata: map[string]any{
+				pmMetaKeyJournal:     testJournalPM,
+				bibtexMetaKeyJournal: testJournalGen,
+			},
+			want: testJournalPM,
+		},
+		{
+			name: "priority order s2 wins over openalex",
+			metadata: map[string]any{
+				s2MetaKeyJournal: testJournalS2,
+				oaMetaKeyVenue:   testJournalOA,
+			},
+			want: testJournalS2,
+		},
+		{
+			name:     "empty string value skipped",
+			metadata: map[string]any{pmMetaKeyJournal: "", s2MetaKeyJournal: testJournalS2},
+			want:     testJournalS2,
+		},
+		{
+			name:     "non-string value skipped",
+			metadata: map[string]any{pmMetaKeyJournal: 42, s2MetaKeyJournal: testJournalS2},
+			want:     testJournalS2,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := bibtexJournal(tc.metadata)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+// TestGenerateBibTeXWithSourceSpecificJournal verifies that BibTeX output
+// includes the journal field when source-specific metadata keys are used.
+func TestGenerateBibTeXWithSourceSpecificJournal(t *testing.T) {
+	t.Parallel()
+
+	const testSourceJournal = "Journal of AI Research"
+
+	tests := []struct {
+		name    string
+		metaKey string
+	}{
+		{"pubmed key", pmMetaKeyJournal},
+		{"s2 key", s2MetaKeyJournal},
+		{"europmc key", emcMetaKeyJournal},
+		{"openalex venue key", oaMetaKeyVenue},
+		{"arxiv journal ref key", arxivMetaKeyJournalRef},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			pub := &Publication{
+				ID:          testBibPubID,
+				Source:      SourceArXiv,
+				ContentType: ContentTypePaper,
+				Title:       testBibTitle,
+				Authors:     []Author{{Name: testBibAuthor1}},
+				Published:   testBibDate,
+				SourceMetadata: map[string]any{
+					tc.metaKey: testSourceJournal,
+				},
+			}
+			result, err := GenerateBibTeX(pub)
+			require.NoError(t, err)
+			assert.Contains(t, result, testSourceJournal,
+				"BibTeX output should include journal from metadata key %q", tc.metaKey)
+		})
+	}
+}

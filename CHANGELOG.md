@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-04-06
+
+### Added
+- Plugin registry pattern (`rtv.registry.go`) — replaces 6 repetitive init blocks in main.go with data-driven factory map
+- BibTeX journal field now checks all source-specific metadata keys (pubmed_journal, s2_journal, emc_journal, oa_venue, arxiv_journal_ref) with priority ordering
+- Registry unit tests (`rtv.registry_test.go`) covering factories, initialization, disabled sources, unknown sources
+- BibTeX cross-source journal tests covering all source keys and priority ordering
+
+### Fixed
+- `errors.Is()` used for `http.ErrServerClosed` comparison in server.go (was using direct equality)
+- Dead code in `convertEMCFormat()` — added missing FormatJSON case
+- Version test helpers (`SetVersionForTesting`/`ResetVersionForTesting`) protected with mutex against data races
+- `TestE2EHuggingFace` race condition — removed erroneous `t.Parallel()` that conflicted with global state mutation
+- Log/error constant mixing in router.go — separated `errDetailNoValidSources` from `logMsgNoValidSources`
+- `io.LimitReader` int64 cast standardized across ArXiv, S2, and OpenAlex plugins
+- `sort.Slice`/`sort.SliceStable` modernized to `slices.SortFunc`/`slices.SortStableFunc` (Go 1.21+)
+- `sort.Strings` modernized to `slices.Sort` in router and cache
+- Consistent `t.Cleanup(ResetVersionForTesting)` added across all version-mutating tests
+- E2E test comment consistency for non-parallel tests
+
 ## [1.0.0] - 2026-04-05
 
 ### Added

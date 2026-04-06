@@ -780,8 +780,11 @@ func parseEMCAuthors(authorString string) []Author {
 // ---------------------------------------------------------------------------
 
 // convertEMCFormat converts the publication to the requested format.
+// FormatJSON is native for EuropePMC and requires no conversion.
 func convertEMCFormat(_ *Publication, format ContentFormat) error {
 	switch format {
+	case FormatJSON:
+		return nil
 	default:
 		return fmt.Errorf("%w: %s", ErrFormatUnsupported, format)
 	}

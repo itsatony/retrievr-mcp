@@ -476,7 +476,7 @@ func (p *OpenAlexPlugin) doRequest(ctx context.Context, reqURL string, target an
 		return fmt.Errorf("%w: "+oaHTTPStatusErrFmt, ErrOAHTTPRequest, resp.StatusCode)
 	}
 
-	limitedBody := io.LimitReader(resp.Body, oaMaxResponseBytes)
+	limitedBody := io.LimitReader(resp.Body, int64(oaMaxResponseBytes))
 	if err := json.NewDecoder(limitedBody).Decode(target); err != nil {
 		return fmt.Errorf("%w: %w", ErrOAJSONParse, err)
 	}

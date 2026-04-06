@@ -118,6 +118,18 @@ const (
 	bibtexMetaKeyJournal = "journal"
 )
 
+// bibtexJournalKeys lists all source-specific metadata keys that carry a
+// journal or venue name. Order defines priority: the first non-empty match
+// wins. Source-specific keys come before the generic fallback.
+var bibtexJournalKeys = []string{
+	pmMetaKeyJournal,       // "pubmed_journal"
+	s2MetaKeyJournal,       // "s2_journal"
+	emcMetaKeyJournal,      // "emc_journal"
+	oaMetaKeyVenue,         // "oa_venue"
+	arxivMetaKeyJournalRef, // "arxiv_journal_ref"
+	bibtexMetaKeyJournal,   // "journal" (generic fallback)
+}
+
 // ---------------------------------------------------------------------------
 // GenerateBibTeX
 // ---------------------------------------------------------------------------
@@ -258,20 +270,21 @@ func bibtexMonth(published string) string {
 	return bibtexMonthNames[monthDigits]
 }
 
-// bibtexJournal extracts the journal name from source metadata, if present.
+// bibtexJournal extracts the journal/venue name from source metadata.
+// It checks all source-specific metadata keys in priority order (see
+// bibtexJournalKeys) and returns the first non-empty string found.
 func bibtexJournal(metadata map[string]any) string {
 	if metadata == nil {
 		return ""
 	}
-	v, ok := metadata[bibtexMetaKeyJournal]
-	if !ok {
-		return ""
+	for _, key := range bibtexJournalKeys {
+		if v, ok := metadata[key]; ok {
+			if s, ok := v.(string); ok && s != "" {
+				return s
+			}
+		}
 	}
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
+	return ""
 }
 
 // writeBibTeXField appends a single BibTeX field line to the builder.

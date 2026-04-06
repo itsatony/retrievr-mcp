@@ -441,7 +441,7 @@ func (p *S2Plugin) doRequest(ctx context.Context, reqURL, apiKey string, target 
 		return fmt.Errorf("%w: "+s2HTTPStatusErrFmt, ErrS2HTTPRequest, resp.StatusCode)
 	}
 
-	limitedBody := io.LimitReader(resp.Body, s2MaxResponseBytes)
+	limitedBody := io.LimitReader(resp.Body, int64(s2MaxResponseBytes))
 	if err := json.NewDecoder(limitedBody).Decode(target); err != nil {
 		return fmt.Errorf("%w: %w", ErrS2JSONParse, err)
 	}

@@ -108,27 +108,30 @@ const SourceCount = 6
 
 // Publication is the unified result type across all sources.
 type Publication struct {
-	ID             string           `json:"id"`                        // Prefixed: "arxiv:2401.12345"
-	Source         string           `json:"source"`                    // Primary source
-	AlsoFoundIn    []string         `json:"also_found_in,omitempty"`   // Cross-source dedup tracking
-	ContentType    ContentType      `json:"content_type"`              //nolint:tagliatelle
-	Title          string           `json:"title"`                     //
-	Authors        []Author         `json:"authors"`                   //
-	Published      string           `json:"published"`                 // YYYY-MM-DD
-	Updated        string           `json:"updated,omitempty"`         //
-	Abstract       string           `json:"abstract,omitempty"`        //
-	URL            string           `json:"url"`                       //
-	PDFURL         string           `json:"pdf_url,omitempty"`         //
-	DOI            string           `json:"doi,omitempty"`             //
-	ArXivID        string           `json:"arxiv_id,omitempty"`        // For cross-source dedup
-	Categories     []string         `json:"categories,omitempty"`      //
-	CitationCount  *int             `json:"citation_count,omitempty"`  // Pointer: nil when unknown
-	FullText       *FullTextContent `json:"full_text,omitempty"`       //
-	References     []Reference      `json:"references,omitempty"`      //
-	Citations      []Reference      `json:"citations,omitempty"`       //
-	Related        []Reference      `json:"related,omitempty"`         //
-	License        string           `json:"license,omitempty"`         //
-	SourceMetadata map[string]any   `json:"source_metadata,omitempty"` //
+	ID            string           `json:"id"`                       // Prefixed: "arxiv:2401.12345"
+	Source        string           `json:"source"`                   // Primary source
+	AlsoFoundIn   []string         `json:"also_found_in,omitempty"`  // Cross-source dedup tracking
+	ContentType   ContentType      `json:"content_type"`             //nolint:tagliatelle
+	Title         string           `json:"title"`                    //
+	Authors       []Author         `json:"authors"`                  //
+	Published     string           `json:"published"`                // YYYY-MM-DD
+	Updated       string           `json:"updated,omitempty"`        //
+	Abstract      string           `json:"abstract,omitempty"`       //
+	URL           string           `json:"url"`                      //
+	PDFURL        string           `json:"pdf_url,omitempty"`        //
+	DOI           string           `json:"doi,omitempty"`            //
+	ArXivID       string           `json:"arxiv_id,omitempty"`       // For cross-source dedup
+	Categories    []string         `json:"categories,omitempty"`     //
+	CitationCount *int             `json:"citation_count,omitempty"` // Pointer: nil when unknown
+	FullText      *FullTextContent `json:"full_text,omitempty"`      //
+	References    []Reference      `json:"references,omitempty"`     //
+	Citations     []Reference      `json:"citations,omitempty"`      //
+	Related       []Reference      `json:"related,omitempty"`        //
+	License       string           `json:"license,omitempty"`        //
+	// SourceMetadata holds source-specific key-value pairs that vary by plugin
+	// (e.g., journal name, venue, volume, MeSH terms). The value type is `any`
+	// because different sources store strings, integers, booleans, and slices.
+	SourceMetadata map[string]any `json:"source_metadata,omitempty"`
 }
 
 // Author represents a publication author.

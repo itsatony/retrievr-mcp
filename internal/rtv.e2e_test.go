@@ -19,6 +19,7 @@ import (
 // TestE2EConfigToTypesToErrors exercises the full pipeline:
 // config loading → type serialization → error formatting.
 // No mocks. Real YAML file, real JSON marshaling, real error chains.
+// Not parallel: mutates global version state.
 func TestE2EConfigToTypesToErrors(t *testing.T) {
 	// Step 1: Write a complete, realistic config to a temp file.
 	fullConfigYAML := `
@@ -3559,10 +3560,10 @@ const (
 // httptest servers → real plugin → real router → MCP tool handlers.
 // Covers papers/models/datasets search, get with full text and related,
 // credential passthrough, BibTeX format, and ArXiv ID dedup.
+// Not parallel: mutates global version state.
 func TestE2EHuggingFace(t *testing.T) {
-	t.Parallel()
-
 	SetVersionForTesting(e2eHFVersion, "e2e-commit", "2024-04-07")
+	t.Cleanup(ResetVersionForTesting)
 
 	// Step 1: Set up httptest server that handles all HuggingFace sub-APIs.
 	hfServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

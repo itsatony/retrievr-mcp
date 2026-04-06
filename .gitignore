@@ -38,3 +38,6 @@ configs/*.local.yaml
 # Claude Code / project planning
 CLAUDE.md
 project_plan/
+
+# Assessment output (auto-generated, not tracked)
+docs/assessments/

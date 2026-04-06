@@ -387,7 +387,7 @@ func (p *ArXivPlugin) doRequest(ctx context.Context, reqURL string) (*arxivFeed,
 	}
 
 	var feed arxivFeed
-	limitedBody := io.LimitReader(resp.Body, arxivMaxResponseBytes)
+	limitedBody := io.LimitReader(resp.Body, int64(arxivMaxResponseBytes))
 	if err := xml.NewDecoder(limitedBody).Decode(&feed); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrArxivXMLParse, err)
 	}

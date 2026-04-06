@@ -1,13 +1,13 @@
 package internal
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +32,7 @@ const (
 	errDetailEmptyID          = "empty id in %q"
 	errDetailUnknownSource    = "unknown source %q"
 	errDetailAllSourcesFailed = "queried %d sources"
+	errDetailNoValidSources   = "no valid sources in request"
 )
 
 // ---------------------------------------------------------------------------
@@ -47,7 +48,6 @@ const (
 	logMsgListSources        = "list sources"
 	logMsgCacheHit           = "cache hit"
 	logMsgCacheMiss          = "cache miss"
-	logMsgNoValidSources     = "no valid sources in request"
 )
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ func (r *Router) Search(
 	// Step 1: Resolve sources.
 	resolved := r.resolveSources(sources)
 	if len(resolved) == 0 {
-		return nil, fmt.Errorf("%w: %s", ErrSearchFailed, logMsgNoValidSources)
+		return nil, fmt.Errorf("%w: %s", ErrSearchFailed, errDetailNoValidSources)
 	}
 
 	// Step 2: Generate request ID and log.
@@ -256,8 +256,8 @@ func (r *Router) Search(
 	)
 
 	// Process in deterministic source-ID order for stable dedup primary selection.
-	sort.Slice(collected, func(i, j int) bool {
-		return collected[i].sourceID < collected[j].sourceID
+	slices.SortFunc(collected, func(a, b sourceResult) int {
+		return strings.Compare(a.sourceID, b.sourceID)
 	})
 
 	for _, sr := range collected {
@@ -523,8 +523,8 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 	}
 
 	// Sort by ID for deterministic output.
-	sort.Slice(infos, func(i, j int) bool {
-		return infos[i].ID < infos[j].ID
+	slices.SortFunc(infos, func(a, b SourceInfo) int {
+		return strings.Compare(a.ID, b.ID)
 	})
 
 	r.logger.Debug(logMsgListSources,
@@ -657,26 +657,26 @@ func sortResults(results []Publication, order SortOrder) []Publication {
 	case SortRelevance:
 		return roundRobinInterleave(results)
 	case SortDateDesc:
-		sort.SliceStable(results, func(i, j int) bool {
-			return results[i].Published > results[j].Published
+		slices.SortStableFunc(results, func(a, b Publication) int {
+			return strings.Compare(b.Published, a.Published)
 		})
 	case SortDateAsc:
-		sort.SliceStable(results, func(i, j int) bool {
-			return results[i].Published < results[j].Published
+		slices.SortStableFunc(results, func(a, b Publication) int {
+			return strings.Compare(a.Published, b.Published)
 		})
 	case SortCitations:
-		sort.SliceStable(results, func(i, j int) bool {
-			ci, cj := results[i].CitationCount, results[j].CitationCount
+		slices.SortStableFunc(results, func(a, b Publication) int {
+			ci, cj := a.CitationCount, b.CitationCount
 			if ci == nil && cj == nil {
-				return false
+				return 0
 			}
 			if ci == nil {
-				return false // nil goes last
+				return 1 // nil goes last
 			}
 			if cj == nil {
-				return true
+				return -1
 			}
-			return *ci > *cj
+			return cmp.Compare(*cj, *ci) // descending
 		})
 	}
 	return results
@@ -702,7 +702,7 @@ func roundRobinInterleave(results []Publication) []Publication {
 	for id := range groups {
 		sourceIDs = append(sourceIDs, id)
 	}
-	sort.Strings(sourceIDs)
+	slices.Sort(sourceIDs)
 
 	// Interleave: take rank-N from each source in round-robin fashion.
 	interleaved := make([]Publication, 0, len(results))

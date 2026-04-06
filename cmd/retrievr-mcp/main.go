@@ -87,79 +87,13 @@ func run() int {
 		slog.Any(internal.LogKeySources, cfg.EnabledSourceIDs()),
 	)
 
-	// Initialize plugins.
-	plugins := make(map[string]internal.SourcePlugin)
-
-	if arxivCfg, ok := cfg.Sources[internal.SourceArXiv]; ok && arxivCfg.Enabled {
-		arxivPlugin := &internal.ArXivPlugin{}
-		if err := arxivPlugin.Initialize(context.Background(), arxivCfg); err != nil {
-			logger.Error(logMsgPluginInitFail,
-				slog.String(internal.LogKeySource, internal.SourceArXiv),
-				slog.String(internal.LogKeyError, err.Error()),
-			)
-			return exitCodeStartup
-		}
-		plugins[internal.SourceArXiv] = arxivPlugin
-	}
-
-	if s2Cfg, ok := cfg.Sources[internal.SourceS2]; ok && s2Cfg.Enabled {
-		s2Plugin := &internal.S2Plugin{}
-		if err := s2Plugin.Initialize(context.Background(), s2Cfg); err != nil {
-			logger.Error(logMsgPluginInitFail,
-				slog.String(internal.LogKeySource, internal.SourceS2),
-				slog.String(internal.LogKeyError, err.Error()),
-			)
-			return exitCodeStartup
-		}
-		plugins[internal.SourceS2] = s2Plugin
-	}
-
-	if oaCfg, ok := cfg.Sources[internal.SourceOpenAlex]; ok && oaCfg.Enabled {
-		oaPlugin := &internal.OpenAlexPlugin{}
-		if err := oaPlugin.Initialize(context.Background(), oaCfg); err != nil {
-			logger.Error(logMsgPluginInitFail,
-				slog.String(internal.LogKeySource, internal.SourceOpenAlex),
-				slog.String(internal.LogKeyError, err.Error()),
-			)
-			return exitCodeStartup
-		}
-		plugins[internal.SourceOpenAlex] = oaPlugin
-	}
-
-	if pmCfg, ok := cfg.Sources[internal.SourcePubMed]; ok && pmCfg.Enabled {
-		pmPlugin := &internal.PubMedPlugin{}
-		if err := pmPlugin.Initialize(context.Background(), pmCfg); err != nil {
-			logger.Error(logMsgPluginInitFail,
-				slog.String(internal.LogKeySource, internal.SourcePubMed),
-				slog.String(internal.LogKeyError, err.Error()),
-			)
-			return exitCodeStartup
-		}
-		plugins[internal.SourcePubMed] = pmPlugin
-	}
-
-	if emcCfg, ok := cfg.Sources[internal.SourceEuropePMC]; ok && emcCfg.Enabled {
-		emcPlugin := &internal.EuropePMCPlugin{}
-		if err := emcPlugin.Initialize(context.Background(), emcCfg); err != nil {
-			logger.Error(logMsgPluginInitFail,
-				slog.String(internal.LogKeySource, internal.SourceEuropePMC),
-				slog.String(internal.LogKeyError, err.Error()),
-			)
-			return exitCodeStartup
-		}
-		plugins[internal.SourceEuropePMC] = emcPlugin
-	}
-
-	if hfCfg, ok := cfg.Sources[internal.SourceHuggingFace]; ok && hfCfg.Enabled {
-		hfPlugin := &internal.HuggingFacePlugin{}
-		if err := hfPlugin.Initialize(context.Background(), hfCfg); err != nil {
-			logger.Error(logMsgPluginInitFail,
-				slog.String(internal.LogKeySource, internal.SourceHuggingFace),
-				slog.String(internal.LogKeyError, err.Error()),
-			)
-			return exitCodeStartup
-		}
-		plugins[internal.SourceHuggingFace] = hfPlugin
+	// Initialize plugins via registry.
+	plugins, err := internal.InitializePlugins(cfg, logger)
+	if err != nil {
+		logger.Error(logMsgPluginInitFail,
+			slog.String(internal.LogKeyError, err.Error()),
+		)
+		return exitCodeStartup
 	}
 
 	logger.Info(logMsgPluginsInit, slog.Int(internal.LogKeyResultCnt, len(plugins)))
@@ -227,6 +161,10 @@ func run() int {
 	sigCh := make(chan os.Signal, signalChannelSize)
 	signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
 
+	// Both channels may be ready simultaneously if the server fails while a
+	// signal is also delivered. Go's select picks a ready case at random in
+	// that scenario. Either path leads to clean exit or error report, so the
+	// non-determinism is benign.
 	select {
 	case sig := <-sigCh:
 		logger.Info(logMsgShutdownSignal, slog.String(internal.LogKeySignal, sig.String()))

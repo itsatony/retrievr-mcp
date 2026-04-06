@@ -24,6 +24,7 @@ func TestLoadVersionFromFile(t *testing.T) {
 
 	t.Run("skips_if_already_set_via_ldflags", func(t *testing.T) {
 		SetVersionForTesting("0.5.0", VersionUnknown, VersionUnknown)
+		t.Cleanup(ResetVersionForTesting)
 		err := LoadVersion("nonexistent.yaml")
 		require.NoError(t, err)
 		assert.Equal(t, "0.5.0", GetVersion())

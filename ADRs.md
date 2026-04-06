@@ -168,3 +168,24 @@ When `sort=relevance`, results are reordered by `roundRobinInterleave` in `rtv.r
 - Ordering is deterministic for a given set of sources and results, which aids reproducibility.
 - Per-source relevance ranking is respected within each source's contribution.
 - If one source returns fewer results than others, its slots in later rounds are simply absent; no padding or re-ranking is performed.
+
+---
+
+## ADR-010: Plugin Registry Pattern
+
+**Status:** Accepted
+
+### Context
+
+The original `main.go` contained six near-identical plugin initialization blocks — one per source (ArXiv, S2, OpenAlex, PubMed, EuropePMC, HuggingFace). Each block checked config enablement, created a zero-value plugin struct, called `Initialize`, handled errors, and inserted into a map. Adding a new source required copy-pasting another block.
+
+### Decision
+
+A plugin registry (`rtv.registry.go`) centralizes plugin creation via a `PluginFactories()` function that returns a `map[string]PluginFactory`. The `InitializePlugins(cfg, logger)` function iterates enabled sources, looks up the factory, creates the plugin, and initializes it. `main.go` calls this single function instead of six repetitive blocks.
+
+### Consequences
+
+- Adding a new source requires adding one line to `PluginFactories()` and implementing the plugin. No changes to `main.go`.
+- Plugin initialization order is non-deterministic (map iteration), which is correct since plugins are independent.
+- Unknown source IDs in config are silently skipped, consistent with the original behavior where only known sources had explicit blocks.
+- The registry is unit-testable in isolation, improving coverage of the initialization path.

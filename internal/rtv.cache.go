@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 )
@@ -92,7 +92,7 @@ func GenerateCacheKey(params SearchParams, sources []string) (string, error) {
 	// Copy the sources slice to avoid mutating the caller's slice.
 	sortedSources := make([]string, len(sources))
 	copy(sortedSources, sources)
-	sort.Strings(sortedSources)
+	slices.Sort(sortedSources)
 
 	payload := struct {
 		Params  SearchParams `json:"params"`

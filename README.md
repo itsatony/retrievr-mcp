@@ -1,32 +1,35 @@
 # retrievr-mcp
 
-![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.25.5-00ADD8?logo=go&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![MCP](https://img.shields.io/badge/MCP-2025--11--25-purple)
 
-## Overview
+An MCP server that gives LLM agents unified access to academic publications, AI research, models, and datasets. Six source APIs — ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, and Europe PMC — behind three tools.
 
-retrievr-mcp is an MCP server ([Model Context Protocol](https://modelcontextprotocol.io/)) that gives LLM agents unified access to academic publications, AI research, models, and datasets. It abstracts six different source APIs -- ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, and Europe PMC -- behind three MCP tools: `rtv_search`, `rtv_get`, and `rtv_list_sources`.
+## What it does
 
-The server uses a plugin architecture where each source is an independent plugin implementing a common interface. Searches fan out to all requested sources concurrently, results are merged and deduplicated by DOI or ArXiv ID, and a round-robin interleaving strategy prevents bias toward any single source.
-
-Per-call credentials allow multi-tenant usage where each caller can supply their own API keys, overriding server defaults. An in-memory LRU cache, per-source rate limiting with per-credential buckets, and Prometheus metrics round out the operational features.
-
-## Features
-
-- **6 academic sources** -- ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC
-- **3 MCP tools** -- `rtv_search`, `rtv_get`, `rtv_list_sources`
-- **Cross-source deduplication** by exact DOI or ArXiv ID match
-- **Per-call credentials** -- callers supply API keys per request for multi-tenant setups
-- **Per-credential rate limit buckets** -- independent rate tracking per caller, TTL-evicted after 15 minutes of inactivity
-- **In-memory LRU cache** with configurable TTL and max entries
-- **BibTeX generation** from publication metadata across all sources
-- **Prometheus metrics** -- counters, histograms, custom registry
-- **Round-robin relevance sorting** -- interleaves results by source-rank position to avoid single-source bias
-- **Graceful partial failure** -- working sources return results while failed sources are reported in `sources_failed`
-- **Structured JSON logging** via `log/slog`
+- **Searches** fan out to all requested sources concurrently
+- **Results** are merged, deduplicated by DOI/ArXiv ID, and interleaved round-robin across sources
+- **Each result** includes title, authors, date, abstract, URL, DOI, and source-specific metadata
+- **rtv_get** retrieves full details for a single publication, including BibTeX, references, and citations
+- **Per-call credentials** let each caller supply their own API keys
 
 ## Quick Start
+
+### Connect to Claude Code
+
+```bash
+# Build
+go build -o retrievr-mcp ./cmd/retrievr-mcp
+
+# Start
+./retrievr-mcp --config configs/retrievr-mcp.yaml
+
+# Register with Claude Code (in another terminal)
+claude mcp add --transport http retrievr http://localhost:8099/mcp
+```
+
+Restart Claude Code. The tools `rtv_search`, `rtv_get`, and `rtv_list_sources` are now available.
 
 ### Docker
 
@@ -35,57 +38,128 @@ docker build -t retrievr-mcp .
 docker run -p 8099:8099 retrievr-mcp
 ```
 
-### Binary
+The MCP endpoint is at `http://localhost:8099/mcp`. Health check at `/health`.
 
-```bash
-go build -o retrievr-mcp ./cmd/retrievr-mcp
-./retrievr-mcp --config configs/retrievr-mcp.yaml
+## Tools
+
+### rtv_search
+
+Search academic publications across multiple sources. Returns merged, deduplicated results.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | yes | — | Search query |
+| `sources` | string[] | no | all enabled | Source IDs to search (e.g., `["arxiv", "s2"]`) |
+| `content_type` | string | no | `"paper"` | `paper`, `model`, `dataset`, or `any` |
+| `sort` | string | no | `"relevance"` | `relevance`, `date_desc`, `date_asc`, or `citations` |
+| `limit` | number | no | `10` | Max results (1–100) |
+| `offset` | number | no | `0` | Pagination offset |
+| `filters` | object | no | — | `title`, `authors`, `date_from`, `date_to`, `categories`, `open_access`, `min_citations` |
+| `credentials` | object | no | — | Per-call API keys: `pubmed_api_key`, `s2_api_key`, `openalex_api_key`, `hf_token` |
+
+**Example:**
+
+```json
+{
+  "query": "transformer attention mechanisms",
+  "sources": ["arxiv", "openalex"],
+  "sort": "date_desc",
+  "limit": 5,
+  "filters": { "date_from": "2024-01-01" }
+}
 ```
 
-The server listens on port **8099** by default. The MCP endpoint is available at `/mcp`.
+**Response:**
+
+```json
+{
+  "total_results": 5,
+  "results": [
+    {
+      "id": "arxiv:2401.12345",
+      "source": "arxiv",
+      "also_found_in": ["openalex"],
+      "content_type": "paper",
+      "title": "Efficient Attention Mechanisms for Transformers",
+      "authors": [{"name": "J. Smith"}],
+      "published": "2024-01-15",
+      "abstract": "We propose...",
+      "url": "https://arxiv.org/abs/2401.12345",
+      "pdf_url": "https://arxiv.org/pdf/2401.12345",
+      "doi": "10.1234/example",
+      "citation_count": 42
+    }
+  ],
+  "sources_queried": ["arxiv", "openalex"],
+  "sources_failed": [],
+  "has_more": true
+}
+```
+
+### rtv_get
+
+Retrieve a single publication by its prefixed ID. Returns full metadata and optionally BibTeX, references, citations, or full text.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `id` | string | yes | — | Prefixed ID (e.g., `"arxiv:2401.12345"`, `"s2:abc123"`, `"pubmed:12345678"`) |
+| `include` | string[] | no | — | `abstract`, `full_text`, `references`, `citations`, `related`, `metadata` |
+| `format` | string | no | `"native"` | `native`, `json`, `xml`, `markdown`, or `bibtex` |
+| `credentials` | object | no | — | Per-call API keys |
+
+**Example — get BibTeX:**
+
+```json
+{
+  "id": "openalex:W4366341216",
+  "format": "bibtex",
+  "include": ["abstract"]
+}
+```
+
+### rtv_list_sources
+
+List all available sources with capabilities, rate limits, and supported content types. No parameters.
+
+## Sources
+
+| Source | ID | Content | Auth | Rate Limit | Key Features |
+|--------|----|---------|------|------------|--------------|
+| ArXiv | `arxiv` | papers | No | 0.33 req/s | 2M+ open-access preprints |
+| Semantic Scholar | `s2` | papers | Optional | 1 req/s (100 with key) | Citation graph, references |
+| OpenAlex | `openalex` | papers | Optional | 10 req/s | 250M+ works, open metadata |
+| PubMed | `pubmed` | papers | Optional | 3 req/s (10 with key) | 35M+ biomedical articles |
+| Europe PMC | `europmc` | papers | No | 10 req/s | 40M+ biomedical, full text |
+| HuggingFace | `huggingface` | papers, models, datasets | Optional | 10 req/s | 1M+ models, 100K+ datasets |
+
+All sources work without API keys. Keys raise rate limits and unlock additional features.
 
 ## Configuration
 
-Configuration is loaded from a YAML file. Default: `configs/retrievr-mcp.yaml`. Override with `--config <path>`. For local development, use `configs/retrievr-mcp.local.yaml` (gitignored).
+Config is loaded from YAML. Default: `configs/retrievr-mcp.yaml`. Override: `--config <path>`. Local dev: `configs/retrievr-mcp.local.yaml` (gitignored).
 
 ```yaml
 server:
-  name: "retrievr-mcp"          # Server name reported in MCP handshake
-  http_addr: ":8099"            # HTTP listen address (host:port)
-  log_level: "info"             # Log level: debug, info, warn, error
-  log_format: "json"            # Log format: json, text
+  name: "retrievr-mcp"
+  http_addr: ":8099"
+  log_level: "info"             # debug, info, warn, error
+  log_format: "json"            # json, text
 
 router:
-  default_sources:              # Sources used when caller does not specify
-    - "arxiv"
-    - "s2"
-    - "openalex"
-    - "pubmed"
-    - "huggingface"
-    - "europmc"
-  per_source_timeout: "10s"     # Timeout for each source plugin per request
-  dedup_enabled: true           # Enable cross-source dedup by DOI/ArXiv ID
-  cache_enabled: true           # Enable in-memory LRU response cache
-  cache_ttl: "5m"               # Cache entry time-to-live
-  cache_max_entries: 1000       # Maximum cached entries
+  default_sources: ["arxiv", "s2", "openalex", "pubmed", "huggingface", "europmc"]
+  per_source_timeout: "10s"
+  dedup_enabled: true
+  cache_enabled: true
+  cache_ttl: "5m"
+  cache_max_entries: 1000
 
 sources:
   arxiv:
     enabled: true
     base_url: "http://export.arxiv.org/api/query"
-    timeout: "15s"              # HTTP client timeout for this source
-    rate_limit: 0.33            # Requests per second (ArXiv asks for 1 req/3s)
-    rate_limit_burst: 1         # Token bucket burst size
-
-  pubmed:
-    enabled: true
-    api_key: ""                 # NCBI API key (optional, raises limit to 10 req/s)
-    timeout: "10s"
-    rate_limit: 3.0
-    rate_limit_burst: 3
-    extra:
-      tool: "retrievr-mcp"     # Required by NCBI E-utilities
-      email: "contact@example.com"
+    timeout: "15s"
+    rate_limit: 0.33            # ArXiv asks for max 1 req/3s
+    rate_limit_burst: 1
 
   s2:
     enabled: true
@@ -96,12 +170,27 @@ sources:
 
   openalex:
     enabled: true
-    api_key: ""                 # OpenAlex API key (optional, for polite pool use mailto)
     timeout: "10s"
     rate_limit: 10.0
     rate_limit_burst: 5
     extra:
-      mailto: "contact@example.com"  # Enters the polite pool for higher limits
+      mailto: "you@example.com" # Enters polite pool for higher limits
+
+  pubmed:
+    enabled: true
+    api_key: ""                 # NCBI API key (optional, raises limit to 10 req/s)
+    timeout: "10s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+    extra:
+      tool: "retrievr-mcp"     # Required by NCBI E-utilities
+      email: "you@example.com"
+
+  europmc:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
 
   huggingface:
     enabled: true
@@ -110,180 +199,51 @@ sources:
     rate_limit: 10.0
     rate_limit_burst: 5
     extra:
-      include_models: "true"    # Search HuggingFace models
-      include_datasets: "true"  # Search HuggingFace datasets
-      include_papers: "true"    # Search HuggingFace papers
-
-  europmc:
-    enabled: true
-    timeout: "10s"
-    rate_limit: 10.0
-    rate_limit_burst: 5
+      include_models: "true"
+      include_datasets: "true"
+      include_papers: "true"
 ```
-
-## Tools
-
-### rtv_search
-
-Search academic publications across multiple sources. Returns merged, deduplicated results.
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | yes | -- | Search query string |
-| `sources` | string[] | no | server default | Source IDs to search (e.g., `["arxiv", "s2"]`) |
-| `content_type` | string | no | `"paper"` | `paper`, `model`, `dataset`, or `any` |
-| `sort` | string | no | `"relevance"` | `relevance`, `date_desc`, `date_asc`, or `citations` |
-| `limit` | number | no | `10` | Max results (1-100) |
-| `offset` | number | no | `0` | Pagination offset |
-| `filters` | object | no | -- | Filters: `title`, `authors`, `date_from`, `date_to`, `categories`, `open_access`, `min_citations` |
-| `credentials` | object | no | -- | Per-call API keys: `pubmed_api_key`, `s2_api_key`, `openalex_api_key`, `hf_token` |
-
-**Example request:**
-
-```json
-{
-  "query": "transformer attention mechanisms",
-  "sources": ["arxiv", "s2"],
-  "content_type": "paper",
-  "sort": "relevance",
-  "limit": 5,
-  "filters": {
-    "date_from": "2023-01-01"
-  }
-}
-```
-
-**Example response (abbreviated):**
-
-```json
-{
-  "results": [
-    {
-      "id": "arxiv:2401.12345",
-      "source": "arxiv",
-      "also_found_in": ["s2"],
-      "content_type": "paper",
-      "title": "Efficient Attention Mechanisms for Transformers",
-      "authors": [{"name": "J. Smith"}],
-      "published": "2024-01-15",
-      "abstract": "We propose...",
-      "url": "https://arxiv.org/abs/2401.12345",
-      "doi": "10.1234/example"
-    }
-  ],
-  "total": 5,
-  "sources_searched": ["arxiv", "s2"],
-  "sources_failed": []
-}
-```
-
-### rtv_get
-
-Retrieve a single publication by its prefixed ID. Returns full metadata and optionally abstract, full text, references, citations, or related works.
-
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `id` | string | yes | -- | Prefixed ID (e.g., `"arxiv:2401.12345"`, `"s2:abc123"`) |
-| `include` | string[] | no | `["abstract"]` | Data to include: `abstract`, `full_text`, `references`, `citations`, `related`, `metadata` |
-| `format` | string | no | `"native"` | Output format: `native`, `json`, `xml`, `markdown`, `bibtex` |
-| `credentials` | object | no | -- | Per-call API keys |
-
-**Example request:**
-
-```json
-{
-  "id": "arxiv:2401.12345",
-  "include": ["abstract", "references"],
-  "format": "bibtex"
-}
-```
-
-### rtv_list_sources
-
-List all available sources with their capabilities, rate limits, and supported features. Takes no parameters.
-
-**Example response (abbreviated):**
-
-```json
-[
-  {
-    "id": "arxiv",
-    "name": "ArXiv",
-    "description": "...",
-    "content_types": ["paper"],
-    "native_format": "xml",
-    "available_formats": ["native", "json", "xml", "markdown", "bibtex"]
-  }
-]
-```
-
-## Sources
-
-| Source | ID | Content Types | Auth Required | Rate Limit (default) | Native Format | Notable Features |
-|--------|----|---------------|---------------|---------------------|---------------|-----------------|
-| ArXiv | `arxiv` | paper | No | 0.33 req/s | XML | 2M+ preprints, open access |
-| Semantic Scholar | `s2` | paper | Optional API key | 1 req/s | JSON | Citation graph data |
-| OpenAlex | `openalex` | paper | Optional (polite pool) | 10 req/s | JSON | 250M+ works, open metadata |
-| PubMed | `pubmed` | paper | Optional API key | 3 req/s (10 with key) | XML | 35M+ biomedical articles |
-| Europe PMC | `europmc` | paper | No | 10 req/s | JSON | 40M+ biomedical, full text access |
-| HuggingFace | `huggingface` | paper, model, dataset | Optional token | 10 req/s | JSON | 1M+ models, datasets, papers |
 
 ## Architecture
 
-All source code lives in `internal/` as a flat single package. Files follow the naming convention `rtv.<concern>.go` (e.g., `rtv.plugin.arxiv.go`, `rtv.router.go`, `rtv.server.go`).
+All source code lives in `internal/` as a flat single package (`package internal`). Files are named `rtv.<concern>.go`.
 
-### Plugin interface
-
-Every source implements the `SourcePlugin` interface:
-
-```go
-type SourcePlugin interface {
-    ID() string
-    Name() string
-    Description() string
-    ContentTypes() []ContentType
-    Capabilities() SourceCapabilities
-    NativeFormat() ContentFormat
-    AvailableFormats() []ContentFormat
-    Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error)
-    Get(ctx context.Context, id string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error)
-    Initialize(ctx context.Context, cfg PluginConfig) error
-    Health(ctx context.Context) SourceHealth
-}
-```
-
-### Router fan-out flow
+### Request flow
 
 ```
-rtv_search request
-       |
-       v
-  Fan-out to N plugins concurrently (limit * 2 per source)
-       |
-       v
-  Per-plugin timeout (default 10s)
-       |
-       v
-  Merge all results into single list
-       |
-       v
-  Deduplicate by exact DOI / ArXiv ID
-       |
-       v
-  Round-robin interleave by source-rank position
-       |
-       v
-  Truncate to requested limit
-       |
-       v
-  Return results + sources_searched + sources_failed
+rtv_search
+  |
+  v
+Fan-out to N sources concurrently (requests limit*2 per source)
+  |
+  v
+Per-source timeout (default 10s)
+  |
+  v
+Merge results, deduplicate by DOI/ArXiv ID
+  |
+  v
+Round-robin interleave by source-rank position
+  |
+  v
+Truncate to requested limit
+  |
+  v
+Return results + sources_queried + sources_failed
 ```
 
-### Credential resolution order
+### Plugin system
+
+Each source implements the `SourcePlugin` interface defined in `rtv.plugin.go`. Adding a new source requires:
+
+1. Create `internal/rtv.plugin.<source>.go` implementing the interface
+2. Add source ID constant to `rtv.types.go`
+3. Add factory entry to `PluginFactories()` in `rtv.registry.go`
+4. Add config block to `configs/retrievr-mcp.yaml`
+
+See [docs/plugin-guide.md](docs/plugin-guide.md) for the full guide.
+
+### Credential resolution
 
 1. Per-call credentials (passed in tool request)
 2. Server config credentials (from YAML)
@@ -291,109 +251,44 @@ rtv_search request
 
 ## Observability
 
-### Endpoints
-
-| Path | Description |
-|------|-------------|
-| `/health` | Health check, returns `{"status":"ok","version":"..."}` |
-| `/version` | Full version information |
-| `/metrics` | Prometheus metrics (custom registry) |
+| Endpoint | Description |
+|----------|-------------|
+| `/health` | `{"status":"ok","version":"..."}` |
+| `/version` | Full version info |
+| `/metrics` | Prometheus metrics |
 | `/mcp` | MCP Streamable HTTP endpoint |
 
-### Prometheus metrics
+**Prometheus metrics** (namespace `rtv_`):
 
-All metrics use the `rtv_` namespace.
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `rtv_search_total` | counter | `source`, `status` | Total search operations by source and status |
-| `rtv_search_duration_seconds` | histogram | `source` | Search latency in seconds (buckets: 0.1 to 30s) |
-| `rtv_get_total` | counter | `source`, `status` | Total get operations by source and status |
-| `rtv_rate_limit_waits_total` | counter | `source` | Rate limit wait events by source |
-| `rtv_cache_hits_total` | counter | -- | Cache hit count |
-| `rtv_cache_misses_total` | counter | -- | Cache miss count |
-
-### Logging
-
-Structured JSON logging via `log/slog` to stdout. Configurable level (`debug`, `info`, `warn`, `error`) and format (`json`, `text`).
-
-## Deployment
-
-### Docker
-
-```bash
-docker build -t retrievr-mcp .
-docker run -p 8099:8099 retrievr-mcp
-```
-
-The Docker image uses a multi-stage build (`golang:1.25-alpine` build stage, `alpine:3.21` runtime). It runs as a non-root user (`rtv`, UID 1000) and includes a healthcheck that polls `/health` every 30 seconds.
-
-To use a custom config, mount it into the container:
-
-```bash
-docker run -p 8099:8099 -v /path/to/config.yaml:/app/configs/retrievr-mcp.yaml retrievr-mcp
-```
-
-### Port
-
-The server listens on port **8099** by default. Change via `server.http_addr` in the config.
+| Metric | Type | Description |
+|--------|------|-------------|
+| `rtv_search_total` | counter | Searches by source and status |
+| `rtv_search_duration_seconds` | histogram | Search latency |
+| `rtv_get_total` | counter | Gets by source and status |
+| `rtv_rate_limit_waits_total` | counter | Rate limit waits by source |
+| `rtv_cache_hits_total` | counter | Cache hits |
+| `rtv_cache_misses_total` | counter | Cache misses |
 
 ## Development
 
-### Build
-
 ```bash
-go build -o retrievr-mcp ./cmd/retrievr-mcp
+go build -o retrievr-mcp ./cmd/retrievr-mcp    # Build
+go test -race ./...                              # Unit tests
+go test -race -tags integration ./...            # Integration tests (live APIs)
+golangci-lint run ./...                          # Lint
 ```
-
-### Test
-
-```bash
-# Unit tests (with race detector)
-go test -race ./...
-
-# Single package
-go test -race ./internal/...
-
-# Integration tests (requires live API access)
-go test -race -tags integration ./...
-```
-
-### Lint
-
-```bash
-golangci-lint run ./...
-```
-
-### Adding a new source
-
-To add a source plugin:
-
-1. Create `internal/rtv.plugin.<source>.go` implementing the `SourcePlugin` interface.
-2. Add the source ID constant to `rtv.types.go`.
-3. Register the plugin in `cmd/retrievr-mcp/main.go`.
-4. Add source config to `configs/retrievr-mcp.yaml`.
 
 ### Dependencies
 
 | Module | Purpose |
 |--------|---------|
-| `github.com/mark3labs/mcp-go` | MCP protocol SDK |
-| `gopkg.in/yaml.v3` | YAML config loading |
-| `github.com/go-playground/validator/v10` | Config validation |
-| `golang.org/x/time/rate` | Token-bucket rate limiting |
-| `github.com/prometheus/client_golang` | Prometheus metrics |
-| `github.com/stretchr/testify` | Test assertions |
-
-## Contributing
-
-1. Fork the repository.
-2. Create a feature branch from `main`.
-3. Implement changes following the flat package structure and `rtv.` file naming convention.
-4. Write tests (table-driven, >80% coverage target, run with `-race`).
-5. Run `go test -race ./...` and `golangci-lint run ./...`.
-6. Open a pull request.
+| [mcp-go](https://github.com/mark3labs/mcp-go) | MCP protocol SDK |
+| [yaml.v3](https://pkg.go.dev/gopkg.in/yaml.v3) | Config loading |
+| [validator](https://github.com/go-playground/validator) | Config validation |
+| [x/time/rate](https://pkg.go.dev/golang.org/x/time/rate) | Token-bucket rate limiting |
+| [client_golang](https://github.com/prometheus/client_golang) | Prometheus metrics |
+| [testify](https://github.com/stretchr/testify) | Test assertions |
 
 ## License
 
-MIT -- see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

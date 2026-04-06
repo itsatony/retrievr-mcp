@@ -25,16 +25,18 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	ToolDescSearch = "Search academic publications across multiple sources " +
-		"(ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC). " +
-		"Returns merged, deduplicated results sorted by the requested order."
+	ToolDescSearch = "Search academic papers, AI models, and datasets across ArXiv, " +
+		"PubMed, Semantic Scholar, OpenAlex, HuggingFace, and Europe PMC. " +
+		"Returns merged, deduplicated results with title, authors, abstract, URL, " +
+		"DOI, and citation count. Supports date filters and sorting by relevance, " +
+		"date, or citations."
 
-	ToolDescGet = "Retrieve a single publication by its prefixed ID " +
-		"(e.g., \"arxiv:2401.12345\"). Returns full metadata and optionally " +
-		"abstract, full text, references, citations, or related works."
+	ToolDescGet = "Get full details for a publication by its prefixed ID " +
+		"(e.g., \"arxiv:2401.12345\", \"pubmed:39871553\"). Returns metadata, " +
+		"abstract, and optionally BibTeX, full text, references, or citations."
 
-	ToolDescListSources = "List all available publication sources with their " +
-		"capabilities, rate limits, and supported features."
+	ToolDescListSources = "List available academic sources with their capabilities, " +
+		"content types, rate limits, and supported output formats."
 )
 
 // ---------------------------------------------------------------------------

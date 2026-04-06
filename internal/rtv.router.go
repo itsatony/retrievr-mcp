@@ -60,6 +60,7 @@ var sourcesAcceptingCredentials = map[string]bool{
 	SourceS2:          true,
 	SourceOpenAlex:    true,
 	SourceHuggingFace: true,
+	SourceADS:         true,
 }
 
 // SourceAcceptsCredentials returns true if the given source supports per-call credentials.

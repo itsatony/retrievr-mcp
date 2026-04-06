@@ -126,6 +126,8 @@ var bibtexJournalKeys = []string{
 	s2MetaKeyJournal,       // "s2_journal"
 	emcMetaKeyJournal,      // "emc_journal"
 	oaMetaKeyVenue,         // "oa_venue"
+	crossrefMetaKeyJournal, // "crossref_journal"
+	adsMetaKeyJournal,      // "ads_journal"
 	arxivMetaKeyJournalRef, // "arxiv_journal_ref"
 	bibtexMetaKeyJournal,   // "journal" (generic fallback)
 }

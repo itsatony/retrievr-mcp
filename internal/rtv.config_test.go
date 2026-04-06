@@ -301,7 +301,7 @@ server:
   log_level: "info"
   log_format: "json"
 router:
-  default_sources: ["arxiv", "s2", "openalex", "huggingface"]
+  default_sources: ["arxiv", "s2", "openalex", "huggingface", "crossref", "dblp", "ads"]
   per_source_timeout: "10s"
   dedup_enabled: true
   cache_enabled: true
@@ -339,12 +339,29 @@ sources:
   europmc:
     enabled: true
     timeout: "10s"
+  crossref:
+    enabled: true
+    timeout: "10s"
+    extra:
+      mailto: "test@example.com"
+  dblp:
+    enabled: true
+    timeout: "10s"
+  ads:
+    enabled: true
+    api_key: "test-ads-key"
+    timeout: "10s"
+  biorxiv:
+    enabled: true
+    timeout: "10s"
+    extra:
+      servers: "biorxiv,medrxiv"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)
 	require.NoError(t, err)
 
-	expectedSourceCount := 6
+	expectedSourceCount := SourceCount
 	assert.Len(t, cfg.Sources, expectedSourceCount)
 
 	// Verify each source exists and has expected fields.

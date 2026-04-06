@@ -207,6 +207,78 @@ var (
 )
 
 // ---------------------------------------------------------------------------
+// Sentinel errors — plugin: CrossRef
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgCrossRefJSONParse   = "failed to parse crossref json response"
+	ErrMsgCrossRefHTTPRequest = "crossref http request failed"
+	ErrMsgCrossRefNotFound    = "crossref work not found"
+	ErrMsgCrossRefEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrCrossRefJSONParse   = errors.New(ErrMsgCrossRefJSONParse)
+	ErrCrossRefHTTPRequest = errors.New(ErrMsgCrossRefHTTPRequest)
+	ErrCrossRefNotFound    = errors.New(ErrMsgCrossRefNotFound)
+	ErrCrossRefEmptyQuery  = errors.New(ErrMsgCrossRefEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
+// Sentinel errors — plugin: bioRxiv
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgBiorxivJSONParse    = "failed to parse biorxiv json response"
+	ErrMsgBiorxivHTTPRequest  = "biorxiv http request failed"
+	ErrMsgBiorxivNotFound     = "biorxiv preprint not found"
+	ErrMsgBiorxivDateRequired = "biorxiv search requires date_from filter (no keyword search API available)"
+)
+
+var (
+	ErrBiorxivJSONParse    = errors.New(ErrMsgBiorxivJSONParse)
+	ErrBiorxivHTTPRequest  = errors.New(ErrMsgBiorxivHTTPRequest)
+	ErrBiorxivNotFound     = errors.New(ErrMsgBiorxivNotFound)
+	ErrBiorxivDateRequired = errors.New(ErrMsgBiorxivDateRequired)
+)
+
+// ---------------------------------------------------------------------------
+// Sentinel errors — plugin: DBLP
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgDBLPJSONParse   = "failed to parse dblp json response"
+	ErrMsgDBLPHTTPRequest = "dblp http request failed"
+	ErrMsgDBLPNotFound    = "dblp publication not found"
+	ErrMsgDBLPEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrDBLPJSONParse   = errors.New(ErrMsgDBLPJSONParse)
+	ErrDBLPHTTPRequest = errors.New(ErrMsgDBLPHTTPRequest)
+	ErrDBLPNotFound    = errors.New(ErrMsgDBLPNotFound)
+	ErrDBLPEmptyQuery  = errors.New(ErrMsgDBLPEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
+// Sentinel errors — plugin: NASA ADS
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgADSJSONParse   = "failed to parse ads json response"
+	ErrMsgADSHTTPRequest = "ads http request failed"
+	ErrMsgADSNotFound    = "ads record not found"
+	ErrMsgADSEmptyQuery  = "search query is empty"
+)
+
+var (
+	ErrADSJSONParse   = errors.New(ErrMsgADSJSONParse)
+	ErrADSHTTPRequest = errors.New(ErrMsgADSHTTPRequest)
+	ErrADSNotFound    = errors.New(ErrMsgADSNotFound)
+	ErrADSEmptyQuery  = errors.New(ErrMsgADSEmptyQuery)
+)
+
+// ---------------------------------------------------------------------------
 // Structured MCP error response
 // ---------------------------------------------------------------------------
 

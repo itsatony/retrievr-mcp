@@ -34,8 +34,8 @@ sources:
 `
 
 const (
-	testExpectedVersion = "1.0.2"
-	testVersionsYAML    = `version: "1.0.2"
+	testExpectedVersion = "1.1.0"
+	testVersionsYAML    = `version: "1.1.0"
 `
 )
 

@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![MCP](https://img.shields.io/badge/MCP-2025--11--25-purple)
 
-An MCP server that gives LLM agents unified access to academic publications, AI research, models, and datasets. Six source APIs — ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, and Europe PMC — behind three tools.
+An MCP server that gives LLM agents unified access to academic publications, AI research, models, and datasets. Ten source APIs — ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, and bioRxiv — behind three tools.
 
 ## What it does
 
@@ -131,8 +131,26 @@ List all available sources with capabilities, rate limits, and supported content
 | PubMed | `pubmed` | papers | Optional | 3 req/s (10 with key) | 35M+ biomedical articles |
 | Europe PMC | `europmc` | papers | No | 10 req/s | 40M+ biomedical, full text |
 | HuggingFace | `huggingface` | papers, models, datasets | Optional | 10 req/s | 1M+ models, 100K+ datasets |
+| CrossRef | `crossref` | papers | No | 10 req/s (polite pool) | 150M+ DOI-centric metadata |
+| DBLP | `dblp` | papers | No | 5 req/s | 7M+ CS publications, venue metadata |
+| NASA ADS | `ads` | papers | **Required** | 5000/day | 16M+ astronomy/astrophysics records |
+| bioRxiv | `biorxiv` | papers | No | 5 req/s | Biology/health preprints, date-range only |
 
-All sources work without API keys. Keys raise rate limits and unlock additional features.
+Most sources work without API keys. NASA ADS requires an API key ([get one here](https://ui.adsabs.harvard.edu/user/settings/token)). bioRxiv search requires a `date_from` filter (no keyword search API).
+
+### Environment variable overrides
+
+API keys can be injected via environment variables, useful for K8s secrets:
+
+```
+RETRIEVR_S2_API_KEY=...
+RETRIEVR_PUBMED_API_KEY=...
+RETRIEVR_OPENALEX_API_KEY=...
+RETRIEVR_HUGGINGFACE_API_KEY=...
+RETRIEVR_ADS_API_KEY=...
+```
+
+Env vars override the corresponding `api_key` value in the YAML config.
 
 ## Configuration
 

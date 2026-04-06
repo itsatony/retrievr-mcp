@@ -189,3 +189,44 @@ A plugin registry (`rtv.registry.go`) centralizes plugin creation via a `PluginF
 - Plugin initialization order is non-deterministic (map iteration), which is correct since plugins are independent.
 - Unknown source IDs in config are silently skipped, consistent with the original behavior where only known sources had explicit blocks.
 - The registry is unit-testable in isolation, improving coverage of the initialization path.
+
+---
+
+## ADR-011: bioRxiv Date-Range-Only Search
+
+**Status:** Accepted
+
+### Context
+
+The bioRxiv/medRxiv API provides date-range browsing and DOI-based retrieval, but has no keyword search endpoint. Adding bioRxiv as a source plugin requires handling this limitation transparently.
+
+### Decision
+
+bioRxiv's `Search()` method requires a `date_from` filter. Without it, the plugin returns `ErrBiorxivDateRequired`. bioRxiv is NOT included in `default_sources` to prevent failures on keyword-only searches. Users opt in explicitly by adding `"biorxiv"` to the sources list. `Get()` works by DOI and tries all configured servers (biorxiv, medrxiv) in sequence.
+
+### Consequences
+
+- Users must explicitly request bioRxiv and provide date filters for search.
+- Get-by-DOI works transparently across both biorxiv and medrxiv servers.
+- The router's partial failure handling gracefully reports bioRxiv failures without blocking other sources.
+
+---
+
+## ADR-012: Environment Variable API Key Overrides
+
+**Status:** Accepted
+
+### Context
+
+K8s deployments inject secrets via environment variables, but retrievr-mcp reads API keys from YAML config files. The sysop team needs a way to override config-file API keys with environment variables without modifying the config.
+
+### Decision
+
+After YAML config parsing and validation, `applyEnvOverrides()` checks for `RETRIEVR_{UPPER_SOURCE_ID}_API_KEY` environment variables (e.g., `RETRIEVR_S2_API_KEY`, `RETRIEVR_ADS_API_KEY`). If set, the env var value overwrites the corresponding source's `api_key` in the parsed config.
+
+### Consequences
+
+- K8s secrets map directly to env vars with a clear naming convention.
+- No custom YAML processing or template engine needed.
+- Env vars take precedence over YAML values — operators can override without touching config files.
+- Only API keys are overridable (not arbitrary config fields), limiting the attack surface.

@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 6
+	testRegistryExpectedFactoryCount = 10
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -116,6 +116,10 @@ func TestInitializePlugins(t *testing.T) {
 				SourcePubMed:      {Enabled: true},
 				SourceEuropePMC:   {Enabled: true},
 				SourceHuggingFace: {Enabled: true},
+				SourceCrossRef:    {Enabled: true},
+				SourceBioRxiv:     {Enabled: true},
+				SourceDBLP:        {Enabled: true},
+				SourceADS:         {Enabled: true},
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

@@ -30,7 +30,7 @@ server:
   log_format: "json"
 
 router:
-  default_sources: ["arxiv", "s2", "openalex", "huggingface"]
+  default_sources: ["arxiv", "s2", "openalex", "huggingface", "crossref", "dblp", "ads"]
   per_source_timeout: "10s"
   dedup_enabled: true
   cache_enabled: true
@@ -80,6 +80,31 @@ sources:
     timeout: "10s"
     rate_limit: 10.0
     rate_limit_burst: 5
+  crossref:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+    extra:
+      mailto: "test@example.com"
+  dblp:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 3
+  ads:
+    enabled: true
+    api_key: "test-ads-key"
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 3
+  biorxiv:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 3
+    extra:
+      servers: "biorxiv,medrxiv"
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
@@ -91,7 +116,7 @@ sources:
 	require.NoError(t, err)
 	require.NotNil(t, cfg)
 
-	expectedSourceCount := 6
+	expectedSourceCount := SourceCount
 	assert.Len(t, cfg.Sources, expectedSourceCount)
 	assert.Equal(t, "retrievr-mcp", cfg.Server.Name)
 

@@ -25,15 +25,17 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	ToolDescSearch = "Search academic papers, AI models, and datasets across ArXiv, " +
-		"PubMed, Semantic Scholar, OpenAlex, HuggingFace, and Europe PMC. " +
+	ToolDescSearch = "Search academic papers, AI models, and datasets across 10 sources: " +
+		"ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, " +
+		"CrossRef, DBLP, NASA ADS, and bioRxiv. " +
 		"Returns merged, deduplicated results with title, authors, abstract, URL, " +
 		"DOI, and citation count. Supports date filters and sorting by relevance, " +
 		"date, or citations."
 
 	ToolDescGet = "Get full details for a publication by its prefixed ID " +
-		"(e.g., \"arxiv:2401.12345\", \"pubmed:39871553\"). Returns metadata, " +
-		"abstract, and optionally BibTeX, full text, references, or citations."
+		"(e.g., \"arxiv:2401.12345\", \"crossref:10.1038/s41586-024-07487-w\", " +
+		"\"ads:2024ApJ...123..456A\"). Returns metadata, abstract, and optionally " +
+		"BibTeX, full text, references, or citations."
 
 	ToolDescListSources = "List available academic sources with their capabilities, " +
 		"content types, rate limits, and supported output formats."
@@ -98,6 +100,7 @@ const (
 	CredFieldS2APIKey       = "s2_api_key"
 	CredFieldOpenAlexAPIKey = "openalex_api_key"
 	CredFieldHFToken        = "hf_token"
+	CredFieldADSAPIKey      = "ads_api_key"
 )
 
 // ---------------------------------------------------------------------------

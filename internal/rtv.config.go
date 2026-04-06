@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -145,6 +146,17 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 }
 
 // ---------------------------------------------------------------------------
+// Environment variable override constants
+// ---------------------------------------------------------------------------
+
+const (
+	// envVarPrefix is the prefix for environment variable API key overrides.
+	// Convention: RETRIEVR_{UPPER_SOURCE_ID}_API_KEY (e.g., RETRIEVR_S2_API_KEY).
+	envVarPrefix = "RETRIEVR_"
+	envVarSuffix = "_API_KEY"
+)
+
+// ---------------------------------------------------------------------------
 // Config loading
 // ---------------------------------------------------------------------------
 
@@ -152,6 +164,8 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 var configValidator = validator.New()
 
 // LoadConfig reads and validates a YAML config file.
+// After validation, environment variable overrides are applied for API keys.
+// Convention: RETRIEVR_{UPPER_SOURCE_ID}_API_KEY overrides sources.{id}.api_key.
 func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -167,7 +181,22 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	applyEnvOverrides(&cfg)
+
 	return &cfg, nil
+}
+
+// applyEnvOverrides checks for RETRIEVR_{SOURCE_ID}_API_KEY environment
+// variables and overwrites the corresponding source API key in config.
+// This supports K8s secret injection without modifying the config file.
+func applyEnvOverrides(cfg *Config) {
+	for sourceID, sourceCfg := range cfg.Sources {
+		envVar := envVarPrefix + strings.ToUpper(sourceID) + envVarSuffix
+		if val, ok := os.LookupEnv(envVar); ok && val != "" {
+			sourceCfg.APIKey = val
+			cfg.Sources[sourceID] = sourceCfg
+		}
+	}
 }
 
 // validateConfig runs struct validation and custom business rules.

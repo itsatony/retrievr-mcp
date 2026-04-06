@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-04-06
+
+### Added
+- **CrossRef source plugin** — DOI-centric metadata for 150M+ scholarly works, JATS XML abstract stripping, date-parts conversion, polite pool via mailto
+- **DBLP source plugin** — computer science bibliography with 7M+ publications, venue/conference metadata, custom author JSON unmarshaling
+- **NASA ADS source plugin** — 16M+ astronomy/astrophysics records, API key auth, parallel array author/affiliation/ORCID mapping, Solr date filtering
+- **bioRxiv/medRxiv source plugin** — preprint servers for biology/health sciences, date-range browsing (no keyword search), dual-server support, DOI retrieval
+- **Environment variable API key overrides** — `RETRIEVR_{SOURCE}_API_KEY` env vars override YAML config, supports K8s secret injection
+- Per-call credential support for NASA ADS (`ads_api_key`)
+
+### Changed
+- Source count expanded from 6 to 10
+- Tool descriptions updated to list all 10 sources
+- BibTeX journal key lookup now includes CrossRef and ADS metadata keys
+- Default sources include crossref, dblp, ads (not biorxiv — requires date filter)
+
 ## [1.0.2] - 2026-04-06
 
 ### Added

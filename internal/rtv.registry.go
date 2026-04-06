@@ -34,6 +34,10 @@ func PluginFactories() map[string]PluginFactory {
 		SourcePubMed:      func() SourcePlugin { return &PubMedPlugin{} },
 		SourceEuropePMC:   func() SourcePlugin { return &EuropePMCPlugin{} },
 		SourceHuggingFace: func() SourcePlugin { return &HuggingFacePlugin{} },
+		SourceCrossRef:    func() SourcePlugin { return &CrossRefPlugin{} },
+		SourceBioRxiv:     func() SourcePlugin { return &BioRxivPlugin{} },
+		SourceDBLP:        func() SourcePlugin { return &DBLPPlugin{} },
+		SourceADS:         func() SourcePlugin { return &ADSPlugin{} },
 	}
 }
 

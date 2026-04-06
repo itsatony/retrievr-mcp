@@ -72,6 +72,10 @@ const (
 	SourceOpenAlex    = "openalex"
 	SourceHuggingFace = "huggingface"
 	SourceEuropePMC   = "europmc"
+	SourceCrossRef    = "crossref"
+	SourceBioRxiv     = "biorxiv"
+	SourceDBLP        = "dblp"
+	SourceADS         = "ads"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -83,6 +87,10 @@ var validSourceIDs = map[string]bool{
 	SourceOpenAlex:    true,
 	SourceHuggingFace: true,
 	SourceEuropePMC:   true,
+	SourceCrossRef:    true,
+	SourceBioRxiv:     true,
+	SourceDBLP:        true,
+	SourceADS:         true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -100,7 +108,7 @@ func AllSourceIDs() []string {
 }
 
 // SourceCount is the number of known source plugins.
-const SourceCount = 6
+const SourceCount = 10
 
 // ---------------------------------------------------------------------------
 // Domain structs
@@ -208,6 +216,7 @@ type CallCredentials struct {
 	S2APIKey       string `json:"s2_api_key,omitempty"`
 	OpenAlexAPIKey string `json:"openalex_api_key,omitempty"`
 	HFToken        string `json:"hf_token,omitempty"`
+	ADSAPIKey      string `json:"ads_api_key,omitempty"`
 }
 
 // ResolveForSource returns the credential relevant to a given source ID.
@@ -227,6 +236,8 @@ func (c *CallCredentials) ResolveForSource(sourceID string, serverDefault string
 		perCall = c.OpenAlexAPIKey
 	case SourceHuggingFace:
 		perCall = c.HFToken
+	case SourceADS:
+		perCall = c.ADSAPIKey
 	}
 
 	if perCall != "" {

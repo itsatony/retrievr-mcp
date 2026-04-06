@@ -14,6 +14,8 @@ const (
 	VersionDev           = "dev"
 	VersionUnknown       = "unknown"
 	buildInfoKeyRevision = "vcs.revision"
+
+	errDetailVersionFieldEmpty = "version field is empty"
 )
 
 // Log field key constants for version info.
@@ -33,8 +35,10 @@ type versionState struct {
 
 var (
 	// versionMu protects versionOnce and currentVersion from concurrent
-	// mutation by test helpers (SetVersionForTesting / ResetVersionForTesting).
-	versionMu      sync.Mutex
+	// access. Writers (test helpers) take a write lock; readers (GetVersion,
+	// GetVersionInfo) take a read lock. In production, currentVersion is
+	// immutable after sync.Once, so the RLock is effectively free.
+	versionMu      sync.RWMutex
 	versionOnce    sync.Once
 	currentVersion = versionState{
 		Version:   VersionDev,
@@ -43,13 +47,17 @@ var (
 	}
 )
 
-// GetVersion returns the current version string. Thread-safe.
+// GetVersion returns the current version string. Thread-safe via RLock.
 func GetVersion() string {
+	versionMu.RLock()
+	defer versionMu.RUnlock()
 	return currentVersion.Version
 }
 
-// GetVersionInfo returns version information as a string map. Thread-safe.
+// GetVersionInfo returns version information as a string map. Thread-safe via RLock.
 func GetVersionInfo() map[string]string {
+	versionMu.RLock()
+	defer versionMu.RUnlock()
 	return map[string]string{
 		LogKeyVersion:   currentVersion.Version,
 		LogKeyGitCommit: currentVersion.GitCommit,
@@ -90,7 +98,7 @@ func doLoadVersion(path string) error {
 	}
 
 	if vf.Version == "" {
-		return fmt.Errorf("%w: version field is empty", ErrVersionLoad)
+		return fmt.Errorf("%w: %s", ErrVersionLoad, errDetailVersionFieldEmpty)
 	}
 
 	currentVersion.Version = vf.Version

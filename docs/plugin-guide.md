@@ -669,23 +669,23 @@ func newMySourceTestPlugin(t *testing.T, baseURL string) *MySourcePlugin {
 
 ## Step 5: Register the Plugin
 
-Open `cmd/retrievr-mcp/main.go`. Add an `if` block following the exact pattern used by every existing plugin. Add it after the last plugin block (currently HuggingFace, ending at line 163):
+Open `internal/rtv.registry.go`. Add a single line to the `PluginFactories()` function that maps the new source ID to its factory:
 
 ```go
-if myCfg, ok := cfg.Sources[internal.SourceMySource]; ok && myCfg.Enabled {
-    myPlugin := &internal.MySourcePlugin{}
-    if err := myPlugin.Initialize(context.Background(), myCfg); err != nil {
-        logger.Error(logMsgPluginInitFail,
-            slog.String(internal.LogKeySource, internal.SourceMySource),
-            slog.String(internal.LogKeyError, err.Error()),
-        )
-        return exitCodeStartup
+func PluginFactories() map[string]PluginFactory {
+    return map[string]PluginFactory{
+        SourceArXiv:       func() SourcePlugin { return &ArXivPlugin{} },
+        SourceS2:          func() SourcePlugin { return &S2Plugin{} },
+        SourceOpenAlex:    func() SourcePlugin { return &OpenAlexPlugin{} },
+        SourcePubMed:      func() SourcePlugin { return &PubMedPlugin{} },
+        SourceEuropePMC:   func() SourcePlugin { return &EuropePMCPlugin{} },
+        SourceHuggingFace: func() SourcePlugin { return &HuggingFacePlugin{} },
+        SourceMySource:    func() SourcePlugin { return &MySourcePlugin{} }, // <-- add this
     }
-    plugins[internal.SourceMySource] = myPlugin
 }
 ```
 
-The rate limit manager, credential resolver, and router pick up the plugin automatically from the `plugins` map — no other changes are needed in `main.go`.
+The `InitializePlugins` function in `cmd/retrievr-mcp/main.go` automatically iterates all enabled sources from config, looks up the factory, creates the plugin, and calls `Initialize`. The rate limit manager, credential resolver, and router pick up the plugin automatically from the resulting `plugins` map — no changes to `main.go` are needed.
 
 ---
 
@@ -796,7 +796,7 @@ Use this list to verify the implementation is complete before opening a pull req
 - [ ] `Publication.ID` uses the `"mysource:"` prefix
 - [ ] `Publication.Source` set to `mySourcePluginID`
 - [ ] `Published` and `Updated` in `YYYY-MM-DD` format
-- [ ] `cmd/retrievr-mcp/main.go`: plugin registration `if` block added
+- [ ] `internal/rtv.registry.go`: factory entry added to `PluginFactories()`
 - [ ] `configs/retrievr-mcp.yaml`: source config block added
 - [ ] `configs/retrievr-mcp.yaml`: source ID added to `router.default_sources`
 

@@ -34,6 +34,7 @@ const (
 const (
 	ErrMsgServerStart    = "server start failed"
 	ErrMsgServerShutdown = "server shutdown failed"
+	ErrMsgPluginInit     = "plugin initialization failed"
 	ErrMsgInvalidInput   = "invalid tool input"
 	ErrMsgJSONMarshal    = "failed to marshal response"
 )
@@ -80,6 +81,7 @@ var (
 var (
 	ErrServerStart    = errors.New(ErrMsgServerStart)
 	ErrServerShutdown = errors.New(ErrMsgServerShutdown)
+	ErrPluginInit     = errors.New(ErrMsgPluginInit)
 	ErrInvalidInput   = errors.New(ErrMsgInvalidInput)
 	ErrJSONMarshal    = errors.New(ErrMsgJSONMarshal)
 )

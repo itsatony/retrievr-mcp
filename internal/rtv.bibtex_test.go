@@ -13,26 +13,33 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testBibAuthor1    = "Alice Smith"
-	testBibAuthor2    = "Bob Jones"
-	testBibTitle      = "Attention Is All You Need"
-	testBibDate       = "2024-06-15"
-	testBibDOI        = "10.1234/example.2024"
-	testBibURL        = "https://arxiv.org/abs/2401.12345"
-	testBibAbstract   = "We propose a new architecture."
-	testBibArXivID    = "2401.12345"
-	testBibCategory1  = "cs.AI"
-	testBibCategory2  = "cs.CL"
-	testBibJournal    = "Nature Machine Intelligence"
-	testBibPubID      = "arxiv:2401.12345"
-	testBibHFModelID  = "huggingface:models/bert-base"
-	testBibDatasetID  = "huggingface:datasets/squad"
-	testBibS2ID       = "s2:abc123"
-	testBibPMID       = "pubmed:12345678"
-	testBibEMCID      = "europmc:PMC7654321"
-	testBibCiteYear   = "2024"
-	testBibCiteMonth  = "jun"
-	testBibSpecialStr = "Results & Discussion: 100% of #1_ranked ~ models^2"
+	testBibAuthor1       = "Alice Smith"
+	testBibAuthor2       = "Bob Jones"
+	testBibTitle         = "Attention Is All You Need"
+	testBibDate          = "2024-06-15"
+	testBibDOI           = "10.1234/example.2024"
+	testBibURL           = "https://arxiv.org/abs/2401.12345"
+	testBibAbstract      = "We propose a new architecture."
+	testBibArXivID       = "2401.12345"
+	testBibCategory1     = "cs.AI"
+	testBibCategory2     = "cs.CL"
+	testBibJournal       = "Nature Machine Intelligence"
+	testBibPubID         = "arxiv:2401.12345"
+	testBibHFModelID     = "huggingface:models/bert-base"
+	testBibDatasetID     = "huggingface:datasets/squad"
+	testBibS2ID          = "s2:abc123"
+	testBibModelTitle    = "BERT Base Uncased"
+	testBibModelAuthor   = "Google Research"
+	testBibModelURL      = "https://huggingface.co/bert-base-uncased"
+	testBibDatasetTitle  = "SQuAD v2"
+	testBibDatasetAuthor = "Rajpurkar et al."
+	testBibDatasetDate   = "2018-06-11"
+	testBibDatasetURL    = "https://huggingface.co/datasets/squad"
+	testBibPMID          = "pubmed:12345678"
+	testBibEMCID         = "europmc:PMC7654321"
+	testBibCiteYear      = "2024"
+	testBibCiteMonth     = "jun"
+	testBibSpecialStr    = "Results & Discussion: 100% of #1_ranked ~ models^2"
 )
 
 // ---------------------------------------------------------------------------
@@ -161,15 +168,15 @@ func TestGenerateBibTeX(t *testing.T) {
 				ID:          testBibHFModelID,
 				Source:      SourceHuggingFace,
 				ContentType: ContentTypeModel,
-				Title:       "BERT Base Uncased",
-				Authors:     []Author{{Name: "Google Research"}},
+				Title:       testBibModelTitle,
+				Authors:     []Author{{Name: testBibModelAuthor}},
 				Published:   testBibDate,
-				URL:         "https://huggingface.co/bert-base-uncased",
+				URL:         testBibModelURL,
 			},
 			wantPrefix: bibtexEntryMisc + bibtexEntryOpen,
 			wantFields: []string{
-				"BERT Base Uncased",
-				"Google Research",
+				testBibModelTitle,
+				testBibModelAuthor,
 				bibtexNotePrefix + SourceHuggingFace,
 			},
 		},
@@ -179,10 +186,10 @@ func TestGenerateBibTeX(t *testing.T) {
 				ID:          testBibDatasetID,
 				Source:      SourceHuggingFace,
 				ContentType: ContentTypeDataset,
-				Title:       "SQuAD v2",
-				Authors:     []Author{{Name: "Rajpurkar et al."}},
-				Published:   "2018-06-11",
-				URL:         "https://huggingface.co/datasets/squad",
+				Title:       testBibDatasetTitle,
+				Authors:     []Author{{Name: testBibDatasetAuthor}},
+				Published:   testBibDatasetDate,
+				URL:         testBibDatasetURL,
 			},
 			wantPrefix: bibtexEntryMisc + bibtexEntryOpen,
 		},

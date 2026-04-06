@@ -14,7 +14,7 @@ const (
 	logMsgPluginInitialized = "plugin initialized"
 	logMsgPluginSkipped     = "plugin skipped (disabled)"
 
-	errDetailPluginInit = "plugin initialization failed"
+	errDetailPluginInitSource = "%s"
 )
 
 // ---------------------------------------------------------------------------
@@ -42,12 +42,18 @@ func PluginFactories() map[string]PluginFactory {
 // ---------------------------------------------------------------------------
 
 // InitializePlugins creates and initializes all enabled source plugins from
-// the given config. It iterates cfg.Sources, looks up each source ID in the
-// factory map, creates the plugin, and calls Initialize. Returns the resulting
-// plugin map or an error on the first plugin that fails to initialize.
-// Unknown source IDs in config are silently skipped.
+// the given config using the default plugin factories. It iterates cfg.Sources,
+// looks up each source ID in the factory map, creates the plugin, and calls
+// Initialize. Returns the resulting plugin map or an error on the first plugin
+// that fails to initialize. Unknown source IDs in config are silently skipped.
 func InitializePlugins(cfg *Config, logger *slog.Logger) (map[string]SourcePlugin, error) {
-	factories := PluginFactories()
+	return InitializePluginsWithFactories(cfg, PluginFactories(), logger)
+}
+
+// InitializePluginsWithFactories is like InitializePlugins but accepts a
+// custom factory map. This allows tests to inject mock factories for error
+// path coverage.
+func InitializePluginsWithFactories(cfg *Config, factories map[string]PluginFactory, logger *slog.Logger) (map[string]SourcePlugin, error) {
 	plugins := make(map[string]SourcePlugin, len(cfg.Sources))
 
 	for sourceID, sourceCfg := range cfg.Sources {
@@ -65,7 +71,7 @@ func InitializePlugins(cfg *Config, logger *slog.Logger) (map[string]SourcePlugi
 
 		plugin := factory()
 		if err := plugin.Initialize(context.Background(), sourceCfg); err != nil {
-			return nil, fmt.Errorf("%s: %s: %w", errDetailPluginInit, sourceID, err)
+			return nil, fmt.Errorf("%w: "+errDetailPluginInitSource+": %w", ErrPluginInit, sourceID, err)
 		}
 
 		plugins[sourceID] = plugin

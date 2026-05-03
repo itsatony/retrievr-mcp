@@ -116,7 +116,14 @@ func NewServer(
 	mux := http.NewServeMux()
 	mux.HandleFunc(healthEndpointPath, s.handleHealth)
 	mux.HandleFunc(versionEndpointPath, s.handleVersion)
+	// Register the MCP handler at both "/mcp" and "/mcp/" so reverse
+	// proxies that normalize a trailing slash onto empty paths (notably
+	// Conduit's singleJoiningSlash) still hit the streamable-HTTP
+	// server. Go's http.ServeMux does NOT canonicalize "/mcp/" to "/mcp"
+	// when a bare "/mcp" pattern is registered — it returns 404. Two
+	// explicit registrations avoid the 404 without changing Conduit.
 	mux.Handle(mcpEndpointPath, mcpHTTP)
+	mux.Handle(mcpEndpointPath+"/", mcpHTTP)
 
 	// Prometheus metrics endpoint (only if metrics are enabled).
 	if metrics != nil {

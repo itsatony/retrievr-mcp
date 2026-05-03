@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] - 2026-04-21
+
+### Fixed
+- **HTTP routing accepts both `/mcp` and `/mcp/`.** Go's `http.ServeMux` treats `mux.Handle("/mcp", …)` as an exact match and does not canonicalise a trailing slash — requests to `/mcp/` returned `404`. Reverse proxies that normalise empty remaining paths to `"/"` (notably Conduit's `singleJoiningSlash`) always forward as `.../mcp/`, so retrievr appeared dead behind a gateway even when it was perfectly healthy for direct `/mcp` callers. Registering the same `StreamableHTTPServer` handler against `/mcp/` as well closes the gap without changing upstream behavior. One-line change in `rtv.server.go`.
+
 ## [1.1.0] - 2026-04-06
 
 ### Added

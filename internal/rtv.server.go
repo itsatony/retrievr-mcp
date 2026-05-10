@@ -99,9 +99,13 @@ func NewServer(
 	mcpSrv.AddTool(GetToolDefinition(), NewGetHandler(router))
 	mcpSrv.AddTool(ListSourcesToolDefinition(), NewListSourcesHandler(router))
 
-	// Create StreamableHTTPServer as an http.Handler with request ID injection.
+	// Create StreamableHTTPServer as an http.Handler with request ID
+	// injection AND per-tenant credential header extraction
+	// (X-Retrievr-Cred-<source>). Order matters only for log output —
+	// both write to ctx independently.
 	mcpHTTP := server.NewStreamableHTTPServer(mcpSrv,
 		server.WithHTTPContextFunc(RequestIDContextFunc()),
+		server.WithHTTPContextFunc(PerRequestCredsContextFunc()),
 	)
 
 	// Build the HTTP mux with all endpoints.

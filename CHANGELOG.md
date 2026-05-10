@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] - 2026-05-10
+
+Minor release. Adds a multi-tenant authentication mode where the server
+process NEVER carries source credentials — each tenant supplies their
+own keys per-request via HTTP headers (or per-call via ctx). Existing
+`hybrid` deployments are unaffected; the new `per_request` mode is
+strictly opt-in.
+
+### Added
+
+- **`auth.mode`** config key with three modes:
+  - `hybrid` (default; backward-compatible) — YAML `sources.<id>.api_key`
+    + `RETRIEVR_<SOURCE>_API_KEY` env overrides act as fallbacks when
+    no per-call credential is attached.
+  - `per_request` — multi-tenant gateway. YAML api_keys are CLEARED at
+    `LoadConfig`, env-var overrides are skipped, and any required-auth
+    source called without ctx-attached credentials returns
+    `ErrCredentialRequired`. Each request must carry its own keys via
+    `X-Retrievr-Cred-<source>` headers (HTTP/MCP transport) or via
+    `WithCredentials` (library callers).
+  - `server_side` — YAML api_keys honored, ctx credentials IGNORED.
+- **`X-Retrievr-Cred-<source>` HTTP header convention** for per-tenant
+  credentials. The new `PerRequestCredsContextFunc` HTTP context-func
+  extracts these headers into a ctx-attached map. Wired by default on
+  the StreamableHTTPServer.
+- **`ClearServerCredentials`** — exported helper that wipes any
+  `sources.<id>.api_key` values that may have leaked into the YAML.
+  Idempotent; returns cleared source IDs for security-warning logs.
+- 8 new unit tests covering the auth-mode resolver, server-side
+  credential clearing, and the HTTP header → ctx extraction.
+
+### Changed
+
+- `LoadConfig` branches on `cfg.Auth.ResolvedAuthMode()`:
+  `per_request` → clear server credentials + skip env overrides;
+  `server_side` / `hybrid` → existing `applyEnvOverrides` flow.
+
+### Migration notes
+
+- **No action required for existing single-tenant deployments.** Default
+  mode is `hybrid`, identical to v2.0.x behavior.
+- **For multi-tenant gateways**, set `auth.mode: per_request`, remove
+  `sources.<id>.api_key` values, and update clients to pass keys via
+  `X-Retrievr-Cred-<source>` headers per request.
+
 ## [2.0.1] - 2026-05-10
 
 Patch release. Migrates the 7 cycle-1 E2E pipeline tests to v2 shape

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -31,6 +32,46 @@ const (
 func RequestIDContextFunc() server.HTTPContextFunc {
 	return func(ctx context.Context, _ *http.Request) context.Context {
 		return WithRequestID(ctx, GenerateRequestID())
+	}
+}
+
+// PerRequestCredsContextFunc returns an HTTPContextFunc that extracts
+// per-request source credentials from HTTP headers and attaches them to
+// the request context via retrievr.WithCredentials.
+//
+// Header convention (case-insensitive): X-Retrievr-Cred-<source-id>
+// where source-id matches the configured plugin ID (e.g. exa, brave,
+// linkup, firecrawl, github, perplexity). Empty values are dropped.
+//
+// This is the multi-tenant gateway path: each tenant supplies their own
+// keys per request, the server NEVER persists them, and all credentials
+// die with the request context.
+func PerRequestCredsContextFunc() server.HTTPContextFunc {
+	return func(ctx context.Context, r *http.Request) context.Context {
+		if r == nil || r.Header == nil {
+			return ctx
+		}
+		creds := map[string]string{}
+		for k, vals := range r.Header {
+			if len(vals) == 0 || vals[0] == "" {
+				continue
+			}
+			// http.Header normalizes "x-retrievr-cred-EXA" to
+			// "X-Retrievr-Cred-Exa" — strip the canonical prefix and
+			// lowercase the source ID for plugin-ID match.
+			if !strings.EqualFold(k[:min(len(k), len(HeaderCredPrefix))], HeaderCredPrefix) {
+				continue
+			}
+			if len(k) <= len(HeaderCredPrefix) {
+				continue
+			}
+			sourceID := strings.ToLower(k[len(HeaderCredPrefix):])
+			creds[sourceID] = vals[0]
+		}
+		if len(creds) == 0 {
+			return ctx
+		}
+		return WithPerCallCredsMap(ctx, creds)
 	}
 }
 

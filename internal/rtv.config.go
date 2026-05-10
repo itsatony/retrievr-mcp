@@ -83,6 +83,52 @@ type Config struct {
 	Audit      AuditConfig             `yaml:"audit"`
 	Snapshot   SnapshotConfig          `yaml:"snapshot"`
 	Enrichment EnrichmentConfig        `yaml:"enrichment"`
+	Auth       AuthConfig              `yaml:"auth"`
+}
+
+// AuthConfig governs how API keys flow into source plugins.
+//
+// Modes:
+//
+//   - "hybrid" (default; backward-compatible): YAML sources.<id>.api_key
+//     and RETRIEVR_<SOURCE>_API_KEY env overrides are used as fallbacks
+//     when no per-call credential is attached. Single-tenant operator
+//     deployments.
+//
+//   - "per_request" (multi-tenant gateway mode): YAML api_keys are
+//     CLEARED at LoadConfig time, env-var overrides are skipped, and
+//     any required-auth source called without ctx-attached credentials
+//     returns ErrCredentialRequired. Each request must carry its own
+//     keys via X-Retrievr-Cred-<source> headers (HTTP/MCP transport)
+//     or via ctx WithCredentials (library callers).
+//
+//   - "server_side": YAML api_keys are honored, ctx credentials are
+//     IGNORED. Forbids clients from supplying keys.
+//
+// Default empty → "hybrid".
+type AuthConfig struct {
+	Mode string `yaml:"mode" validate:"omitempty,oneof=hybrid per_request server_side"`
+}
+
+// Authentication mode constants.
+const (
+	AuthModeHybrid     = "hybrid"
+	AuthModePerRequest = "per_request"
+	AuthModeServerSide = "server_side"
+
+	// HeaderCredPrefix is the case-insensitive HTTP header prefix for
+	// per-request source credentials. Append the lowercase source ID
+	// (e.g. "X-Retrievr-Cred-Exa", "X-Retrievr-Cred-Brave"). Multi-tenant
+	// gateway mode reads these into ctx via WithCredentials.
+	HeaderCredPrefix = "X-Retrievr-Cred-"
+)
+
+// ResolvedAuthMode returns the active auth mode, defaulting empty → hybrid.
+func (a AuthConfig) ResolvedAuthMode() string {
+	if a.Mode == "" {
+		return AuthModeHybrid
+	}
+	return a.Mode
 }
 
 // EUModeConfig governs jurisdictional gating across all providers (Cycle 2).
@@ -302,9 +348,37 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
-	applyEnvOverrides(&cfg)
+	// Auth mode gates server-side credential usage. In per_request mode
+	// the server MUST NOT carry credentials — each tenant supplies their
+	// own per-call (via headers or ctx). In server_side mode env-var
+	// overrides are still applied but ctx credentials are later ignored
+	// by plugins. In hybrid (default) mode both paths work.
+	switch cfg.Auth.ResolvedAuthMode() {
+	case AuthModePerRequest:
+		ClearServerCredentials(&cfg)
+		// Env overrides skipped: a multi-tenant gateway must not absorb
+		// server-process secrets into request paths.
+	case AuthModeServerSide, AuthModeHybrid:
+		applyEnvOverrides(&cfg)
+	}
 
 	return &cfg, nil
+}
+
+// ClearServerCredentials wipes any sources.<id>.api_key values that may
+// have leaked into the YAML in per_request deployments. Returns the list
+// of source IDs that had a non-empty key cleared so the caller can log
+// a warning. Idempotent.
+func ClearServerCredentials(cfg *Config) []string {
+	cleared := []string{}
+	for sourceID, sourceCfg := range cfg.Sources {
+		if sourceCfg.APIKey != "" {
+			sourceCfg.APIKey = ""
+			cfg.Sources[sourceID] = sourceCfg
+			cleared = append(cleared, sourceID)
+		}
+	}
+	return cleared
 }
 
 // applyEnvOverrides checks for RETRIEVR_{SOURCE_ID}_API_KEY environment

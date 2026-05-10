@@ -25,20 +25,23 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	ToolDescSearch = "Search academic papers, AI models, and datasets across 10 sources: " +
-		"ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, " +
-		"CrossRef, DBLP, NASA ADS, and bioRxiv. " +
-		"Returns merged, deduplicated results with title, authors, abstract, URL, " +
-		"DOI, and citation count. Supports date filters and sorting by relevance, " +
-		"date, or citations."
+	ToolDescSearch = `Search across published information: papers, AI models, datasets, web pages, news, code repos, and encyclopedia articles. 17 sources behind one tool.
 
-	ToolDescGet = "Get full details for a publication by its prefixed ID " +
-		"(e.g., \"arxiv:2401.12345\", \"crossref:10.1038/s41586-024-07487-w\", " +
-		"\"ads:2024ApJ...123..456A\"). Returns metadata, abstract, and optionally " +
-		"BibTeX, full text, references, or citations."
+Use rtv_search when you need: academic papers, code provenance, web context, encyclopedia lookup, mixed evidence-gathering. Do NOT use for: real-time data (prices, weather), private documents, authenticated services.
 
-	ToolDescListSources = "List available academic sources with their capabilities, " +
-		"content types, rate limits, and supported output formats."
+content_type: "paper" (peer-reviewed/preprints), "model" (HuggingFace), "dataset", or "any" (mixed). Wave-1 web/code/encyclopedia results surface via "any".
+
+intent (recommended over manual sources): "deep_research" fans across academic + web; "quick_lookup" hits one fast source per type; "primary_source" returns DOI-backed OA papers only; "code_provenance" targets GitHub + CS literature; "news"/"reference" target their respective providers.
+
+eu_mode: not a tool param — set server-side. eu_strict admits only EU-resident sources (Linkup, DBLP, Europe PMC) plus optional public-research-infrastructure tier.
+
+compat: "v1" (default) returns Publication-shaped results (title/authors/doi/citation_count flat). "v2" returns Result with kind discriminator + per-kind blocks (kind="paper" populates result.paper.{doi, citation_count, ...}; kind="web" populates result.web.{site_name, ...}; kind="code" populates result.code.{repo, stars, ...}). Always check kind before reading kind-specific fields.
+
+sources_failed lists providers that errored. sources_skipped lists providers gated out by eu_mode with a reason. audit_ref correlates the response to retrievr's audit log.`
+
+	ToolDescGet = `Fetch full details for a single result by its prefixed ID (e.g. "arxiv:2401.12345", "github:owner/repo", "wikipedia:Attention_(machine_learning)", "openalex:W4366341216"). Returns metadata, abstract/extract, and optionally BibTeX, full text, references, or citations depending on what the source supports.`
+
+	ToolDescListSources = `List every registered source with capabilities, residency posture (region + DPA status), supported result kinds (paper/web/code/...), query intents, rate limits, and free-tier flag. Use this to pick sources by intent + jurisdiction without trial-and-error.`
 )
 
 // ---------------------------------------------------------------------------
@@ -57,6 +60,14 @@ const (
 	FieldID          = "id"
 	FieldInclude     = "include"
 	FieldFormat      = "format"
+	FieldIntent      = "intent"
+	FieldCompat      = "compat"
+)
+
+// Compat values for the rtv_search MCP tool's response shape.
+const (
+	CompatV1 = "v1" // legacy Publication shape (default; matches v1.5.0 wire)
+	CompatV2 = "v2" // fat-struct Result shape with Kind discriminator
 )
 
 // ---------------------------------------------------------------------------
@@ -171,6 +182,22 @@ func SearchToolDefinition() mcp.Tool {
 		mcp.WithObject(FieldCredentials,
 			mcp.Description(FieldDescCredentials),
 		),
+		mcp.WithString(FieldIntent,
+			mcp.Description("Drives source selection + fallback chains: deep_research | quick_lookup | primary_source | code_provenance | news | reference. Empty = use defaults."),
+			mcp.Enum(
+				string(IntentDeepResearch),
+				string(IntentQuickLookup),
+				string(IntentPrimarySource),
+				string(IntentCodeProvenance),
+				string(IntentNews),
+				string(IntentReference),
+			),
+		),
+		mcp.WithString(FieldCompat,
+			mcp.Description("Response shape: \"v1\" (default; legacy Publication shape) or \"v2\" (Result with kind discriminator + per-kind data blocks)."),
+			mcp.DefaultString(CompatV1),
+			mcp.Enum(CompatV1, CompatV2),
+		),
 	)
 }
 
@@ -231,6 +258,8 @@ func NewSearchHandler(router *Router) server.ToolHandlerFunc {
 		sortOrder := SortOrder(req.GetString(FieldSort, string(SortRelevance)))
 		limit := req.GetInt(FieldLimit, DefaultSearchLimit)
 		offset := req.GetInt(FieldOffset, DefaultSearchOffset)
+		intent := Intent(req.GetString(FieldIntent, ""))
+		compat := req.GetString(FieldCompat, CompatV1)
 
 		// Extract optional filters and credentials from raw arguments.
 		args := req.GetArguments()
@@ -244,6 +273,17 @@ func NewSearchHandler(router *Router) server.ToolHandlerFunc {
 			Sort:        sortOrder,
 			Limit:       limit,
 			Offset:      offset,
+			Intent:      intent,
+		}
+
+		// v2 callers opt into the fat-struct shape; v1 (default) preserves
+		// the cycle-1 Publication wire format.
+		if compat == CompatV2 {
+			result, err := router.SearchV2(ctx, params, sources, creds)
+			if err != nil {
+				return mcp.NewToolResultError(NewMCPErrorFromErr(err, "")), nil
+			}
+			return marshalToolResult(result)
 		}
 
 		result, err := router.Search(ctx, params, sources, creds)

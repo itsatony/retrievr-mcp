@@ -356,6 +356,27 @@ sources:
     timeout: "10s"
     extra:
       servers: "biorxiv,medrxiv"
+  exa:
+    enabled: false
+    timeout: "10s"
+  brave:
+    enabled: false
+    timeout: "10s"
+  linkup:
+    enabled: false
+    timeout: "10s"
+  firecrawl:
+    enabled: false
+    timeout: "10s"
+  github:
+    enabled: false
+    timeout: "10s"
+  wikipedia:
+    enabled: true
+    timeout: "10s"
+  unpaywall:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

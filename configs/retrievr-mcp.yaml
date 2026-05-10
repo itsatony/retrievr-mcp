@@ -91,3 +91,69 @@ sources:
     rate_limit_burst: 3
     extra:
       servers: "biorxiv,medrxiv"
+
+  # Cycle-2 Wave-1 providers.
+  exa:
+    enabled: false               # Set true + supply api_key (or RETRIEVR_EXA_API_KEY env) to activate
+    api_key: ""
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      default_type: "auto"       # auto | neural | keyword
+      include_text: "true"       # fetch result.text inline (snippet enrichment)
+
+  brave:
+    enabled: false               # Set true + supply api_key (or RETRIEVR_BRAVE_API_KEY env)
+    api_key: ""
+    timeout: "10s"
+    rate_limit: 1.0              # Free-tier soft cap; bump for Pro subscriptions
+    rate_limit_burst: 1
+    extra:
+      country: "ALL"
+      safesearch: "moderate"     # off | moderate | strict
+
+  linkup:
+    enabled: false               # EU-resident; primary admit under eu_strict
+    api_key: ""                  # Bearer token; or RETRIEVR_LINKUP_API_KEY env
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      depth: "standard"          # standard | deep (deep costs more)
+
+  firecrawl:
+    enabled: false
+    api_key: ""                  # Bearer token; or RETRIEVR_FIRECRAWL_API_KEY env
+    timeout: "15s"               # Scrape can be slow on heavy pages
+    rate_limit: 2.0
+    rate_limit_burst: 2
+    extra:
+      include_markdown: "false"  # "true" pulls per-result markdown bodies
+
+  github:
+    enabled: false
+    api_key: ""                  # Fine-grained PAT (read-only public_repo); or RETRIEVR_GITHUB_API_KEY env
+    timeout: "10s"
+    rate_limit: 0.5              # 30 req/min PAT-authenticated search ceiling
+    rate_limit_burst: 1
+    extra:
+      sort: "stars"
+      order: "desc"
+
+  wikipedia:
+    enabled: true                # Free / no auth required
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+    extra:
+      lang: "en"                 # ISO 639-1
+      user_agent: "retrievr/1.6 (+https://github.com/itsatony/retrievr-mcp; contact@example.com)"
+
+  unpaywall:
+    enabled: false               # Wired as enrichment hook via enrichment.unpaywall
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      email: "contact@example.com"  # REQUIRED by Unpaywall TOS

@@ -99,8 +99,8 @@ func TestPublicSurfaceCompiles(t *testing.T) {
 	var sink retrievr.AuditSink = retrievr.NoopAuditSink()
 	sink.Emit(context.Background(), retrievr.AuditEvent{
 		AuditRef: "evt_test",
-		Mode:     retrievr.EUModeOff,
-		Intent:   retrievr.IntentQuickLookup,
+		Mode:     string(retrievr.EUModeOff),
+		Intent:   string(retrievr.IntentQuickLookup),
 	})
 
 	// Errors are typed sentinels.
@@ -123,10 +123,10 @@ func TestPublicSurfaceCompiles(t *testing.T) {
 		t.Fatal("Resolve on empty registry must miss")
 	}
 
-	// ResidencyTag is constructible.
+	// ResidencyTag is constructible (cycle 2 made Region/DPAStatus typed enums).
 	_ = plugin.ResidencyTag{
-		Region:    string(retrievr.RegionEU),
-		DPAStatus: "signed",
+		Region:    retrievr.RegionEU,
+		DPAStatus: retrievr.DPASigned,
 	}
 
 	// Middleware composition.

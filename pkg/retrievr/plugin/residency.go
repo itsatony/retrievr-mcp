@@ -1,31 +1,33 @@
 package plugin
 
-import "time"
+import "github.com/itsatony/retrievr-mcp/internal"
 
-// ResidencyTag declares a provider's data-residency posture for EU-mode
-// gating. Hook #1 of the six EU-mode audit hooks (see plan §3.7).
-//
-// Cycle-1 status: type defined, not yet returned by SourcePlugin. Cycle 2
-// adds a Residency() method to the SourcePlugin interface and populates a
-// tag for every registered provider; CI fails if LastVerifiedAt is older
-// than 90 days.
-type ResidencyTag struct {
-	// Region is the high-level jurisdiction classification (EU, US, UK-adequacy,
-	// public-research-infrastructure, etc.). String here rather than the
-	// retrievr.Region enum to avoid an import cycle (retrievr → plugin → retrievr).
-	// The retrievr package re-exports Region constants; callers compare strings.
-	Region string `json:"region"`
+// ResidencyTag re-exports internal.ResidencyTag — the canonical residency
+// posture record. Cycle 2 (v1.6.0) added a Residency() method to
+// SourcePlugin and made this the source of truth for the EU-mode gate
+// (Hook #1, plan §3.7).
+type ResidencyTag = internal.ResidencyTag
 
-	// DPAStatus records the contractual posture: "signed", "covered-by-scc",
-	// "n/a" (e.g., public-research-infrastructure), or "unknown".
-	DPAStatus string `json:"dpa_status,omitempty"`
+// Region re-exports the region enum + values for cross-module callers.
+type Region = internal.Region
 
-	// SubprocessorURL is the provider's published sub-processor list URL,
-	// used by adopters' compliance teams to monitor for changes.
-	SubprocessorURL string `json:"subprocessor_url,omitempty"`
+// Region values.
+const (
+	RegionEU             = internal.RegionEU
+	RegionUKAdequacy     = internal.RegionUKAdequacy
+	RegionUS             = internal.RegionUS
+	RegionGlobal         = internal.RegionGlobal
+	RegionPublicResearch = internal.RegionPublicResearch
+	RegionUnknown        = internal.RegionUnknown
+)
 
-	// LastVerifiedAt is when the provider's residency claim was last
-	// verified by a maintainer. CI warns when older than 90 days, hard-fails
-	// at 180 days.
-	LastVerifiedAt time.Time `json:"last_verified_at"`
-}
+// DPAStatus re-exports the contractual-posture enum.
+type DPAStatus = internal.DPAStatus
+
+// DPAStatus values.
+const (
+	DPASigned        = internal.DPASigned
+	DPACoveredBySCC  = internal.DPACoveredBySCC
+	DPANotApplicable = internal.DPANotApplicable
+	DPAUnknown       = internal.DPAUnknown
+)

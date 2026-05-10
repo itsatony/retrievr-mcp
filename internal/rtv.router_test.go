@@ -61,6 +61,9 @@ func (m *mockPlugin) Capabilities() SourceCapabilities      { return m.capabilit
 func (m *mockPlugin) NativeFormat() ContentFormat           { return m.nativeFormat }
 func (m *mockPlugin) AvailableFormats() []ContentFormat     { return m.availableFormats }
 func (m *mockPlugin) Health(_ context.Context) SourceHealth { return m.healthState }
+func (m *mockPlugin) Residency() ResidencyTag {
+	return ResidencyTag{Region: RegionUnknown, DPAStatus: DPAUnknown}
+}
 
 func (m *mockPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if m.searchFunc != nil {

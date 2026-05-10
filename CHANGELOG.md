@@ -5,6 +5,152 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-05-10
+
+Cycle 2 of the v2 multi-cycle plan (`project_plan/retrievr_v2.md`). Headline:
+**Wave-1 providers + EU-GDPR mode + v2 result shape**. Source count grows
+from 10 → 17 (Exa, Brave, Linkup, Firecrawl, GitHub, Wikipedia, Unpaywall).
+EU-mode platform with all 6 audit hooks ships behind the existing public
+API. v2 fat-struct `Result` shape opt-in via MCP `compat: "v2"` arg or
+`Client.SearchV2()`; default v1 wire format unchanged for byte-stable
+backward compat.
+
+### Added — Wave-1 providers
+
+- **Exa.ai** (`exa`) — neural + keyword web/news search. POST /search with
+  `x-api-key`. `Kinds: [web, news]`, `QueryIntents: [quick_lookup, deep_research]`.
+  US-resident; blocked under `eu_strict`.
+- **Brave Search** (`brave`) — independent 35B+ page index. GET
+  /res/v1/web/search with `X-Subscription-Token`. Merges web + news sections
+  with `kind` override per result. US-resident; blocked under `eu_strict`.
+- **Linkup** (`linkup`) — **EU-resident** web search (Linkup SAS, France)
+  with signed DPA. POST /v1/search with Bearer auth. The headline EU-strict
+  primary web provider — only Wave-1 source admitted under `eu_strict`.
+- **Firecrawl** (`firecrawl`) — web search + per-URL markdown extraction.
+  POST /v1/search with Bearer. Cycle-3 will activate the post-merge
+  enrichment hook (toggle in config: `enrichment.firecrawl.enabled`).
+  US-resident; blocked under `eu_strict`.
+- **GitHub Code Search** (`github`) — public repository search via
+  GET /search/repositories with PAT. `Kinds: [code]`,
+  `QueryIntents: [code_provenance]`. Maps repo metadata (stars, forks,
+  language, topics, license, last_commit) into `CodeData`.
+- **Wikipedia** (`wikipedia`) — encyclopedia search via the public
+  MediaWiki API. Free / no auth (polite User-Agent required).
+  `Kinds: [encyclopedia]`, `QueryIntents: [reference, quick_lookup]`.
+  Public-research-infrastructure tier; admitted under `eu_strict` only with
+  `IncludePublicResearch=true`.
+- **Unpaywall** (`unpaywall`) — DOI → OA PDF resolver, wired as a
+  **post-merge enrichment hook**. When paper results have a DOI but no
+  upstream PDF link, the Router consults Unpaywall to fill `PDFURL` +
+  `License` + `OpenAccess`. Toggle via `enrichment.unpaywall` and the
+  `Router.WithUnpaywallEnrichment(*UnpaywallPlugin)` option.
+
+### Added — EU-mode platform (all 6 audit hooks per plan §3.7)
+
+- **Hook #1 — Provider residency tags.** `SourcePlugin.Residency() ResidencyTag`
+  is now part of the interface; every plugin declares region (EU /
+  UK-adequacy / US / public-research-infrastructure / unknown), DPA status
+  (signed / covered-by-scc / n/a / unknown), subprocessor URL, and
+  last-verified date. Surfaced in `rtv_list_sources`.
+- **Hook #2 — Mode gate pre-fanout.** Configurable via
+  `Router.WithEUMode(mode, includePublicResearch)`. In `eu_strict` mode,
+  non-EU providers are filtered out before fan-out and surface in
+  `MergedSearchResult.SourcesSkipped` with `reason: "eu_strict_mode"`.
+- **Hook #3 — Outbound query audit log.** Every `Router.Search` call emits
+  an `AuditEvent` with `audit_ref`, mode, intent, hashed query (sha256:16,
+  default), invoked/skipped/failed providers, fallback flags. Default sink
+  routes to slog.Info; opt-in plaintext query via
+  `WithAuditLogQueryPlaintext(true)`.
+- **Hook #4 — Outbound HTTP hygiene.** New `internal.NewEgressClient(timeout)`
+  builds an `*http.Client` with neutral User-Agent (`retrievr/<version> (+repo)`),
+  no Referer / X-Forwarded-For / X-Real-IP / Forwarded headers, and no
+  cookie jar. All Wave-1 plugins use it; cycle-3 migrates the 10 cycle-1
+  scholarly plugins.
+- **Hook #5 — Refusal path.** `Router.Search` rejects calls with
+  `eu_strict + explicit non-EU sources` upfront with
+  `*EUModeProviderConflictError` (satisfies `errors.Is(err, ErrEUModeProviderConflict)`).
+  Structured `Requested` / `Blocked` / `Mode` fields let callers render
+  remediation messages without parsing strings.
+- **Hook #6 — Config drift guard.** `VerifyProvidersSnapshot` computes
+  SHA256 of `providers.yaml` and compares to a checked-in signature file.
+  Mismatch warns by default; `Strict: true` upgrades to fatal
+  (`ErrConfigDriftDetected`). No-op when files unset.
+
+### Added — v2 result shape
+
+- **`Result` fat struct** with `Kind` discriminator (paper / model / dataset /
+  web / news / code / encyclopedia) + per-kind data blocks (`PaperData`,
+  `WebData`, `CodeData`, etc.). Lives in `internal/rtv.result.go`; aliased
+  from `pkg/retrievr/result.go`.
+- **`Client.SearchV2(ctx, params, sources)`** returns `*MergedSearchResultV2`
+  with `[]Result`. Internally wraps `Search` and runs `PublicationsToResults`.
+- **`Router.toResult(p, rank)`** converter — rank-based score
+  (`1 / (1 + rank)`), domain auto-derived from URL, snippet auto-truncated
+  from Abstract for non-paper kinds, provenance tagged from plugin's
+  `Residency()`. 17 SourceMetadata keys for plugins to populate kind-
+  specific data.
+- **MCP `rtv_search` `compat` arg.** Default `"v1"` keeps the cycle-1 wire
+  shape byte-stable. Opt in to `"v2"` for the new fat-struct response.
+- **MCP `rtv_search` `intent` arg.** Drives Router source selection +
+  fallback chains; values match the `Intent` enum.
+
+### Added — `rtv_list_sources` revamp
+
+`SourceInfo` gains `Kinds`, `QueryIntents`, `Region`, `DPAStatus`,
+`SubprocessorURL`, `FreeTier`, `RequiresKey`. LLM agents and operators
+can now pick sources by intent + jurisdiction without enumerating booleans.
+Updated `ToolDescSearch` to a 30-second LLM-readable description covering
+intent / kind / eu_mode / compat semantics.
+
+### Added — config blocks (top-level)
+
+- `eu_mode: { mode, include_public_research }` — gate configuration
+- `audit: { enabled, log_query_plaintext, sink }` — Hook #3 controls
+- `snapshot: { providers_file, signature_file, strict }` — Hook #6 inputs
+- `enrichment: { unpaywall: {...}, firecrawl: {...} }` — post-merge hooks
+- `sources: { exa, brave, linkup, firecrawl, github, wikipedia, unpaywall }` —
+  7 new provider blocks (all `enabled: false` default; `wikipedia` enabled
+  since it's keyless)
+
+### Changed
+
+- **`SourcePlugin` interface** gained `Residency() ResidencyTag` (breaking
+  for any external implementor; pre-1.0 acceptable).
+- **`SourceCapabilities`** gained `Kinds []ResultKind` (informational; cycle-1
+  plugins return empty → converter defaults to `KindPaper`).
+- **`MergedSearchResult`** gained `SourcesSkipped`, `AuditRef`,
+  `FallbackWalked`, `EUFallbackUsed` (additive, JSON-omitempty preserves
+  v1 callers' byte-stable response).
+- **`NewRouter`** signature gained variadic `opts ...RouterOption` —
+  existing 8-arg callers unaffected. New options: `WithEUMode`,
+  `WithAuditSink`, `WithAuditLogQueryPlaintext`, `WithUnpaywallEnrichment`.
+- **`SourceCount`** 10 → 17.
+
+### Tests
+
+- 14 new EU-mode conformance tests (`internal/rtv.eumode_test.go`) covering
+  every hook end-to-end including HTTP hygiene round-trip + config-drift
+  scenarios.
+- 8 new converter tests (`internal/rtv.result_convert_test.go`) covering
+  paper-default, web-via-SourceMetadata, code with stars, kind override,
+  score decay, SearchV2 happy path, snippet truncation.
+- 11 new Exa unit tests + live smoke (`TestExa_LiveSmoke`).
+- 11 new Brave unit tests + live smoke (`TestBrave_LiveSmoke`).
+- 13 new Linkup unit tests + **`TestEUMode_StrictAdmitsLinkupRefusesExa`**
+  (the cycle-2 EU-mode end-to-end conformance test) + live smoke.
+- 8 new Firecrawl unit tests + live smoke.
+- 9 new GitHub unit tests + live smoke.
+- 6 new Wikipedia unit tests + live smoke (keyless).
+- 9 new Unpaywall unit tests including
+  **`TestRouter_EnrichWithUnpaywall_Integration`** that proves the
+  post-merge enrichment loop fills missing PDFURLs end-to-end.
+
+### Sign-up gates (cycle 3 / Wave 2 prep)
+
+Wave-2 (cycle 3) needs: Mixedbread (EU-resident reranker, headline EU-mode
+companion), Perplexity Sonar (already in `~/code/.creds`), Cohere
+(already; auto-disabled in `eu_strict`).
+
 ## [1.5.0] - 2026-05-10
 
 Cycle 1 of the v2 multi-cycle plan (`project_plan/retrievr_v2.md`). Headline

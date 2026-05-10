@@ -455,3 +455,178 @@ credential surface end-to-end.
   regression independently from the MCP server's own evolution.
 - Cycle 2 may add `--stream` (paired with `Client.Stream()`) and
   `--eu-mode=strict` flags as the upstream surface gains those features.
+
+---
+
+## ADR-018: Three-State EU-GDPR Mode (off / eu_preferred / eu_strict)
+
+**Status:** Accepted (cycle 2, v1.6.0)
+
+### Context
+
+Customers in regulated markets need a verifiable assertion that retrievr's
+fan-out only touches EU-resident providers. A binary "EU-only" toggle is
+either too restrictive (forces operators to choose between EU compliance
+and useful coverage of OA scholarly metadata hosted by US non-profits) or
+too permissive (relies on operator-set-and-forget config that's invisible
+to a downstream auditor).
+
+### Decision
+
+Three-state enum — `off | eu_preferred | eu_strict` — with an orthogonal
+`include_public_research` opt-in for the strict mode. `eu_strict` admits
+only EU-resident or UK-adequacy providers by default; the opt-in widens
+admission to public-research-infrastructure providers (ArXiv, OpenAlex,
+CrossRef, Semantic Scholar, PubMed, Wikipedia, Unpaywall) which are
+US-hosted but scientifically public-good metadata. `eu_preferred` admits
+everyone but tries EU first at the result-level (cycle-3 enhancement;
+cycle-2 admits everyone in `eu_preferred`). `off` is no-op.
+
+### Consequences
+
+- Auditable contract: the gate's admission decision is recorded per call
+  in `MergedSearchResult.SourcesSkipped` and the `AuditEvent`, so a
+  downstream auditor can reconstruct mode + skipped-providers from logs.
+- Customers in regulated markets get a single config knob with predictable
+  semantics. Customers without that constraint pay no cost (default `off`).
+- The `include_public_research` flag is documented as a known relaxation
+  — not a hidden default — so adopters explicitly accept the cross-border
+  scientific-metadata flow when they enable it.
+
+---
+
+## ADR-019: Centralized Residency Source-of-Truth in `internal`
+
+**Status:** Accepted (cycle 2, v1.6.0)
+
+### Context
+
+Cycle 1 introduced `ResidencyTag` in `pkg/retrievr/plugin/residency.go` as
+a forward-compatible stub. Cycle 2's EU-mode gate (Hook #2) needs to read
+residency from the `SourcePlugin` interface, but that interface lives in
+`internal` — and Go's `internal` visibility rule prevents `internal` from
+importing `pkg/retrievr/plugin` (which already imports `internal` for the
+SourcePlugin alias).
+
+### Decision
+
+Move residency types — `Region`, `DPAStatus`, `ResidencyTag` — into
+`internal/rtv.residency.go` as the canonical source of truth. The public
+`pkg/retrievr/plugin/residency.go` and `pkg/retrievr/eumode.go` re-export
+via type aliases. A single `residencyVerifiedAt` constant in
+`internal/rtv.plugin_residency.go` lets a quarterly residency audit bump
+one date variable rather than touching every plugin.
+
+### Consequences
+
+- `SourcePlugin.Residency()` reads typed enums (not strings), eliminating
+  a class of typos at provider authoring time.
+- External Go consumers of `pkg/retrievr` see the same types via aliases
+  — no surface change.
+- A single grep for `residencyVerifiedAt` answers "when was the residency
+  table last reviewed" without parsing per-file dates.
+
+---
+
+## ADR-020: Router-Side Publication→Result Conversion (vs. Plugin-Side Emission)
+
+**Status:** Accepted (cycle 2, v1.6.0)
+
+### Context
+
+The plan called for plugins to emit the v2 fat-struct `Result` directly.
+That would have required updating every cycle-1 plugin's result builder
+to set `Kind = KindPaper` + `Paper: &PaperData{...}` plus newly-required
+core fields (Snippet, Domain, Language, Score) — substantial mechanical
+churn across 10 well-tested plugins.
+
+### Decision
+
+Plugins continue to emit `Publication`. Wave-1 plugins stuff kind-specific
+data (snippet, domain, stars, repo, language) into
+`Publication.SourceMetadata` using documented keys. The Router runs a
+**post-merge converter** (`Router.toResult`) that:
+
+- Picks `Kind` from `Capabilities().Kinds[0]`, with a per-result override
+  via `SourceMetadata["kind"]`.
+- Auto-derives Domain from URL when not set, auto-truncates Snippet from
+  Abstract for non-paper kinds, computes `Score = 1/(1+rank)` from
+  per-source rank position, attaches `Provenance` from the plugin's
+  `Residency()`.
+- Populates the matching kind-specific data block; leaves others nil.
+
+### Consequences
+
+- Cycle-1 plugins remain byte-stable. Wave-1 plugins emit Publication +
+  SourceMetadata — a tiny additional mapping layer per provider, vastly
+  simpler than dual-shape emission.
+- The converter centralises rank-based scoring + domain extraction +
+  snippet truncation, so future cycles can refine these signals once
+  rather than per-plugin.
+- Cycle-3 may invert this when v1 sunsets and a typed plugin-side `Result`
+  emission justifies the surface change. Until then, the converter is the
+  single source of truth for Result shaping.
+
+---
+
+## ADR-021: MCP `compat` Field for v1↔v2 Wire Coexistence
+
+**Status:** Accepted (cycle 2, v1.6.0)
+
+### Context
+
+ADR-013 promised v1 MCP consumers would stay byte-stable across cycle-1+2.
+v2's fat-struct `Result` is a substantial wire-shape change. We can't
+flip the default without breaking every existing rtv_search caller; we
+can't gate v2 behind a flag day without losing the value of shipping it.
+
+### Decision
+
+The MCP `rtv_search` tool gains an opt-in `compat` field. `"v1"` (default)
+preserves the legacy `Publication`-shaped response. `"v2"` returns
+`MergedSearchResultV2` with `kind`-discriminated `Result`s. `Client.Search`
+and `Client.SearchV2` mirror this dichotomy on the Go side. v2.0.0 will
+sunset `compat: "v1"` with `RTV_COMPAT_V1_SUNSET` per plan §6.1.4.
+
+### Consequences
+
+- LLM agents adopt v2 incrementally — the Wave-1 mixed-kind results
+  (paper + web + code) are dramatically more useful through the v2 surface,
+  giving early adopters a clear migration incentive.
+- v1.6.0 ships zero breaking changes to the MCP wire — every v1.5.0
+  consumer continues to work without code changes.
+- Documentation has to track both shapes. The trade-off is acceptable for
+  one cycle; v2.0.0 retires the v1 shape and reduces docs surface.
+
+---
+
+## ADR-022: Post-Merge Enrichment as Inline Router Hook (Cycle-2 Minimum-Viable)
+
+**Status:** Accepted (cycle 2, v1.6.0)
+
+### Context
+
+Unpaywall fills in OA PDF links on paper results that have a DOI but no
+upstream PDF URL. It's not a search source (no keyword index) — only a
+DOI lookup. Wiring it as a regular fan-out source would make zero sense;
+wiring it as a generic "Enrichment" middleware would require typed
+abstractions that don't exist yet.
+
+### Decision
+
+Cycle 2 ships a **direct Router method** —
+`Router.enrichWithUnpaywall(ctx, pubs)` — invoked post-dedup in
+`Router.Search`. Configuration via `Router.WithUnpaywallEnrichment(*UnpaywallPlugin)`
+option. The Unpaywall plugin remains in the registry (so it surfaces in
+`rtv_list_sources` and gets its residency tag honored by EU-mode) but its
+`Search()` returns empty.
+
+### Consequences
+
+- v1.6.0 ships a working enrichment loop without a half-baked generic
+  abstraction. The implementation is one method + one option + one
+  optional plugin reference on Router.
+- Cycle 3 promotes enrichment to a typed `Enrichment` middleware
+  interface (Firecrawl scrape + future re-rankers will plug into it).
+- The cycle-2 wiring is rapidly removable when the typed interface lands
+  — no data-format churn, only plumbing churn.

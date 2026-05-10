@@ -76,9 +76,85 @@ const (
 
 // Config is the top-level configuration.
 type Config struct {
-	Server  ServerConfig            `yaml:"server" validate:"required"`
-	Router  RouterConfig            `yaml:"router" validate:"required"`
-	Sources map[string]PluginConfig `yaml:"sources" validate:"required,min=1"`
+	Server     ServerConfig            `yaml:"server" validate:"required"`
+	Router     RouterConfig            `yaml:"router" validate:"required"`
+	Sources    map[string]PluginConfig `yaml:"sources" validate:"required,min=1"`
+	EUMode     EUModeConfig            `yaml:"eu_mode"`
+	Audit      AuditConfig             `yaml:"audit"`
+	Snapshot   SnapshotConfig          `yaml:"snapshot"`
+	Enrichment EnrichmentConfig        `yaml:"enrichment"`
+}
+
+// EUModeConfig governs jurisdictional gating across all providers (Cycle 2).
+// See plan §3.7 for the full design and the six audit-hook contract.
+type EUModeConfig struct {
+	// Mode is one of "off" | "eu_preferred" | "eu_strict".
+	// Empty defaults to "off" (cycle-2 default; flips to "eu_preferred" in v2.0.0).
+	Mode string `yaml:"mode" validate:"omitempty,oneof=off eu_preferred eu_strict"`
+
+	// IncludePublicResearch widens eu_strict to admit public-research-
+	// infrastructure providers (ArXiv, OpenAlex, CrossRef, Semantic Scholar,
+	// PubMed, Wikipedia, Unpaywall). Ignored when Mode != eu_strict.
+	IncludePublicResearch bool `yaml:"include_public_research"`
+}
+
+// AuditConfig governs the outbound-query audit log (EU-mode hook #3).
+type AuditConfig struct {
+	// Enabled toggles AuditEvent emission. Default: true (always emit when
+	// EUMode != "off"; configurable for noise control).
+	Enabled bool `yaml:"enabled"`
+
+	// LogQueryPlaintext, when true, includes the raw query string in
+	// AuditEvent.QueryPlaintext. Default: false — query is sha256-hashed
+	// to the first 16 hex chars (DSGVO Art. 5(1)(c) data minimization).
+	LogQueryPlaintext bool `yaml:"log_query_plaintext"`
+
+	// Sink selects the audit destination: "slog" (default), "file", "nats".
+	// "file" and "nats" are deferred to v2.1.0; "slog" routes events to
+	// the Router's logger at Info level.
+	Sink string `yaml:"sink" validate:"omitempty,oneof=slog file nats"`
+}
+
+// SnapshotConfig governs the providers.yaml drift guard (EU-mode hook #6).
+type SnapshotConfig struct {
+	// ProvidersFile is the path to a checked-in providers.yaml that
+	// declares the residency-tag-bearing provider set. Cycle 2 reads this
+	// at NewClient time and computes a SHA256.
+	ProvidersFile string `yaml:"providers_file"`
+
+	// SignatureFile is the path to a checked-in plain-text file holding
+	// the SHA256 of ProvidersFile. Mismatch at boot emits a drift warning
+	// audit event.
+	SignatureFile string `yaml:"signature_file"`
+
+	// Strict, when true, promotes drift-mismatch from warn to fatal. Used
+	// in production deployments where unverified provider changes must
+	// not boot.
+	Strict bool `yaml:"strict"`
+}
+
+// EnrichmentConfig groups post-merge enrichment hooks. Cycle 2 ships
+// Unpaywall + Firecrawl scrape; cycle 3 may add more (e.g., Cohere/Mixedbread
+// rerank, currently config-less).
+type EnrichmentConfig struct {
+	// Unpaywall fills in PaperData.PDFURL / OpenAccess on results that
+	// have a DOI but no upstream PDF link.
+	Unpaywall UnpaywallEnrichmentConfig `yaml:"unpaywall"`
+
+	// Firecrawl per-URL scrape for kind=web results with thin snippets.
+	// Off by default; opt-in to avoid burning the limited Firecrawl tier.
+	Firecrawl FirecrawlEnrichmentConfig `yaml:"firecrawl"`
+}
+
+// UnpaywallEnrichmentConfig is the Unpaywall-specific knob set.
+type UnpaywallEnrichmentConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Email   string `yaml:"email" validate:"omitempty,email"`
+}
+
+// FirecrawlEnrichmentConfig is the Firecrawl-specific knob set.
+type FirecrawlEnrichmentConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 // ServerConfig holds HTTP server and logging settings.

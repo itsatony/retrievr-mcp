@@ -53,6 +53,36 @@ const (
 )
 
 // ---------------------------------------------------------------------------
+// EU-mode error messages + sentinel errors (Cycle 2)
+// ---------------------------------------------------------------------------
+
+const (
+	ErrMsgEUModeProviderConflict = "eu_strict mode is incompatible with the requested non-EU sources"
+	ErrMsgConfigDriftDetected    = "providers.yaml SHA256 does not match the checked-in signature"
+)
+
+// EUModeProviderConflictError is returned when a caller asks for eu_strict
+// mode while explicitly listing one or more non-EU providers. The structured
+// detail (Requested + Blocked) lets the caller render a remediation message
+// without parsing the error string.
+type EUModeProviderConflictError struct {
+	Mode      string   // "eu_strict" or "eu_preferred"
+	Requested []string // sources the caller asked for
+	Blocked   []string // subset of Requested rejected by the gate
+}
+
+// Error implements error.
+func (e *EUModeProviderConflictError) Error() string {
+	return ErrMsgEUModeProviderConflict
+}
+
+// Is supports errors.Is(err, ErrEUModeProviderConflict) for callers using
+// the sentinel form.
+func (e *EUModeProviderConflictError) Is(target error) bool {
+	return target == ErrEUModeProviderConflict
+}
+
+// ---------------------------------------------------------------------------
 // Sentinel errors — domain
 // ---------------------------------------------------------------------------
 
@@ -72,6 +102,10 @@ var (
 	ErrCredentialRequired  = errors.New(ErrMsgCredentialRequired)
 	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)
 	ErrBibTeXGeneration    = errors.New(ErrMsgBibTeXGeneration)
+
+	// EU-mode sentinels (Cycle 2).
+	ErrEUModeProviderConflict = errors.New(ErrMsgEUModeProviderConflict)
+	ErrConfigDriftDetected    = errors.New(ErrMsgConfigDriftDetected)
 )
 
 // ---------------------------------------------------------------------------

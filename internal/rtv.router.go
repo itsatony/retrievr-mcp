@@ -88,6 +88,17 @@ type Router struct {
 	logger         *slog.Logger
 	retry          RetryConfig
 	fallback       RouterFallbackConfig
+
+	// EU-mode (Cycle 2). Empty mode treated as "off"; gate is a no-op.
+	// SearchParams may override per-call via the Mode field.
+	euMode                  string
+	euIncludePublicResearch bool
+	auditSink               AuditSink
+	auditLogQueryPlaintext  bool
+
+	// Cycle 2 Wave-1 enrichment hook — Unpaywall is consulted post-merge
+	// for paper results with a DOI but no upstream PDF link. nil = disabled.
+	unpaywallEnrichment *UnpaywallPlugin
 }
 
 // DefaultFallbackConfig returns the cycle-1 default chains. Only the
@@ -113,9 +124,58 @@ const (
 	fallbackChainAcademic = "academic"
 )
 
+// RouterOption is a functional option used by NewRouter for cycle-2+
+// additions (EU mode, audit sink) that don't fit the original positional
+// signature. Existing 8-arg NewRouter callers don't break.
+type RouterOption func(*Router)
+
+// WithEUMode configures the router's jurisdictional gate (Hook #2 of EU
+// mode). Empty mode is treated as off. includePublicResearch widens
+// eu_strict to admit public-research-infrastructure providers (ArXiv,
+// OpenAlex, Wikipedia, ...).
+func WithEUMode(mode string, includePublicResearch bool) RouterOption {
+	return func(r *Router) {
+		r.euMode = mode
+		r.euIncludePublicResearch = includePublicResearch
+	}
+}
+
+// WithAuditSink installs an AuditSink. When unset, Router uses NoopAuditSink.
+func WithAuditSink(sink AuditSink) RouterOption {
+	return func(r *Router) {
+		if sink != nil {
+			r.auditSink = sink
+		}
+	}
+}
+
+// WithAuditLogQueryPlaintext, when true, opts in to recording the raw query
+// in AuditEvent.QueryPlaintext alongside the always-present QueryHash.
+// Default false (DSGVO Art. 5(1)(c) data minimization).
+func WithAuditLogQueryPlaintext(v bool) RouterOption {
+	return func(r *Router) {
+		r.auditLogQueryPlaintext = v
+	}
+}
+
+// WithUnpaywallEnrichment installs a configured *UnpaywallPlugin that the
+// Router consults post-merge to fill PDFURL / License / OpenAccess on paper
+// results carrying a DOI but no upstream PDF. Pass nil to disable.
+//
+// Cycle-2 minimum-viable wiring; cycle 3 promotes this to a typed
+// Enrichment middleware that any provider can register against.
+func WithUnpaywallEnrichment(plugin *UnpaywallPlugin) RouterOption {
+	return func(r *Router) {
+		r.unpaywallEnrichment = plugin
+	}
+}
+
 // NewRouter creates a Router wired to the given plugins and infrastructure.
 // The plugins map is defensively copied. A nil logger is replaced with a discard logger.
 // The metrics parameter is optional (nil disables Prometheus instrumentation).
+//
+// Cycle-2 EU-mode + audit configuration goes through the variadic opts:
+// pass WithEUMode / WithAuditSink / WithAuditLogQueryPlaintext as needed.
 func NewRouter(
 	cfg RouterConfig,
 	plugins map[string]SourcePlugin,
@@ -125,6 +185,7 @@ func NewRouter(
 	creds *CredentialResolver,
 	metrics *Metrics,
 	logger *slog.Logger,
+	opts ...RouterOption,
 ) *Router {
 	// Defensive copy of plugins map.
 	pluginsCopy := make(map[string]SourcePlugin, len(plugins))
@@ -138,7 +199,7 @@ func NewRouter(
 		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
 	}
 
-	return &Router{
+	r := &Router{
 		plugins:        pluginsCopy,
 		defaultSources: cfg.DefaultSources,
 		timeout:        cfg.PerSourceTimeout.Duration,
@@ -151,7 +212,12 @@ func NewRouter(
 		logger:         logger,
 		retry:          resolveRetryConfig(cfg.Retry),
 		fallback:       resolveFallbackConfig(cfg.Fallback),
+		auditSink:      NoopAuditSink(),
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 // resolveFallbackConfig returns the user-supplied config if it has any
@@ -252,6 +318,12 @@ func (r *Router) Search(
 ) (*MergedSearchResult, error) {
 	start := time.Now()
 
+	// Step 0: EU-mode refusal path (Hook #5). Reject eu_strict + explicit
+	// non-EU sources up-front rather than silently dropping them.
+	if err := validateEUModeSources(sources, r.plugins, r.euMode, r.euIncludePublicResearch); err != nil {
+		return nil, err
+	}
+
 	// Step 1: Resolve sources. Three precedence levels:
 	//   (a) explicit `sources` arg — overrides everything; no fallback walking.
 	//   (b) params.Intent set — chain-based primary set + ordered fallback list.
@@ -269,9 +341,39 @@ func (r *Router) Search(
 		return nil, fmt.Errorf("%w: %s", ErrSearchFailed, errDetailNoValidSources)
 	}
 
+	// Step 1.5: EU-mode gate (Hook #2). Filter resolved sources by jurisdiction.
+	// In eu_strict, providers without EU residency (or public-research, when
+	// the opt-in is set) are skipped with a structured reason. Skipped fallback
+	// sources are filtered too — we don't want fallback to silently re-introduce
+	// non-EU providers that the gate rejected from the primary set.
+	gate := applyEUGate(resolved, r.plugins, r.euMode, r.euIncludePublicResearch)
+	resolved = gate.Admitted
+	euSkipped := gate.Skipped
+	if len(fallbackList) > 0 && r.euMode == EUModeStrict {
+		fbGate := applyEUGate(fallbackList, r.plugins, r.euMode, r.euIncludePublicResearch)
+		fallbackList = fbGate.Admitted
+		euSkipped = append(euSkipped, fbGate.Skipped...)
+	}
+	if len(resolved) == 0 {
+		// Gate filtered everyone out — likely eu_strict with no EU sources
+		// configured. Return a useful empty merged result so the caller can
+		// surface the skip reasons rather than getting a generic error.
+		auditRef := r.emitAuditEvent(ctx, params, nil, euSkipped, nil, false, false, false)
+		return &MergedSearchResult{
+			TotalResults:   0,
+			Results:        []Publication{},
+			SourcesQueried: []string{},
+			SourcesFailed:  []string{},
+			SourcesSkipped: euSkipped,
+			AuditRef:       auditRef,
+			HasMore:        false,
+		}, nil
+	}
+
 	// Step 2: Generate request ID and log.
 	requestID := GenerateRequestID()
 	ctx = WithRequestID(ctx, requestID)
+	logEUGateDecision(ctx, r.logger, requestID, gate)
 	r.logger.Info(logMsgSearchStart,
 		slog.String(LogKeyRequestID, requestID),
 		slog.Any(LogKeySources, resolved),
@@ -293,11 +395,14 @@ func (r *Router) Search(
 				// Cache stores only successful results. On hit, SourcesFailed is
 				// always empty because partial-failure results are not cached —
 				// only the merged/deduped output from successful sources is stored.
+				auditRef := r.emitAuditEvent(ctx, params, resolved, euSkipped, nil, false, false, true)
 				return &MergedSearchResult{
 					TotalResults:   cached.Total,
 					Results:        cached.Results,
 					SourcesQueried: resolved,
 					SourcesFailed:  []string{},
+					SourcesSkipped: euSkipped,
+					AuditRef:       auditRef,
 					HasMore:        cached.HasMore,
 				}, nil
 			}
@@ -384,6 +489,12 @@ func (r *Router) Search(
 		allResults = dedup(allResults)
 	}
 
+	// Step 7.5: Post-merge enrichment (Cycle 2 task #17). Iterates paper
+	// results with a DOI but no PDFURL and consults Unpaywall to fill in
+	// the OA PDF link + license + open_access flag. Errors are swallowed —
+	// enrichment failures must never fail the search.
+	r.enrichWithUnpaywall(ctx, allResults)
+
 	// Step 8: Sort.
 	allResults = sortResults(allResults, params.Sort)
 
@@ -394,11 +505,33 @@ func (r *Router) Search(
 		hasMore = true
 	}
 
+	// Track fallback-walked status for audit. The fallback block above mutates
+	// `sourcesQueried` so we deduce the flag by checking whether any non-
+	// originally-resolved source ID appeared.
+	fallbackWalked := false
+	if len(fallbackList) > 0 {
+		resolvedSet := make(map[string]struct{}, len(resolved))
+		for _, id := range resolved {
+			resolvedSet[id] = struct{}{}
+		}
+		for _, id := range sourcesQueried {
+			if _, ok := resolvedSet[id]; !ok {
+				fallbackWalked = true
+				break
+			}
+		}
+	}
+
+	auditRef := r.emitAuditEvent(ctx, params, sourcesQueried, euSkipped, sourcesFailed, fallbackWalked, false, false)
+
 	merged := &MergedSearchResult{
 		TotalResults:   len(allResults),
 		Results:        allResults,
 		SourcesQueried: sourcesQueried,
 		SourcesFailed:  sourcesFailed,
+		SourcesSkipped: euSkipped,
+		AuditRef:       auditRef,
+		FallbackWalked: fallbackWalked,
 		HasMore:        hasMore,
 	}
 
@@ -511,6 +644,93 @@ func applyFallbackWalk(
 		}
 	}
 	return sourcesQueried, sourcesFailed, allResults
+}
+
+// SearchV2 runs Search and converts the merged Publication list into the
+// v2 fat-struct shape (Result with Kind discriminator + per-kind blocks).
+// Cycle 2 v1.6.0 entry point for callers wanting the new wire shape;
+// v1.7+ may make this the default and v2.0.0 retires Search().
+//
+// Internally a thin wrapper: Router.Search performs the resilience chain,
+// fan-out, dedup, sort, truncate, audit, etc. SearchV2 only reshapes the
+// Publication slice.
+func (r *Router) SearchV2(
+	ctx context.Context,
+	params SearchParams,
+	sources []string,
+	creds *CallCredentials,
+) (*MergedSearchResultV2, error) {
+	merged, err := r.Search(ctx, params, sources, creds)
+	if err != nil {
+		return nil, err
+	}
+	return &MergedSearchResultV2{
+		TotalResults:   merged.TotalResults,
+		Results:        r.PublicationsToResults(merged.Results),
+		SourcesQueried: merged.SourcesQueried,
+		SourcesFailed:  merged.SourcesFailed,
+		SourcesSkipped: merged.SourcesSkipped,
+		AuditRef:       merged.AuditRef,
+		FallbackWalked: merged.FallbackWalked,
+		EUFallbackUsed: merged.EUFallbackUsed,
+		HasMore:        merged.HasMore,
+	}, nil
+}
+
+// enrichWithUnpaywall iterates paper results with a DOI but no PDFURL and
+// fills them via the configured Unpaywall plugin. No-op when no plugin is
+// installed. Per-result errors are logged at Debug and skipped — enrichment
+// failures must never fail the search.
+func (r *Router) enrichWithUnpaywall(ctx context.Context, pubs []Publication) {
+	if r.unpaywallEnrichment == nil {
+		return
+	}
+	for i := range pubs {
+		if pubs[i].DOI == "" || pubs[i].PDFURL != "" {
+			continue
+		}
+		if _, err := r.unpaywallEnrichment.EnrichPublication(ctx, &pubs[i]); err != nil {
+			r.logger.Debug("retrievr unpaywall enrichment failed",
+				slog.String("doi", pubs[i].DOI),
+				slog.String(LogKeyError, err.Error()),
+			)
+		}
+	}
+}
+
+// emitAuditEvent constructs and dispatches an AuditEvent describing this
+// Search call (Hook #3 of EU mode). Returns the generated audit_ref so the
+// caller can echo it in MergedSearchResult.AuditRef. Safe with a nil sink:
+// Router defaults to NoopAuditSink when no WithAuditSink option is supplied.
+func (r *Router) emitAuditEvent(
+	ctx context.Context,
+	params SearchParams,
+	invoked []string,
+	skipped []SkipNote,
+	failed []string,
+	fallbackWalked, euFallbackUsed, cacheHit bool,
+) string {
+	ref := generateAuditRef()
+	evt := AuditEvent{
+		AuditRef:         ref,
+		Mode:             r.euMode,
+		Intent:           string(params.Intent),
+		QueryHash:        hashQuery(params.Query),
+		ProvidersInvoked: invoked,
+		ProvidersSkipped: skipped,
+		ProvidersFailed:  failed,
+		FallbackWalked:   fallbackWalked,
+		EUFallbackUsed:   euFallbackUsed,
+		CacheHit:         cacheHit,
+		Ts:               time.Now().UTC(),
+	}
+	if r.auditLogQueryPlaintext {
+		evt.QueryPlaintext = params.Query
+	}
+	if r.auditSink != nil {
+		r.auditSink.Emit(ctx, evt)
+	}
+	return ref
 }
 
 // resolveByIntent returns the primary source set + ordered fallback list for
@@ -682,6 +902,9 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 			remaining = r.rateLimits.Remaining(plugin.ID(), CredentialAnonymous)
 		}
 
+		residency := plugin.Residency()
+		acceptsCreds := SourceAcceptsCredentials(plugin.ID())
+
 		infos = append(infos, SourceInfo{
 			ID:                     plugin.ID(),
 			Name:                   plugin.Name(),
@@ -700,7 +923,16 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 				Remaining:         remaining,
 			},
 			CategoriesHint:     caps.CategoriesHint,
-			AcceptsCredentials: SourceAcceptsCredentials(plugin.ID()),
+			AcceptsCredentials: acceptsCreds,
+
+			// Cycle-2 additions surfaced for LLM agents + compliance review.
+			Kinds:           caps.Kinds,
+			QueryIntents:    caps.QueryIntents,
+			Region:          residency.Region,
+			DPAStatus:       residency.DPAStatus,
+			SubprocessorURL: residency.SubprocessorURL,
+			FreeTier:        !acceptsCreds, // working approximation: anon-tier sources are "free"
+			RequiresKey:     acceptsCreds,
 		})
 	}
 

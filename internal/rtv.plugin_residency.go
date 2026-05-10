@@ -1,0 +1,122 @@
+package internal
+
+import "time"
+
+// Cycle 2 task #8 — residency tags for the 10 cycle-1 scholarly providers.
+//
+// Centralized in this file rather than scattered across every plugin so a
+// quarterly residency audit reviews and bumps a single date variable. The
+// EU-mode design (plan §3.7, ADR-018-pending) treats ANY non-zero
+// LastVerifiedAt as in-policy at registration time; cycle 3 will surface
+// CI warnings when the date is older than 90 days and hard-fail at 180.
+//
+// Region classifications follow plan §3.7's residency table for cycle-1
+// providers:
+//
+//   DBLP                — EU (Schloss Dagstuhl, Germany)
+//   Europe PMC          — UK-adequacy (EBI, Hinxton)
+//   ArXiv               — public-research-infrastructure (Cornell, US)
+//   OpenAlex            — public-research-infrastructure (OurResearch, US)
+//   CrossRef            — public-research-infrastructure
+//   Semantic Scholar    — public-research-infrastructure (AI2, US)
+//   PubMed              — public-research-infrastructure (NLM, US)
+//   HuggingFace         — US (US-resident; cycle 2 verifies EU-region option)
+//   NASA ADS            — US (Harvard CfA)
+//   bioRxiv             — US (CSHL)
+
+// residencyVerifiedAt is the single source of truth for the
+// LastVerifiedAt field on every cycle-1 provider's ResidencyTag.
+// Bump this date when a maintainer re-verifies the residency table.
+var residencyVerifiedAt = time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)
+
+// Residency implementations — one method per plugin type.
+
+// Residency reports ArXiv's data-residency posture.
+func (*ArXivPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionPublicResearch,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Semantic Scholar's data-residency posture.
+func (*S2Plugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionPublicResearch,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports OpenAlex's data-residency posture.
+func (*OpenAlexPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionPublicResearch,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports PubMed's data-residency posture.
+func (*PubMedPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionPublicResearch,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports CrossRef's data-residency posture.
+func (*CrossRefPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionPublicResearch,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports DBLP's data-residency posture (EU — Schloss Dagstuhl, DE).
+func (*DBLPPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Europe PMC's data-residency posture (UK adequacy — EBI Hinxton).
+func (*EuropePMCPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUKAdequacy,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports HuggingFace's data-residency posture (US, unverified).
+func (*HuggingFacePlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPAUnknown,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports NASA ADS's data-residency posture (US — Harvard CfA).
+func (*ADSPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPAUnknown,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports bioRxiv's data-residency posture (US — CSHL).
+func (*BioRxivPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPAUnknown,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

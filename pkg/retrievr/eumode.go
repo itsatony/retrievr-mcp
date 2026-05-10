@@ -1,5 +1,7 @@
 package retrievr
 
+import "github.com/itsatony/retrievr-mcp/internal"
+
 // EUMode controls how retrievr filters provider eligibility on data residency
 // and GDPR grounds.
 //
@@ -33,40 +35,32 @@ func IsValidEUMode(m string) bool {
 	return false
 }
 
-// Region classifies a provider's data-residency posture for EU-mode gating.
-type Region string
+// Region re-exports internal.Region — the canonical residency
+// classification. Cycle 2 promoted Region from a public-only type to the
+// SourcePlugin contract (Hook #1 of EU mode).
+type Region = internal.Region
 
 // Region values.
 const (
-	// RegionEU — data processed exclusively in EU/EEA member states.
-	RegionEU Region = "EU"
-
-	// RegionUKAdequacy — UK, currently covered by EU adequacy decision.
-	RegionUKAdequacy Region = "UK-adequacy"
-
-	// RegionUS — US-hosted provider; blocked under eu_strict.
-	RegionUS Region = "US"
-
-	// RegionGlobal — multi-region or unspecified hosting.
-	RegionGlobal Region = "global"
-
-	// RegionPublicResearch — public research infrastructure (e.g., ArXiv,
-	// OpenAlex, Wikipedia). US-hosted but openly-accessible scientific
-	// metadata; admissible under eu_strict only with explicit opt-in.
-	RegionPublicResearch Region = "public-research-infrastructure"
-
-	// RegionUnknown — residency not yet verified.
-	RegionUnknown Region = "unknown"
+	RegionEU             = internal.RegionEU
+	RegionUKAdequacy     = internal.RegionUKAdequacy
+	RegionUS             = internal.RegionUS
+	RegionGlobal         = internal.RegionGlobal
+	RegionPublicResearch = internal.RegionPublicResearch
+	RegionUnknown        = internal.RegionUnknown
 )
 
-// IsEU reports whether the region is treated as EU-resident under
-// EUModeStrict (without the public-research opt-in).
-func (r Region) IsEU() bool {
-	return r == RegionEU || r == RegionUKAdequacy
-}
+// DPAStatus re-exports the contractual-posture enum.
+type DPAStatus = internal.DPAStatus
 
-// IsPublicResearch reports whether the region is the public-research-
-// infrastructure tier (admissible under eu_strict + opt-in).
-func (r Region) IsPublicResearch() bool {
-	return r == RegionPublicResearch
-}
+// DPAStatus values.
+const (
+	DPASigned        = internal.DPASigned
+	DPACoveredBySCC  = internal.DPACoveredBySCC
+	DPANotApplicable = internal.DPANotApplicable
+	DPAUnknown       = internal.DPAUnknown
+)
+
+// ResidencyTag re-exports internal.ResidencyTag for direct cross-module
+// use. Same shape as the SourcePlugin's Residency() return value.
+type ResidencyTag = internal.ResidencyTag

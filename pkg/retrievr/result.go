@@ -1,175 +1,53 @@
 package retrievr
 
-import (
-	"encoding/json"
-	"time"
-)
+import "github.com/itsatony/retrievr-mcp/internal"
 
 // ---------------------------------------------------------------------------
-// ResultKind discriminator
+// Result fat-struct re-exports — Cycle 2 (v1.6.0).
+//
+// The canonical types live in internal so Router can produce them. This
+// file is the public surface for external Go consumers. v1 Publication
+// shape continues to exist alongside; the MCP rtv_search tool defaults
+// to v1 for compatibility, with compat:"v2" as the opt-in for new shape.
 // ---------------------------------------------------------------------------
 
 // ResultKind discriminates the per-kind data block populated on a Result.
-type ResultKind string
+type ResultKind = internal.ResultKind
 
 // ResultKind constants.
 const (
-	KindPaper        ResultKind = "paper"
-	KindModel        ResultKind = "model"
-	KindDataset      ResultKind = "dataset"
-	KindWeb          ResultKind = "web"
-	KindNews         ResultKind = "news"
-	KindCode         ResultKind = "code"
-	KindEncyclopedia ResultKind = "encyclopedia"
+	KindPaper        = internal.KindPaper
+	KindModel        = internal.KindModel
+	KindDataset      = internal.KindDataset
+	KindWeb          = internal.KindWeb
+	KindNews         = internal.KindNews
+	KindCode         = internal.KindCode
+	KindEncyclopedia = internal.KindEncyclopedia
 )
 
-// ---------------------------------------------------------------------------
-// Result fat struct
-//
-// Cycle-1 status: declared but not yet populated by plugins. Plugins
-// continue to emit Publication through internal.Router; cycle 2 introduces
-// converters and switches the public API to []Result.
-// ---------------------------------------------------------------------------
+// IsValidResultKind returns true if the given string is a known kind.
+func IsValidResultKind(k string) bool { return internal.IsValidResultKind(k) }
 
-// Result is the unified search/get return type spanning paper, model, dataset,
-// web, news, code, and encyclopedia content. Consumers always check Kind
-// before dereferencing the kind-specific pointer block.
-type Result struct {
-	// Discriminator — always set.
-	Kind ResultKind `json:"kind"`
+// Result is the v2 unified search/get return type.
+type Result = internal.Result
 
-	// Core identity.
-	ID          string   `json:"id"`
-	Source      string   `json:"source"`
-	AlsoFoundIn []string `json:"also_found_in,omitempty"`
+// MergedSearchResultV2 is the v2 wire shape returned by Client.SearchV2.
+type MergedSearchResultV2 = internal.MergedSearchResultV2
 
-	// Core content.
-	Title    string `json:"title"`
-	URL      string `json:"url,omitempty"`
-	Snippet  string `json:"snippet,omitempty"`
-	Abstract string `json:"abstract,omitempty"`
-	Domain   string `json:"domain,omitempty"`
-	Language string `json:"language,omitempty"`
+// Per-kind data blocks.
+type (
+	PaperData        = internal.PaperData
+	WebData          = internal.WebData
+	NewsData         = internal.NewsData
+	CodeData         = internal.CodeData
+	ModelData        = internal.ModelData
+	DatasetData      = internal.DatasetData
+	EncyclopediaData = internal.EncyclopediaData
+)
 
-	// Metadata.
-	Authors   []Author `json:"authors,omitempty"`
-	Published string   `json:"published,omitempty"`
-	Updated   string   `json:"updated,omitempty"`
-	License   string   `json:"license,omitempty"`
-
-	// Ranking + LLM hints.
-	Score      float64         `json:"score,omitempty"`
-	ScoreParts *ScoreBreakdown `json:"score_parts,omitempty"`
-	LLMContext string          `json:"llm_context,omitempty"`
-
-	// Cross-kind signal that surfaces at top level (e.g. HF model + GitHub repo
-	// stars are conceptually the same engagement metric).
-	Stars *int `json:"stars,omitempty"`
-
-	// Kind-specific blocks. Exactly one is populated for a given Result.
-	Paper        *PaperData        `json:"paper,omitempty"`
-	Model        *ModelData        `json:"model,omitempty"`
-	Dataset      *DatasetData      `json:"dataset,omitempty"`
-	Web          *WebData          `json:"web,omitempty"`
-	News         *NewsData         `json:"news,omitempty"`
-	Code         *CodeData         `json:"code,omitempty"`
-	Encyclopedia *EncyclopediaData `json:"encyclopedia,omitempty"`
-
-	// Raw provider response (opt-in via WithIncludeRaw).
-	Raw json.RawMessage `json:"raw,omitempty"`
-
-	// Provenance tags (one per source that contributed to this merged result).
-	Provenance []ProvenanceTag `json:"provenance,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
-// Per-kind data blocks
-// ---------------------------------------------------------------------------
-
-// PaperData carries scholarly-paper-specific fields.
-type PaperData struct {
-	DOI           string      `json:"doi,omitempty"`
-	ArXivID       string      `json:"arxiv_id,omitempty"`
-	Categories    []string    `json:"categories,omitempty"`
-	CitationCount *int        `json:"citation_count,omitempty"`
-	PDFURL        string      `json:"pdf_url,omitempty"`
-	OpenAccess    *bool       `json:"open_access,omitempty"`
-	References    []Reference `json:"references,omitempty"`
-	Citations     []Reference `json:"citations,omitempty"`
-	Venue         string      `json:"venue,omitempty"`
-}
-
-// WebData carries general-web-page-specific fields.
-type WebData struct {
-	Favicon     string `json:"favicon,omitempty"`
-	SiteName    string `json:"site_name,omitempty"`
-	PublishedAt string `json:"published_at,omitempty"`
-	ReadingMins int    `json:"reading_mins,omitempty"`
-}
-
-// NewsData carries news-article-specific fields.
-type NewsData struct {
-	Outlet      string `json:"outlet,omitempty"`
-	Section     string `json:"section,omitempty"`
-	PublishedAt string `json:"published_at,omitempty"`
-}
-
-// CodeData carries source-code-specific fields (GitHub, etc.).
-type CodeData struct {
-	Repo       string   `json:"repo,omitempty"`
-	Path       string   `json:"path,omitempty"`
-	Language   string   `json:"language,omitempty"`
-	LineFrom   int      `json:"line_from,omitempty"`
-	LineTo     int      `json:"line_to,omitempty"`
-	SHA        string   `json:"sha,omitempty"`
-	Stars      *int     `json:"stars,omitempty"`
-	License    string   `json:"license,omitempty"`
-	Topics     []string `json:"topics,omitempty"`
-	Forks      *int     `json:"forks,omitempty"`
-	LastCommit string   `json:"last_commit,omitempty"`
-}
-
-// ModelData carries ML-model-specific fields (HuggingFace, etc.).
-type ModelData struct {
-	Architecture string   `json:"architecture,omitempty"`
-	Parameters   string   `json:"parameters,omitempty"`
-	Downloads    *int     `json:"downloads,omitempty"`
-	Likes        *int     `json:"likes,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-	BaseModel    string   `json:"base_model,omitempty"`
-}
-
-// DatasetData carries dataset-specific fields.
-type DatasetData struct {
-	Rows      *int     `json:"rows,omitempty"`
-	SizeBytes *int64   `json:"size_bytes,omitempty"`
-	Tasks     []string `json:"tasks,omitempty"`
-	Modality  []string `json:"modality,omitempty"`
-	License   string   `json:"license,omitempty"`
-}
-
-// EncyclopediaData carries reference-style article fields (Wikipedia, etc.).
-type EncyclopediaData struct {
-	Article   string   `json:"article,omitempty"`
-	Sections  []string `json:"sections,omitempty"`
-	Languages []string `json:"languages,omitempty"`
-	Revision  string   `json:"revision,omitempty"`
-}
-
-// ScoreBreakdown decomposes the final Score by signal source.
-type ScoreBreakdown struct {
-	Lexical   float64 `json:"lexical,omitempty"`
-	Semantic  float64 `json:"semantic,omitempty"`
-	Authority float64 `json:"authority,omitempty"`
-	Recency   float64 `json:"recency,omitempty"`
-	Reranker  float64 `json:"reranker,omitempty"`
-}
-
-// ProvenanceTag records which source contributed a result and under what
-// residency/DPA classification at fetch time.
-type ProvenanceTag struct {
-	Source    string    `json:"source"`
-	Region    string    `json:"region"`
-	DPAStatus string    `json:"dpa_status,omitempty"`
-	FetchedAt time.Time `json:"fetched_at"`
-}
+// Auxiliary types.
+type (
+	ScoreBreakdown = internal.ScoreBreakdown
+	ProvenanceTag  = internal.ProvenanceTag
+	SkipNote       = internal.SkipNote
+)

@@ -105,6 +105,41 @@ sources:
     rate_limit_burst: 3
     extra:
       servers: "biorxiv,medrxiv"
+  exa:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+  brave:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+  linkup:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+  firecrawl:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
+  github:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 0.5
+    rate_limit_burst: 1
+  wikipedia:
+    enabled: true
+    timeout: "10s"
+    rate_limit: 10.0
+    rate_limit_burst: 5
+  unpaywall:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

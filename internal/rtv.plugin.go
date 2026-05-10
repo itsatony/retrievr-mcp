@@ -47,4 +47,9 @@ type SourcePlugin interface {
 
 	// Health returns current health and rate-limit status.
 	Health(ctx context.Context) SourceHealth
+
+	// Residency returns the provider's data-residency posture, used by
+	// the EU-mode gate (Hook #1) and surfaced in rtv_list_sources for
+	// compliance review. Cycle-2 addition.
+	Residency() ResidencyTag
 }

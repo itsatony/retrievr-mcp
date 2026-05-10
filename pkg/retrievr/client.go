@@ -67,6 +67,19 @@ func (c *Client) Search(ctx context.Context, params SearchParams, sources []stri
 	return c.router.Search(ctx, params, sources, creds)
 }
 
+// SearchV2 runs Search and returns the v2 fat-struct shape with per-kind
+// data blocks (Result.Kind discriminator + Paper / Web / Code / etc.).
+// Cycle-2 entry point for v2 callers; cycle-1 Search keeps returning v1
+// Publication shape so existing consumers stay byte-stable.
+func (c *Client) SearchV2(ctx context.Context, params SearchParams, sources []string) (*MergedSearchResultV2, error) {
+	if c.router == nil {
+		return nil, ErrNotImplemented
+	}
+	ctx = mirrorCredsToInternal(ctx)
+	creds := legacyCredsFromContext(ctx)
+	return c.router.SearchV2(ctx, params, sources, creds)
+}
+
 // Get retrieves a single result by its prefixed ID (e.g. "arxiv:2401.12345").
 func (c *Client) Get(ctx context.Context, prefixedID string, include []IncludeField, format ContentFormat) (*Publication, error) {
 	if c.router == nil {

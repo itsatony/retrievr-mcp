@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 10
+	testRegistryExpectedFactoryCount = 17 // 10 cycle-1 + Exa + Brave + Linkup + Firecrawl + GitHub + Wikipedia + Unpaywall (cycle-2 tasks #11–17)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -46,6 +46,9 @@ func (f *failingPlugin) Initialize(_ context.Context, _ PluginConfig) error {
 	return errors.New(testRegistryFailingErrMsg)
 }
 func (f *failingPlugin) Health(_ context.Context) SourceHealth { return SourceHealth{} }
+func (f *failingPlugin) Residency() ResidencyTag {
+	return ResidencyTag{Region: RegionUnknown, DPAStatus: DPAUnknown}
+}
 
 // ---------------------------------------------------------------------------
 // PluginFactories
@@ -120,6 +123,13 @@ func TestInitializePlugins(t *testing.T) {
 				SourceBioRxiv:     {Enabled: true},
 				SourceDBLP:        {Enabled: true},
 				SourceADS:         {Enabled: true},
+				SourceExa:         {Enabled: true}, // Cycle 2 Wave-1
+				SourceBrave:       {Enabled: true}, // Cycle 2 Wave-1
+				SourceLinkup:      {Enabled: true}, // Cycle 2 Wave-1 (EU-resident)
+				SourceFirecrawl:   {Enabled: true}, // Cycle 2 Wave-1
+				SourceGitHub:      {Enabled: true}, // Cycle 2 Wave-1
+				SourceWikipedia:   {Enabled: true}, // Cycle 2 Wave-1
+				SourceUnpaywall:   {Enabled: true}, // Cycle 2 Wave-1 (enrichment)
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

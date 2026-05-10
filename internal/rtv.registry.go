@@ -38,6 +38,15 @@ func PluginFactories() map[string]PluginFactory {
 		SourceBioRxiv:     func() SourcePlugin { return &BioRxivPlugin{} },
 		SourceDBLP:        func() SourcePlugin { return &DBLPPlugin{} },
 		SourceADS:         func() SourcePlugin { return &ADSPlugin{} },
+
+		// Cycle-2 Wave-1 providers.
+		SourceExa:       func() SourcePlugin { return &ExaPlugin{} },
+		SourceBrave:     func() SourcePlugin { return &BravePlugin{} },
+		SourceLinkup:    func() SourcePlugin { return &LinkupPlugin{} },
+		SourceFirecrawl: func() SourcePlugin { return &FirecrawlPlugin{} },
+		SourceGitHub:    func() SourcePlugin { return &GitHubPlugin{} },
+		SourceWikipedia: func() SourcePlugin { return &WikipediaPlugin{} },
+		SourceUnpaywall: func() SourcePlugin { return &UnpaywallPlugin{} },
 	}
 }
 

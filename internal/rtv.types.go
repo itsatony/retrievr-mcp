@@ -76,10 +76,21 @@ const (
 	SourceBioRxiv     = "biorxiv"
 	SourceDBLP        = "dblp"
 	SourceADS         = "ads"
+
+	// Cycle-2 Wave-1 providers.
+	SourceExa       = "exa"
+	SourceBrave     = "brave"
+	SourceLinkup    = "linkup"
+	SourceFirecrawl = "firecrawl"
+	SourceGitHub    = "github"
+	SourceWikipedia = "wikipedia"
+	SourceUnpaywall = "unpaywall"
 )
 
 // validSourceIDs is the internal immutable lookup set.
-// Access via IsValidSourceID().
+// Access via IsValidSourceID(). Wave-1 IDs are added incrementally as
+// their respective plugin tasks land — keeps the TestPluginFactories
+// "has_all_sources" invariant green between tasks #11–17.
 var validSourceIDs = map[string]bool{
 	SourceArXiv:       true,
 	SourcePubMed:      true,
@@ -91,6 +102,14 @@ var validSourceIDs = map[string]bool{
 	SourceBioRxiv:     true,
 	SourceDBLP:        true,
 	SourceADS:         true,
+	// Wave-1 — added per task as plugins land.
+	SourceExa:       true,
+	SourceBrave:     true,
+	SourceLinkup:    true,
+	SourceFirecrawl: true,
+	SourceGitHub:    true,
+	SourceWikipedia: true,
+	SourceUnpaywall: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -107,8 +126,9 @@ func AllSourceIDs() []string {
 	return ids
 }
 
-// SourceCount is the number of known source plugins.
-const SourceCount = 10
+// SourceCount is the number of known source plugins. Cycle-2 Wave-1
+// increments this as each provider lands.
+const SourceCount = 17
 
 // ---------------------------------------------------------------------------
 // Domain structs
@@ -241,6 +261,26 @@ type MergedSearchResult struct {
 	SourcesQueried []string      `json:"sources_queried"`
 	SourcesFailed  []string      `json:"sources_failed"`
 	HasMore        bool          `json:"has_more"`
+
+	// Cycle-2 additions (EU mode + audit observability):
+
+	// SourcesSkipped lists providers excluded from the fan-out by the
+	// EU-mode gate, with a structured reason. Empty when no gating
+	// occurred. Populated by Hook #2 of EU mode.
+	SourcesSkipped []SkipNote `json:"sources_skipped,omitempty"`
+
+	// AuditRef identifies the AuditEvent emitted for this call, so callers
+	// can correlate the response to logs. Format: "evt_aud_<16hex>".
+	AuditRef string `json:"audit_ref,omitempty"`
+
+	// FallbackWalked is true when the fallback chain was walked beyond
+	// the primary set (primary yielded zero or all-fail). Cycle-2 lift
+	// of the existing per-intent walk into the response surface.
+	FallbackWalked bool `json:"fallback_walked,omitempty"`
+
+	// EUFallbackUsed is true when EUModePreferred fell back to a non-EU
+	// provider after the EU set yielded zero / all-fail.
+	EUFallbackUsed bool `json:"eu_fallback_used,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -307,9 +347,14 @@ type SourceCapabilities struct {
 	// QueryIntents is the set of Intents this provider is reasonable to
 	// dispatch for. Used informationally by Router for chain validation
 	// and surfaced via rtv_list_sources so callers (and LLM agents) can
-	// pick sources by intent. Defaults to nil for cycle-1 plugins; cycle 2
-	// fills in real intent tags when wave-1 providers land.
+	// pick sources by intent.
 	QueryIntents []Intent `json:"query_intents,omitempty"`
+
+	// Kinds is the set of ResultKinds this provider emits. Drives the
+	// Publication->Result conversion (cycle-2 task #10): when converting,
+	// the first entry becomes Result.Kind. Cycle-1 scholarly providers
+	// return [KindPaper]; wave-1 providers declare web/code/encyclopedia.
+	Kinds []ResultKind `json:"kinds,omitempty"`
 }
 
 // SourceHealth represents the current health and rate-limit status of a source.
@@ -353,6 +398,10 @@ type RateLimitInfo struct {
 }
 
 // SourceInfo is the response item from the list_sources tool.
+//
+// Cycle 2 expanded the surface to include residency posture, intent tags,
+// kinds, and free-tier flags so LLM agents and operators can pick sources
+// without enumerating booleans.
 type SourceInfo struct {
 	ID                     string          `json:"id"`
 	Name                   string          `json:"name"`
@@ -369,4 +418,13 @@ type SourceInfo struct {
 	RateLimit              RateLimitInfo   `json:"rate_limit"`
 	CategoriesHint         string          `json:"categories_hint,omitempty"`
 	AcceptsCredentials     bool            `json:"accepts_credentials"`
+
+	// Cycle-2 additions:
+	Kinds         []ResultKind `json:"kinds,omitempty"`          // result kinds this source emits
+	QueryIntents  []Intent     `json:"query_intents,omitempty"`  // intents this source serves well
+	Region        Region       `json:"region,omitempty"`         // EU / US / public-research-infrastructure / ...
+	DPAStatus     DPAStatus    `json:"dpa_status,omitempty"`     // signed / covered-by-scc / n/a / unknown
+	SubprocessorURL string     `json:"subprocessor_url,omitempty"`
+	FreeTier      bool         `json:"free_tier,omitempty"`      // works without a paid key (incl. anon-tier providers)
+	RequiresKey   bool         `json:"requires_key,omitempty"`   // mirror of AcceptsCredentials but renamed for clarity
 }

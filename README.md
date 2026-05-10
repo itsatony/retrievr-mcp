@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![MCP](https://img.shields.io/badge/MCP-2025--11--25-purple)
 
-An MCP server that gives LLM agents unified access to academic publications, AI research, models, and datasets. Ten source APIs — ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, and bioRxiv — behind three tools.
+An MCP server that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repositories, and encyclopedia articles. **17 source APIs** — ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv, plus Wave-1 web/code/encyclopedia providers (Exa, Brave, Linkup [EU-resident], Firecrawl, GitHub, Wikipedia, Unpaywall) — behind three tools. With **EU-GDPR mode** (`eu_strict` + 6 audit hooks) for regulated deployments.
 
 ## What it does
 

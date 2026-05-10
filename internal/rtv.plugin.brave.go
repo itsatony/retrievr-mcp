@@ -60,9 +60,9 @@ const (
 // ---------------------------------------------------------------------------
 
 type braveSearchResponse struct {
-	Type string             `json:"type"`
-	Web  *braveWebSection   `json:"web,omitempty"`
-	News *braveNewsSection  `json:"news,omitempty"`
+	Type string            `json:"type"`
+	Web  *braveWebSection  `json:"web,omitempty"`
+	News *braveNewsSection `json:"news,omitempty"`
 }
 
 type braveWebSection struct {
@@ -74,16 +74,16 @@ type braveNewsSection struct {
 }
 
 type braveResult struct {
-	Type           string         `json:"type"`
-	Subtype        string         `json:"subtype,omitempty"`
-	Title          string         `json:"title"`
-	URL            string         `json:"url"`
-	Description    string         `json:"description,omitempty"`
-	PageAge        string         `json:"page_age,omitempty"`
-	Language       string         `json:"language,omitempty"`
-	ExtraSnippets  []string       `json:"extra_snippets,omitempty"`
-	MetaURL        *braveMetaURL  `json:"meta_url,omitempty"`
-	Profile        *braveProfile  `json:"profile,omitempty"`
+	Type          string        `json:"type"`
+	Subtype       string        `json:"subtype,omitempty"`
+	Title         string        `json:"title"`
+	URL           string        `json:"url"`
+	Description   string        `json:"description,omitempty"`
+	PageAge       string        `json:"page_age,omitempty"`
+	Language      string        `json:"language,omitempty"`
+	ExtraSnippets []string      `json:"extra_snippets,omitempty"`
+	MetaURL       *braveMetaURL `json:"meta_url,omitempty"`
+	Profile       *braveProfile `json:"profile,omitempty"`
 }
 
 type braveMetaURL struct {

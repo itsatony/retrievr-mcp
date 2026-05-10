@@ -56,9 +56,9 @@ func TestUnpaywall_Get_HappyPath(t *testing.T) {
 		assert.Equal(t, "test@example.com", r.URL.Query().Get(unpaywallEmailParam))
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(unpaywallResponse{
-			DOI:           "10.1234/abc",
-			Title:         "Test Paper",
-			IsOA:          true,
+			DOI:   "10.1234/abc",
+			Title: "Test Paper",
+			IsOA:  true,
 			BestOALocation: &unpaywallOALocation{
 				URL:       "https://example.com/page",
 				URLForPDF: "https://example.com/paper.pdf",

@@ -1559,7 +1559,7 @@ func TestResolvePMAPIKey(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			result := resolvePMAPIKey(WithCallCredentials(context.Background(), tc.creds),tc.serverDefault)
+			result := resolvePMAPIKey(WithCallCredentials(context.Background(), tc.creds), tc.serverDefault)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

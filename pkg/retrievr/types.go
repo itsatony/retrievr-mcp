@@ -18,7 +18,7 @@ const (
 	ContentTypePaper   = internal.ContentTypePaper
 	ContentTypeModel   = internal.ContentTypeModel
 	ContentTypeDataset = internal.ContentTypeDataset
-	ContentTypeAny    = internal.ContentTypeAny
+	ContentTypeAny     = internal.ContentTypeAny
 )
 
 // ContentFormat represents the format of content returned by a source.

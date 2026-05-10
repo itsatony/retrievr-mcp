@@ -70,17 +70,17 @@ const (
 // ---------------------------------------------------------------------------
 
 type exaSearchRequest struct {
-	Query      string         `json:"query"`
-	NumResults int            `json:"numResults,omitempty"`
-	Type       string         `json:"type,omitempty"`
-	Category   string         `json:"category,omitempty"`
-	Contents   *exaContents   `json:"contents,omitempty"`
-	StartDate  string         `json:"startPublishedDate,omitempty"`
-	EndDate    string         `json:"endPublishedDate,omitempty"`
+	Query      string       `json:"query"`
+	NumResults int          `json:"numResults,omitempty"`
+	Type       string       `json:"type,omitempty"`
+	Category   string       `json:"category,omitempty"`
+	Contents   *exaContents `json:"contents,omitempty"`
+	StartDate  string       `json:"startPublishedDate,omitempty"`
+	EndDate    string       `json:"endPublishedDate,omitempty"`
 }
 
 type exaContents struct {
-	Text       *exaTextOpts `json:"text,omitempty"`
+	Text       *exaTextOpts      `json:"text,omitempty"`
 	Highlights *exaHighlightOpts `json:"highlights,omitempty"`
 }
 
@@ -96,9 +96,9 @@ type exaHighlightOpts struct {
 }
 
 type exaSearchResponse struct {
-	RequestID string         `json:"requestId"`
-	Results   []exaResult    `json:"results"`
-	AutoDate  *exaAutoDate   `json:"autopromptString,omitempty"`
+	RequestID string       `json:"requestId"`
+	Results   []exaResult  `json:"results"`
+	AutoDate  *exaAutoDate `json:"autopromptString,omitempty"`
 }
 
 type exaAutoDate struct{}

@@ -1784,7 +1784,7 @@ func TestResolveHFToken(t *testing.T) {
 
 	t.Run("nil_creds_returns_server_default", func(t *testing.T) {
 		t.Parallel()
-		token := resolveHFToken(nil, testHFAPIKey)
+		token := resolveHFToken(context.TODO(), testHFAPIKey)
 		assert.Equal(t, testHFAPIKey, token)
 	})
 
@@ -1804,7 +1804,7 @@ func TestResolveHFToken(t *testing.T) {
 
 	t.Run("no_creds_no_server_returns_empty", func(t *testing.T) {
 		t.Parallel()
-		token := resolveHFToken(nil, "")
+		token := resolveHFToken(context.TODO(), "")
 		assert.Empty(t, token)
 	})
 }

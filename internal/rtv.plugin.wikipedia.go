@@ -33,8 +33,8 @@ const (
 	wikipediaPluginName        = "Wikipedia"
 	wikipediaPluginDescription = "Encyclopedia article search via the public MediaWiki API. No auth required (polite User-Agent recommended)."
 
-	wikipediaSearchPathFmt  = "https://%s.wikipedia.org/w/api.php"
-	wikipediaSummaryPathFmt = "https://%s.wikipedia.org/api/rest_v1/page/summary/%s"
+	wikipediaSearchPathFmt    = "https://%s.wikipedia.org/w/api.php"
+	wikipediaSummaryPathFmt   = "https://%s.wikipedia.org/api/rest_v1/page/summary/%s"
 	wikipediaUserAgentDefault = "retrievr/dev (+https://github.com/itsatony/retrievr-mcp)"
 
 	wikipediaDefaultLang  = "en"
@@ -79,14 +79,14 @@ type wikipediaSearchHit struct {
 }
 
 type wikipediaSummaryResponse struct {
-	Type        string `json:"type"`
-	Title       string `json:"title"`
-	DisplayTitle string `json:"displaytitle,omitempty"`
-	Description string `json:"description,omitempty"`
-	Extract     string `json:"extract,omitempty"`
-	Lang        string `json:"lang,omitempty"`
-	ContentURLs *wikipediaContentURLs `json:"content_urls,omitempty"`
-	Revision    string `json:"revision,omitempty"`
+	Type         string                `json:"type"`
+	Title        string                `json:"title"`
+	DisplayTitle string                `json:"displaytitle,omitempty"`
+	Description  string                `json:"description,omitempty"`
+	Extract      string                `json:"extract,omitempty"`
+	Lang         string                `json:"lang,omitempty"`
+	ContentURLs  *wikipediaContentURLs `json:"content_urls,omitempty"`
+	Revision     string                `json:"revision,omitempty"`
 }
 
 type wikipediaContentURLs struct {

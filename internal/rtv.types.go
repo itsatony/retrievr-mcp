@@ -112,7 +112,7 @@ var validSourceIDs = map[string]bool{
 	SourceFirecrawl: true,
 	SourceGitHub:    true,
 	SourceWikipedia: true,
-	SourceUnpaywall:  true,
+	SourceUnpaywall: true,
 	// Wave-2.
 	SourcePerplexity: true,
 }
@@ -425,11 +425,11 @@ type SourceInfo struct {
 	AcceptsCredentials     bool            `json:"accepts_credentials"`
 
 	// Cycle-2 additions:
-	Kinds         []ResultKind `json:"kinds,omitempty"`          // result kinds this source emits
-	QueryIntents  []Intent     `json:"query_intents,omitempty"`  // intents this source serves well
-	Region        Region       `json:"region,omitempty"`         // EU / US / public-research-infrastructure / ...
-	DPAStatus     DPAStatus    `json:"dpa_status,omitempty"`     // signed / covered-by-scc / n/a / unknown
-	SubprocessorURL string     `json:"subprocessor_url,omitempty"`
-	FreeTier      bool         `json:"free_tier,omitempty"`      // works without a paid key (incl. anon-tier providers)
-	RequiresKey   bool         `json:"requires_key,omitempty"`   // mirror of AcceptsCredentials but renamed for clarity
+	Kinds           []ResultKind `json:"kinds,omitempty"`         // result kinds this source emits
+	QueryIntents    []Intent     `json:"query_intents,omitempty"` // intents this source serves well
+	Region          Region       `json:"region,omitempty"`        // EU / US / public-research-infrastructure / ...
+	DPAStatus       DPAStatus    `json:"dpa_status,omitempty"`    // signed / covered-by-scc / n/a / unknown
+	SubprocessorURL string       `json:"subprocessor_url,omitempty"`
+	FreeTier        bool         `json:"free_tier,omitempty"`    // works without a paid key (incl. anon-tier providers)
+	RequiresKey     bool         `json:"requires_key,omitempty"` // mirror of AcceptsCredentials but renamed for clarity
 }

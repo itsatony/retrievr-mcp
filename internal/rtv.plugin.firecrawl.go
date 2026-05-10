@@ -68,18 +68,18 @@ type firecrawlScrapeOptions struct {
 }
 
 type firecrawlSearchResponse struct {
-	Success bool                `json:"success"`
-	Data    []firecrawlResult   `json:"data"`
-	Warning string              `json:"warning,omitempty"`
-	Error   string              `json:"error,omitempty"`
+	Success bool              `json:"success"`
+	Data    []firecrawlResult `json:"data"`
+	Warning string            `json:"warning,omitempty"`
+	Error   string            `json:"error,omitempty"`
 }
 
 type firecrawlResult struct {
-	URL         string                 `json:"url"`
-	Title       string                 `json:"title,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Markdown    string                 `json:"markdown,omitempty"`
-	Metadata    map[string]any         `json:"metadata,omitempty"`
+	URL         string         `json:"url"`
+	Title       string         `json:"title,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Markdown    string         `json:"markdown,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

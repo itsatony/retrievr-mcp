@@ -34,14 +34,14 @@ const (
 	githubPluginName        = "GitHub Code Search"
 	githubPluginDescription = "Public repository search ranked by stars/relevance. Maps to IntentCodeProvenance. US-resident; blocked under eu_strict."
 
-	githubDefaultBaseURL    = "https://api.github.com"
-	githubReposSearchPath   = "/search/repositories"
-	githubAuthHeader        = "Authorization"
-	githubAuthScheme        = "Bearer "
-	githubAcceptHeader      = "Accept"
-	githubAcceptValue       = "application/vnd.github+json"
-	githubAPIVersionHeader  = "X-GitHub-Api-Version"
-	githubAPIVersionValue   = "2022-11-28"
+	githubDefaultBaseURL   = "https://api.github.com"
+	githubReposSearchPath  = "/search/repositories"
+	githubAuthHeader       = "Authorization"
+	githubAuthScheme       = "Bearer "
+	githubAcceptHeader     = "Accept"
+	githubAcceptValue      = "application/vnd.github+json"
+	githubAPIVersionHeader = "X-GitHub-Api-Version"
+	githubAPIVersionValue  = "2022-11-28"
 
 	githubDefaultLimit = 10
 	githubMaxLimit     = 100
@@ -61,27 +61,27 @@ const (
 // ---------------------------------------------------------------------------
 
 type githubReposResponse struct {
-	TotalCount        int                 `json:"total_count"`
-	IncompleteResults bool                `json:"incomplete_results"`
-	Items             []githubRepoItem    `json:"items"`
-	Message           string              `json:"message,omitempty"` // populated on errors
+	TotalCount        int              `json:"total_count"`
+	IncompleteResults bool             `json:"incomplete_results"`
+	Items             []githubRepoItem `json:"items"`
+	Message           string           `json:"message,omitempty"` // populated on errors
 }
 
 type githubRepoItem struct {
-	ID              int64               `json:"id"`
-	NodeID          string              `json:"node_id"`
-	Name            string              `json:"name"`
-	FullName        string              `json:"full_name"`
-	HTMLURL         string              `json:"html_url"`
-	Description     string              `json:"description,omitempty"`
-	Language        string              `json:"language,omitempty"`
-	StargazersCount int                 `json:"stargazers_count"`
-	ForksCount      int                 `json:"forks_count"`
-	Topics          []string            `json:"topics,omitempty"`
-	License         *githubLicense      `json:"license,omitempty"`
-	DefaultBranch   string              `json:"default_branch,omitempty"`
-	PushedAt        string              `json:"pushed_at,omitempty"`
-	Owner           *githubOwner        `json:"owner,omitempty"`
+	ID              int64          `json:"id"`
+	NodeID          string         `json:"node_id"`
+	Name            string         `json:"name"`
+	FullName        string         `json:"full_name"`
+	HTMLURL         string         `json:"html_url"`
+	Description     string         `json:"description,omitempty"`
+	Language        string         `json:"language,omitempty"`
+	StargazersCount int            `json:"stargazers_count"`
+	ForksCount      int            `json:"forks_count"`
+	Topics          []string       `json:"topics,omitempty"`
+	License         *githubLicense `json:"license,omitempty"`
+	DefaultBranch   string         `json:"default_branch,omitempty"`
+	PushedAt        string         `json:"pushed_at,omitempty"`
+	Owner           *githubOwner   `json:"owner,omitempty"`
 }
 
 type githubLicense struct {
@@ -125,8 +125,10 @@ func (p *GitHubPlugin) Description() string { return githubPluginDescription }
 func (p *GitHubPlugin) ContentTypes() []ContentType { return []ContentType{ContentTypeAny} }
 
 // NativeFormat / AvailableFormats.
-func (p *GitHubPlugin) NativeFormat() ContentFormat        { return FormatJSON }
-func (p *GitHubPlugin) AvailableFormats() []ContentFormat  { return []ContentFormat{FormatJSON, FormatMarkdown} }
+func (p *GitHubPlugin) NativeFormat() ContentFormat { return FormatJSON }
+func (p *GitHubPlugin) AvailableFormats() []ContentFormat {
+	return []ContentFormat{FormatJSON, FormatMarkdown}
+}
 
 // Capabilities reports GitHub's filtering + sorting support.
 func (p *GitHubPlugin) Capabilities() SourceCapabilities {

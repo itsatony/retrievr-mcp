@@ -82,10 +82,10 @@ func TestEUMode_Hook1_PluginResidencyTagsAccessible(t *testing.T) {
 func TestEUMode_Hook2_StrictAdmitsOnlyEU(t *testing.T) {
 	t.Parallel()
 	plugins := map[string]SourcePlugin{
-		"euA":  newEUPlugin("euA", RegionEU),
-		"ukB":  newEUPlugin("ukB", RegionUKAdequacy),
-		"usC":  newEUPlugin("usC", RegionUS),
-		"prD":  newEUPlugin("prD", RegionPublicResearch),
+		"euA": newEUPlugin("euA", RegionEU),
+		"ukB": newEUPlugin("ukB", RegionUKAdequacy),
+		"usC": newEUPlugin("usC", RegionUS),
+		"prD": newEUPlugin("prD", RegionPublicResearch),
 	}
 	gate := applyEUGate([]string{"euA", "ukB", "usC", "prD"}, plugins, EUModeStrict, false)
 	assert.ElementsMatch(t, []string{"euA", "ukB"}, gate.Admitted)
@@ -128,7 +128,7 @@ func TestEUMode_Hook2_OffAndPreferredAdmitEveryone(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type captureSink struct {
-	mu    sync.Mutex
+	mu     sync.Mutex
 	events []AuditEvent
 }
 

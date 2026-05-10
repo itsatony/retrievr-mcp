@@ -35,7 +35,7 @@ const (
 	flagDefaultConfig = "configs/retrievr-mcp.yaml"
 	flagUsageConfig   = "path to retrievr-mcp YAML config file"
 
-	flagNameVerbose = "v"
+	flagNameVerbose  = "v"
 	flagUsageVerbose = "verbose: emit structured logs to stderr"
 
 	defaultVersionPath = "versions.yaml"

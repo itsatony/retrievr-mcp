@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] - 2026-05-10
+
+Patch release. Migrates the 7 cycle-1 E2E pipeline tests to v2 shape
+(closing the cycle-3 documented migration debt), wires the cycle-2
+`eu_mode` / `audit` / `snapshot` / `enrichment.unpaywall` config blocks
+through to the Router (they were declared but never plumbed in cycle 2),
+and fixes 4 lint failures + the recurring gofmt CI failure that broke
+v1.5.0/v1.6.0/v2.0.0 CI runs.
+
+### Fixed
+
+- **Recurring CI gofmt failure.** v1.5.0–v2.0.0 CI runs failed at the
+  `gofmt -l .` step because 22+ files weren't formatted. Re-applied
+  `gofmt -w .` and verified clean.
+- **Cycle-2 EU-mode + audit wiring gap.** `cmd/retrievr-mcp/main.go` and
+  `pkg/retrievr.NewClientFromConfig` now actually plumb the YAML
+  `eu_mode:`, `audit:`, `snapshot:`, and `enrichment.unpaywall:` blocks
+  through to `internal.NewRouter` via the appropriate `RouterOption`
+  values. Before this fix, the config blocks were declared and parsed
+  but Router was constructed without them — every `eu_strict`-flagged
+  deployment was effectively running in `off` mode at runtime.
+- **`internal.ResolveAuditSink` exported** (was `resolveAuditSink`,
+  unused — golangci-lint failure on v2.0.0). Now consumed by both the
+  MCP main and the library bootstrap.
+- **`kindForSource` now honors `Publication.ContentType`** as a
+  third-priority Kind derivation. HuggingFace's mixed paper/model/
+  dataset emissions correctly map to `KindModel` / `KindDataset` in v2
+  Result responses (was always `KindPaper` regardless of `ContentType`).
+- **3 `nil` `context.Context` passes** in `resolveS2APIKey` /
+  `resolveOAAPIKey` / `resolveHFToken` test call sites replaced with
+  `context.TODO()` (staticcheck SA1012 lint failure).
+- **7 cycle-1 E2E pipeline tests un-skipped and migrated to v2 Result
+  shape.** `TestE2E*PluginFullPipeline` tests now assert on `Kind` +
+  `Paper.{DOI, CitationCount, PDFURL, ArXivID}` + `Model` / `Dataset`
+  per-kind blocks instead of the v1 flat Publication fields. Provides
+  full end-to-end pipeline coverage on the v2 wire format.
+
+### Added
+
+- **`internal.VerifyProvidersSnapshot` called at boot** in both the MCP
+  main and `pkg/retrievr.NewClientFromConfig`. Hook #6 of EU mode is
+  now actually evaluated rather than being a no-op when `snapshot:`
+  config is provided.
+
+### Verification
+
+Local CI sim run (matches `.github/workflows/ci.yaml` step-for-step):
+- `go mod tidy` + `git diff --exit-code` — clean
+- `go build ./...` — clean
+- `go vet ./...` — clean
+- `gofmt -l .` — empty (was 22 files in v2.0.0)
+- `golangci-lint run ./...` (v1.64.8, the CI version) — clean (was 4
+  failures in v2.0.0)
+- `go test -race -coverprofile -covermode=atomic ./...` — all suites
+  green
+- Coverage: **81.4%** (above 80% threshold)
+
 ## [2.0.0] - 2026-05-10
 
 Cycle 3 of the v2 multi-cycle plan. **First major release with a stable

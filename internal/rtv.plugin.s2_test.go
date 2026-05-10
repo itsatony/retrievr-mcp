@@ -1392,23 +1392,23 @@ func TestResolveS2APIKey(t *testing.T) {
 
 	t.Run("nil_creds_uses_server_default", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "server-key", resolveS2APIKey(nil, "server-key"))
+		assert.Equal(t, "server-key", resolveS2APIKey(context.TODO(), "server-key"))
 	})
 
 	t.Run("empty_per_call_uses_server_default", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{}
-		assert.Equal(t, "server-key", resolveS2APIKey(WithCallCredentials(context.Background(), creds),"server-key"))
+		assert.Equal(t, "server-key", resolveS2APIKey(WithCallCredentials(context.Background(), creds), "server-key"))
 	})
 
 	t.Run("per_call_overrides_server", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{S2APIKey: "per-call-key"}
-		assert.Equal(t, "per-call-key", resolveS2APIKey(WithCallCredentials(context.Background(), creds),"server-key"))
+		assert.Equal(t, "per-call-key", resolveS2APIKey(WithCallCredentials(context.Background(), creds), "server-key"))
 	})
 
 	t.Run("both_empty", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "", resolveS2APIKey(nil, ""))
+		assert.Equal(t, "", resolveS2APIKey(context.TODO(), ""))
 	})
 }

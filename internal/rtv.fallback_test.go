@@ -21,8 +21,8 @@ import (
 const (
 	fbIntentTest    = Intent("test_intent")
 	fbChainName     = "test_chain"
-	fbSourcePrimary = "arxiv"     // re-use existing source IDs so plugin
-	fbSourceAlt     = "s2"        // factories accept the mock plugins.
+	fbSourcePrimary = "arxiv" // re-use existing source IDs so plugin
+	fbSourceAlt     = "s2"    // factories accept the mock plugins.
 	fbSourceFB1     = "crossref"
 	fbSourceFB2     = "europmc"
 )

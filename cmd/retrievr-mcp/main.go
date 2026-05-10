@@ -144,8 +144,25 @@ func run() int {
 		serverDefaults[id] = src.APIKey
 	}
 
-	// Step 7: Create router.
-	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, metrics, logger)
+	// Step 6.5: Verify providers.yaml snapshot drift (EU-mode Hook #6).
+	// Logged at warn / fatal-on-strict per SnapshotConfig; no-op when files unset.
+	if err := internal.VerifyProvidersSnapshot(cfg.Snapshot, logger); err != nil {
+		logger.Error("providers.yaml drift check failed",
+			slog.String(internal.LogKeyError, err.Error()),
+		)
+		return exitCodeStartup
+	}
+
+	// Step 7: Create router with EU-mode + audit options from config.
+	routerOpts := []internal.RouterOption{
+		internal.WithEUMode(cfg.EUMode.Mode, cfg.EUMode.IncludePublicResearch),
+		internal.WithAuditSink(internal.ResolveAuditSink(cfg.Audit, logger)),
+		internal.WithAuditLogQueryPlaintext(cfg.Audit.LogQueryPlaintext),
+	}
+	if up := buildUnpaywallEnrichment(cfg, plugins); up != nil {
+		routerOpts = append(routerOpts, internal.WithUnpaywallEnrichment(up))
+	}
+	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, metrics, logger, routerOpts...)
 	logger.Info(logMsgRouterCreated)
 
 	// Step 8: Create MCP server.
@@ -222,4 +239,22 @@ func generateInstanceID() string {
 		return fmt.Sprintf("pid-%d", os.Getpid())
 	}
 	return hex.EncodeToString(b)
+}
+
+// buildUnpaywallEnrichment returns a configured *internal.UnpaywallPlugin
+// when enrichment.unpaywall.enabled is true and the registered plugin is
+// available. Returns nil otherwise (no-op enrichment).
+func buildUnpaywallEnrichment(cfg *internal.Config, plugins map[string]internal.SourcePlugin) *internal.UnpaywallPlugin {
+	if !cfg.Enrichment.Unpaywall.Enabled {
+		return nil
+	}
+	plugin, ok := plugins[internal.SourceUnpaywall]
+	if !ok {
+		return nil
+	}
+	up, ok := plugin.(*internal.UnpaywallPlugin)
+	if !ok {
+		return nil
+	}
+	return up
 }

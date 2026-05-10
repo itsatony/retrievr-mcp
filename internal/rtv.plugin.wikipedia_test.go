@@ -82,7 +82,7 @@ func TestWikipedia_SearchResponseDecode(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(wikipediaSearchResponse{
 			Query: &wikipediaQuery{
-				Search: []wikipediaSearchHit{{Title: "Go (programming language)", Snippet: "Go is a <i>language</i>"}},
+				Search:     []wikipediaSearchHit{{Title: "Go (programming language)", Snippet: "Go is a <i>language</i>"}},
 				SearchInfo: &wikipediaSearchInfo{TotalHits: 42},
 			},
 		})

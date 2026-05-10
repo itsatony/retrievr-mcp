@@ -54,23 +54,23 @@ const (
 // ---------------------------------------------------------------------------
 
 type unpaywallResponse struct {
-	DOI            string                  `json:"doi"`
-	Title          string                  `json:"title"`
-	IsOA           bool                    `json:"is_oa"`
-	BestOALocation *unpaywallOALocation    `json:"best_oa_location,omitempty"`
-	OALocations    []unpaywallOALocation   `json:"oa_locations,omitempty"`
-	Year           int                     `json:"year"`
-	JournalName    string                  `json:"journal_name,omitempty"`
-	PublishedDate  string                  `json:"published_date,omitempty"`
-	Authors        []unpaywallAuthor       `json:"z_authors,omitempty"`
+	DOI            string                `json:"doi"`
+	Title          string                `json:"title"`
+	IsOA           bool                  `json:"is_oa"`
+	BestOALocation *unpaywallOALocation  `json:"best_oa_location,omitempty"`
+	OALocations    []unpaywallOALocation `json:"oa_locations,omitempty"`
+	Year           int                   `json:"year"`
+	JournalName    string                `json:"journal_name,omitempty"`
+	PublishedDate  string                `json:"published_date,omitempty"`
+	Authors        []unpaywallAuthor     `json:"z_authors,omitempty"`
 }
 
 type unpaywallOALocation struct {
-	URL          string `json:"url,omitempty"`
-	URLForPDF    string `json:"url_for_pdf,omitempty"`
-	License      string `json:"license,omitempty"`
-	HostType     string `json:"host_type,omitempty"`
-	Version      string `json:"version,omitempty"`
+	URL       string `json:"url,omitempty"`
+	URLForPDF string `json:"url_for_pdf,omitempty"`
+	License   string `json:"license,omitempty"`
+	HostType  string `json:"host_type,omitempty"`
+	Version   string `json:"version,omitempty"`
 }
 
 type unpaywallAuthor struct {

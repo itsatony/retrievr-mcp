@@ -52,18 +52,18 @@ const (
 // Surfaced via AuditSink after every Router.Search; AuditRef returns to the
 // caller in MergedSearchResult.
 type AuditEvent struct {
-	AuditRef         string         `json:"audit_ref"`
-	Mode             string         `json:"mode,omitempty"`
-	Intent           string         `json:"intent,omitempty"`
-	QueryHash        string         `json:"query_hash"`
-	QueryPlaintext   string         `json:"query_plaintext,omitempty"`
-	ProvidersInvoked []string       `json:"providers_invoked"`
-	ProvidersSkipped []SkipNote     `json:"providers_skipped,omitempty"`
-	ProvidersFailed  []string       `json:"providers_failed,omitempty"`
-	FallbackWalked   bool           `json:"fallback_walked,omitempty"`
-	EUFallbackUsed   bool           `json:"eu_fallback_used,omitempty"`
-	CacheHit         bool           `json:"cache_hit,omitempty"`
-	Ts               time.Time      `json:"ts"`
+	AuditRef         string     `json:"audit_ref"`
+	Mode             string     `json:"mode,omitempty"`
+	Intent           string     `json:"intent,omitempty"`
+	QueryHash        string     `json:"query_hash"`
+	QueryPlaintext   string     `json:"query_plaintext,omitempty"`
+	ProvidersInvoked []string   `json:"providers_invoked"`
+	ProvidersSkipped []SkipNote `json:"providers_skipped,omitempty"`
+	ProvidersFailed  []string   `json:"providers_failed,omitempty"`
+	FallbackWalked   bool       `json:"fallback_walked,omitempty"`
+	EUFallbackUsed   bool       `json:"eu_fallback_used,omitempty"`
+	CacheHit         bool       `json:"cache_hit,omitempty"`
+	Ts               time.Time  `json:"ts"`
 }
 
 // SkipNote records why a provider was excluded from a fan-out. Exposed in
@@ -175,9 +175,12 @@ func generateAuditRef() string {
 	return auditRefPrefix + hex.EncodeToString(b)
 }
 
-// resolveAuditSink returns an AuditSink derived from cfg + a fallback
+// ResolveAuditSink returns an AuditSink derived from cfg + a fallback
 // logger. Returns NoopAuditSink when cfg.Enabled=false.
-func resolveAuditSink(cfg AuditConfig, logger *slog.Logger) AuditSink {
+//
+// Exported because cmd/retrievr-mcp/main.go and pkg/retrievr.NewClientFromConfig
+// both consume it to wire the operator's `audit:` YAML block onto the Router.
+func ResolveAuditSink(cfg AuditConfig, logger *slog.Logger) AuditSink {
 	if !cfg.Enabled {
 		return NoopAuditSink()
 	}

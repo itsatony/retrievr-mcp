@@ -1650,24 +1650,24 @@ func TestResolveOAAPIKey(t *testing.T) {
 
 	t.Run("nil_creds_returns_server_default", func(t *testing.T) {
 		t.Parallel()
-		assert.Equal(t, "server-key", resolveOAAPIKey(nil, "server-key"))
+		assert.Equal(t, "server-key", resolveOAAPIKey(context.TODO(), "server-key"))
 	})
 
 	t.Run("per_call_overrides_server", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{OpenAlexAPIKey: "per-call-key"}
-		assert.Equal(t, "per-call-key", resolveOAAPIKey(WithCallCredentials(context.Background(), creds),"server-key"))
+		assert.Equal(t, "per-call-key", resolveOAAPIKey(WithCallCredentials(context.Background(), creds), "server-key"))
 	})
 
 	t.Run("empty_per_call_falls_back", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{}
-		assert.Equal(t, "server-key", resolveOAAPIKey(WithCallCredentials(context.Background(), creds),"server-key"))
+		assert.Equal(t, "server-key", resolveOAAPIKey(WithCallCredentials(context.Background(), creds), "server-key"))
 	})
 
 	t.Run("both_empty", func(t *testing.T) {
 		t.Parallel()
-		assert.Empty(t, resolveOAAPIKey(nil, ""))
+		assert.Empty(t, resolveOAAPIKey(context.TODO(), ""))
 	})
 }
 

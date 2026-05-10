@@ -668,6 +668,8 @@ sources:
 	assert.Empty(t, result.SourcesFailed)
 
 	// Verify dedup: shared DOI paper should have AlsoFoundIn.
+	// (This test path uses Router.Search directly which still returns the
+	// v1 Publication shape; only the MCP handler defaults to v2.)
 	var sharedPaper *Publication
 	for i := range result.Results {
 		if result.Results[i].DOI == e2eDOI {
@@ -754,7 +756,6 @@ sources:
 // → Router → MCP Server → HTTP endpoints → tool handlers. Mock plugins only
 // (no real HTTP sources), but ALL infrastructure is real.
 func TestE2EMCPServerFullPipeline(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	// Not parallel: mutates global version state.
 	const e2eServerVersion = "0.4.0-e2e"
 	SetVersionForTesting(e2eServerVersion, "e2e-commit", "2024-04-05")
@@ -942,7 +943,7 @@ sources:
 
 	// Parse search response.
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -953,22 +954,22 @@ sources:
 	assert.Empty(t, merged.SourcesFailed)
 
 	// Verify dedup: shared DOI paper should have AlsoFoundIn and highest citations.
-	var sharedPaper *Publication
+	var sharedPaper *Result
 	for i := range merged.Results {
-		if merged.Results[i].DOI == e2eDOI {
+		if merged.Results[i].Paper != nil && merged.Results[i].Paper.DOI == e2eDOI {
 			sharedPaper = &merged.Results[i]
 			break
 		}
 	}
 	require.NotNil(t, sharedPaper, "shared DOI paper should be in results")
 	assert.NotEmpty(t, sharedPaper.AlsoFoundIn)
-	require.NotNil(t, sharedPaper.CitationCount)
-	assert.Equal(t, e2eCitations50, *sharedPaper.CitationCount, "highest citation count wins")
-
-	// Merged source metadata should contain keys from both sources.
-	require.NotNil(t, sharedPaper.SourceMetadata)
-	assert.Contains(t, sharedPaper.SourceMetadata, "arxiv_cat")
-	assert.Contains(t, sharedPaper.SourceMetadata, "s2_tldr")
+	require.NotNil(t, sharedPaper.Paper)
+	require.NotNil(t, sharedPaper.Paper.CitationCount)
+	assert.Equal(t, e2eCitations50, *sharedPaper.Paper.CitationCount, "highest citation count wins")
+	// (v2 Result drops SourceMetadata top-level; per-source-specific keys
+	// like "arxiv_cat"/"s2_tldr" are absorbed into per-kind data blocks
+	// where the converter knows them, or discarded otherwise. Cycle-3
+	// migration omits these legacy assertions.)
 
 	// 8b: rtv_get
 	getHandler := NewGetHandler(router)
@@ -1056,7 +1057,6 @@ const (
 // The ONLY fake element is the ArXiv HTTP endpoint (httptest). Everything else
 // is real production code.
 func TestE2EArXivPluginFullPipeline(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	// Not parallel: mutates global version state.
 	SetVersionForTesting(e2eArxivVersion, "e2e-commit", "2024-04-05")
 	t.Cleanup(ResetVersionForTesting)
@@ -1248,7 +1248,7 @@ sources:
 	assert.False(t, searchResult.IsError, "search should succeed")
 
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -1259,12 +1259,13 @@ sources:
 	// Verify first result mapping.
 	pub1 := merged.Results[0]
 	assert.Equal(t, SourceArXiv, pub1.Source)
-	assert.Equal(t, ContentTypePaper, pub1.ContentType)
+	assert.Equal(t, KindPaper, pub1.Kind)
 	assert.NotEmpty(t, pub1.Title)
 	assert.NotEmpty(t, pub1.Abstract)
 	assert.NotEmpty(t, pub1.URL)
-	assert.NotEmpty(t, pub1.PDFURL)
-	assert.NotEmpty(t, pub1.ArXivID)
+	require.NotNil(t, pub1.Paper)
+	assert.NotEmpty(t, pub1.Paper.PDFURL)
+	assert.NotEmpty(t, pub1.Paper.ArXivID)
 	assert.NotEmpty(t, pub1.Published)
 	assert.NotEmpty(t, pub1.Authors)
 
@@ -1381,7 +1382,6 @@ const (
 // Validates multi-source search, dedup by DOI, citation merge, and credential
 // propagation.
 func TestE2ES2PluginMultiSourcePipeline(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	// Not parallel: mutates global version state.
 	SetVersionForTesting(e2eS2Version, "e2e-commit", "2024-04-06")
 	t.Cleanup(ResetVersionForTesting)
@@ -1657,7 +1657,7 @@ sources:
 	assert.False(t, searchResult.IsError, "search should succeed")
 
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -1669,9 +1669,9 @@ sources:
 	assert.Empty(t, merged.SourcesFailed)
 
 	// Step 8: Verify DOI-based dedup.
-	var sharedPaper *Publication
+	var sharedPaper *Result
 	for i := range merged.Results {
-		if merged.Results[i].DOI == e2eS2SharedDOI {
+		if merged.Results[i].Paper != nil && merged.Results[i].Paper.DOI == e2eS2SharedDOI {
 			sharedPaper = &merged.Results[i]
 			break
 		}
@@ -1680,16 +1680,16 @@ sources:
 	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in")
 
 	// Highest citation count should win (S2 has 75, ArXiv has nil).
-	require.NotNil(t, sharedPaper.CitationCount)
+	require.NotNil(t, sharedPaper.Paper)
+	require.NotNil(t, sharedPaper.Paper.CitationCount)
 	e2eExpectedCitations := 75
-	assert.Equal(t, e2eExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
-
-	// Merged source metadata should contain keys from both sources.
-	require.NotNil(t, sharedPaper.SourceMetadata)
+	assert.Equal(t, e2eExpectedCitations, *sharedPaper.Paper.CitationCount, "highest citation count should win")
+	// (v2 Result drops SourceMetadata top-level; cycle-3 migration omits the legacy
+	// "merged source metadata contains keys from both sources" assertion.)
 
 	// Step 9: Verify citation sort order: 75 first (highest), then others.
-	require.NotNil(t, merged.Results[0].CitationCount)
-	assert.Equal(t, e2eExpectedCitations, *merged.Results[0].CitationCount)
+	require.NotNil(t, merged.Results[0].Paper.CitationCount)
+	assert.Equal(t, e2eExpectedCitations, *merged.Results[0].Paper.CitationCount)
 
 	// Step 10: Test S2 Get via MCP tool handler.
 	getHandler := NewGetHandler(router)
@@ -1834,7 +1834,6 @@ const (
 // real CredentialResolver → MCP tool handlers. Validates triple-source search,
 // dedup by DOI, inverted abstract reconstruction, and credential propagation.
 func TestE2EOpenAlexPluginTripleSourcePipeline(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	// Not parallel: mutates global version state.
 	SetVersionForTesting(e2eOAVersion, "e2e-commit", "2024-04-07")
 	t.Cleanup(ResetVersionForTesting)
@@ -2185,7 +2184,7 @@ sources:
 	assert.False(t, searchResult.IsError, "search should succeed")
 
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -2198,9 +2197,9 @@ sources:
 	assert.Empty(t, merged.SourcesFailed)
 
 	// Step 9: Verify DOI-based dedup across all three sources.
-	var sharedPaper *Publication
+	var sharedPaper *Result
 	for i := range merged.Results {
-		if merged.Results[i].DOI == e2eOASharedDOI {
+		if merged.Results[i].Paper.DOI == e2eOASharedDOI {
 			sharedPaper = &merged.Results[i]
 			break
 		}
@@ -2209,8 +2208,9 @@ sources:
 	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in from multiple sources")
 
 	// Highest citation count should win (OA has 150, S2 has 120, ArXiv has nil).
-	require.NotNil(t, sharedPaper.CitationCount)
-	assert.Equal(t, e2eOAExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
+	require.NotNil(t, sharedPaper.Paper)
+	require.NotNil(t, sharedPaper.Paper.CitationCount)
+	assert.Equal(t, e2eOAExpectedCitations, *sharedPaper.Paper.CitationCount, "highest citation count should win")
 
 	// Step 10: Test OpenAlex Get via MCP tool handler.
 	getHandler := NewGetHandler(router)
@@ -2345,7 +2345,6 @@ const (
 // real CredentialResolver → MCP tool handlers. Validates quad-source search,
 // dedup by DOI, PubMed two-phase workflow, and credential propagation.
 func TestE2EPubMedPluginQuadSourcePipeline(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	// Not parallel: mutates global version state.
 	SetVersionForTesting(e2ePMVersion, "e2e-commit", "2024-04-07")
 	t.Cleanup(ResetVersionForTesting)
@@ -2790,7 +2789,7 @@ sources:
 	assert.False(t, searchResult.IsError, "search should succeed")
 
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -2804,9 +2803,9 @@ sources:
 	assert.Empty(t, merged.SourcesFailed)
 
 	// Step 10: Verify DOI-based dedup across all four sources.
-	var sharedPaper *Publication
+	var sharedPaper *Result
 	for i := range merged.Results {
-		if merged.Results[i].DOI == e2ePMSharedDOI {
+		if merged.Results[i].Paper.DOI == e2ePMSharedDOI {
 			sharedPaper = &merged.Results[i]
 			break
 		}
@@ -2815,8 +2814,9 @@ sources:
 	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in from multiple sources")
 
 	// Highest citation count should win (OA has 200, S2 has 180, ArXiv has nil, PubMed has nil).
-	require.NotNil(t, sharedPaper.CitationCount)
-	assert.Equal(t, e2ePMExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
+	require.NotNil(t, sharedPaper.Paper)
+	require.NotNil(t, sharedPaper.Paper.CitationCount)
+	assert.Equal(t, e2ePMExpectedCitations, *sharedPaper.Paper.CitationCount, "highest citation count should win")
 
 	// Step 11: Test PubMed Get via MCP tool handler.
 	getHandler := NewGetHandler(router)
@@ -2957,7 +2957,6 @@ const (
 // real CredentialResolver → MCP tool handlers. Validates quint-source search,
 // dedup by DOI across five sources, and EuropePMC JSON workflow.
 func TestE2EEuropePMCPluginQuintSourcePipeline(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	// Not parallel: mutates global version state.
 	SetVersionForTesting(e2eEMCVersion, "e2e-commit", "2024-04-09")
 	t.Cleanup(ResetVersionForTesting)
@@ -3441,7 +3440,7 @@ sources:
 	assert.False(t, searchResult.IsError, "search should succeed")
 
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -3456,9 +3455,9 @@ sources:
 	assert.Empty(t, merged.SourcesFailed)
 
 	// Step 11: Verify DOI-based dedup across all five sources.
-	var sharedPaper *Publication
+	var sharedPaper *Result
 	for i := range merged.Results {
-		if merged.Results[i].DOI == e2eEMCSharedDOI {
+		if merged.Results[i].Paper.DOI == e2eEMCSharedDOI {
 			sharedPaper = &merged.Results[i]
 			break
 		}
@@ -3467,8 +3466,9 @@ sources:
 	assert.NotEmpty(t, sharedPaper.AlsoFoundIn, "should track also_found_in from multiple sources")
 
 	// Highest citation count should win (OA has 250, EPMC has 200, S2 has 180, ArXiv nil, PM nil).
-	require.NotNil(t, sharedPaper.CitationCount)
-	assert.Equal(t, e2eEMCExpectedCitations, *sharedPaper.CitationCount, "highest citation count should win")
+	require.NotNil(t, sharedPaper.Paper)
+	require.NotNil(t, sharedPaper.Paper.CitationCount)
+	assert.Equal(t, e2eEMCExpectedCitations, *sharedPaper.Paper.CitationCount, "highest citation count should win")
 
 	// Step 12: Test EuropePMC Get via MCP tool handler.
 	getHandler := NewGetHandler(router)
@@ -3633,7 +3633,6 @@ const (
 // credential passthrough, BibTeX format, and ArXiv ID dedup.
 // Not parallel: mutates global version state.
 func TestE2EHuggingFace(t *testing.T) {
-	t.Skip("v1 compat sunset in v2.0.0 — cycle-3 migration debt; see CHANGELOG and rtv.plugin.<src>_test.go for v2-shape coverage")
 	SetVersionForTesting(e2eHFVersion, "e2e-commit", "2024-04-07")
 	t.Cleanup(ResetVersionForTesting)
 
@@ -3842,7 +3841,7 @@ sources:
 	assert.False(t, searchResult.IsError, "search should succeed")
 
 	searchText := extractTextContent(t, searchResult)
-	var merged MergedSearchResult
+	var merged MergedSearchResultV2
 	err = json.Unmarshal([]byte(searchText), &merged)
 	require.NoError(t, err)
 
@@ -3850,18 +3849,21 @@ sources:
 	assert.Contains(t, merged.SourcesQueried, SourceHuggingFace)
 	assert.Empty(t, merged.SourcesFailed)
 
-	// Verify we have all three content types.
+	// Verify we have all three result kinds. v2 result kind comes from the
+	// converter's kindForSource fallback that maps Publication.ContentType
+	// onto the corresponding ResultKind when Capabilities.Kinds is unset.
 	var hasPaper, hasModel, hasDataset bool
 	for _, pub := range merged.Results {
-		switch pub.ContentType {
-		case ContentTypePaper:
+		switch pub.Kind {
+		case KindPaper:
 			hasPaper = true
 			assert.Equal(t, e2eHFPaperTitle, pub.Title)
-			assert.Equal(t, e2eHFPaperID, pub.ArXivID)
-		case ContentTypeModel:
+			require.NotNil(t, pub.Paper)
+			assert.Equal(t, e2eHFPaperID, pub.Paper.ArXivID)
+		case KindModel:
 			hasModel = true
 			assert.Equal(t, e2eHFModelID, pub.Title)
-		case ContentTypeDataset:
+		case KindDataset:
 			hasDataset = true
 			assert.Equal(t, e2eHFDatasetID, pub.Title)
 			assert.Equal(t, e2eHFDatasetDescription, pub.Abstract)
@@ -3886,11 +3888,11 @@ sources:
 	paperResult, err := searchHandler(ctx, paperSearchReq)
 	require.NoError(t, err)
 	paperText := extractTextContent(t, paperResult)
-	var paperMerged MergedSearchResult
+	var paperMerged MergedSearchResultV2
 	err = json.Unmarshal([]byte(paperText), &paperMerged)
 	require.NoError(t, err)
 	assert.Len(t, paperMerged.Results, 1)
-	assert.Equal(t, ContentTypePaper, paperMerged.Results[0].ContentType)
+	assert.Equal(t, KindPaper, paperMerged.Results[0].Kind)
 
 	// ---------------------------------------------------------------
 	// Step 8: Get paper with full text and related models.

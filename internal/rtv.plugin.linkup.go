@@ -73,8 +73,8 @@ type linkupSearchResponse struct {
 }
 
 type linkupResult struct {
-	Type    string `json:"type"`              // "text" | "image" — we only consume "text"
-	Name    string `json:"name"`              // title
+	Type    string `json:"type"` // "text" | "image" — we only consume "text"
+	Name    string `json:"name"` // title
 	URL     string `json:"url"`
 	Content string `json:"content,omitempty"` // snippet / extract
 	Snippet string `json:"snippet,omitempty"` // legacy field name

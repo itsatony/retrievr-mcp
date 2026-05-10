@@ -60,9 +60,9 @@ const (
 // ---------------------------------------------------------------------------
 
 type perplexityChatRequest struct {
-	Model           string                  `json:"model"`
-	Messages        []perplexityMessage     `json:"messages"`
-	ReturnCitations bool                    `json:"return_citations,omitempty"`
+	Model           string              `json:"model"`
+	Messages        []perplexityMessage `json:"messages"`
+	ReturnCitations bool                `json:"return_citations,omitempty"`
 }
 
 type perplexityMessage struct {
@@ -216,7 +216,7 @@ func (p *PerplexityPlugin) Search(ctx context.Context, params SearchParams) (*Se
 		primary.URL = resp.Citations[0]
 	}
 	primary.SourceMetadata = map[string]any{
-		smetaSnippet: truncateSnippet(answer),
+		smetaSnippet:  truncateSnippet(answer),
 		"llm_context": answer,
 		"model":       resp.Model,
 	}

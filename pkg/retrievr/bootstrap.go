@@ -81,7 +81,25 @@ func NewClientFromConfig(configPath string, logger *slog.Logger) (*Client, func(
 		serverDefaults[id] = src.APIKey
 	}
 
-	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, metrics, logger)
+	// Pre-flight providers.yaml drift check (EU-mode Hook #6). Fatal-on-strict
+	// per cfg.Snapshot.Strict; warn-only otherwise.
+	if err := internal.VerifyProvidersSnapshot(cfg.Snapshot, logger); err != nil {
+		return nil, nil, fmt.Errorf("retrievr: %w", err)
+	}
+
+	// Wire EU-mode + audit + Unpaywall enrichment from the YAML config.
+	routerOpts := []internal.RouterOption{
+		internal.WithEUMode(cfg.EUMode.Mode, cfg.EUMode.IncludePublicResearch),
+		internal.WithAuditSink(internal.ResolveAuditSink(cfg.Audit, logger)),
+		internal.WithAuditLogQueryPlaintext(cfg.Audit.LogQueryPlaintext),
+	}
+	if cfg.Enrichment.Unpaywall.Enabled {
+		if up, ok := plugins[internal.SourceUnpaywall].(*internal.UnpaywallPlugin); ok {
+			routerOpts = append(routerOpts, internal.WithUnpaywallEnrichment(up))
+		}
+	}
+
+	router := internal.NewRouter(cfg.Router, plugins, serverDefaults, cache, rateLimits, resolver, metrics, logger, routerOpts...)
 	client := NewClientFromRouter(router, WithLogger(logger))
 
 	return client, rateLimits.Stop, nil

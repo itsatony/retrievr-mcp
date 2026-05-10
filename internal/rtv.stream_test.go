@@ -51,8 +51,8 @@ func TestStream_PartialFailureSurfacesPerSourceError(t *testing.T) {
 		return nil, errors.New("upstream 503")
 	}
 	plugins := map[string]SourcePlugin{
-		"badA":    failing,
-		"goodB":   newMockPlugin("goodB", []Publication{testPub("goodB", "b:1", testDOI1, nil)}),
+		"badA":  failing,
+		"goodB": newMockPlugin("goodB", []Publication{testPub("goodB", "b:1", testDOI1, nil)}),
 	}
 	cfg := testRouterConfig()
 	cfg.DefaultSources = []string{"badA", "goodB"}

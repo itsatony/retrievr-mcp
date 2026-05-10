@@ -22,12 +22,12 @@ import (
 // SourceMetadata keys recognized by toResult — wave-1 plugins set these on
 // Publication.SourceMetadata when their result has non-paper-shaped data.
 const (
-	smetaKindOverride = "kind"        // explicit Kind override (e.g., "web")
-	smetaSnippet      = "snippet"     // short summary for web/news/code
-	smetaDomain       = "domain"      // hostname (web/news/code)
-	smetaLanguage     = "language"    // BCP-47 (any kind)
-	smetaStars        = "stars"       // *int (code/model)
-	smetaSiteName     = "site_name"   // web
+	smetaKindOverride = "kind"         // explicit Kind override (e.g., "web")
+	smetaSnippet      = "snippet"      // short summary for web/news/code
+	smetaDomain       = "domain"       // hostname (web/news/code)
+	smetaLanguage     = "language"     // BCP-47 (any kind)
+	smetaStars        = "stars"        // *int (code/model)
+	smetaSiteName     = "site_name"    // web
 	smetaPublishedAt  = "published_at" // web/news (precise timestamp)
 	smetaReadingMins  = "reading_mins" // web
 
@@ -51,7 +51,9 @@ const (
 // Lookup priority:
 //  1. SourceMetadata["kind"] — explicit per-result override.
 //  2. plugins[sourceID].Capabilities().Kinds[0] — declared default.
-//  3. KindPaper — cycle-1 fallback (every existing plugin is paper).
+//  3. Publication.ContentType mapping — covers HuggingFace's mixed
+//     paper/model/dataset emissions where Capabilities().Kinds is unset.
+//  4. KindPaper — cycle-1 fallback (every cycle-1 plugin is paper).
 func kindForSource(p Publication, plugin SourcePlugin) ResultKind {
 	if v, ok := p.SourceMetadata[smetaKindOverride].(string); ok && IsValidResultKind(v) {
 		return ResultKind(v)
@@ -60,6 +62,14 @@ func kindForSource(p Publication, plugin SourcePlugin) ResultKind {
 		if kinds := plugin.Capabilities().Kinds; len(kinds) > 0 {
 			return kinds[0]
 		}
+	}
+	switch p.ContentType {
+	case ContentTypeModel:
+		return KindModel
+	case ContentTypeDataset:
+		return KindDataset
+	case ContentTypePaper:
+		return KindPaper
 	}
 	return KindPaper
 }

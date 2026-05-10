@@ -346,7 +346,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			Query:       "attention",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -371,7 +371,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			Query:       "llama",
 			ContentType: ContentTypeModel,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -396,7 +396,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			Query:       "squad",
 			ContentType: ContentTypeDataset,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -431,7 +431,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			Query:       "transformer",
 			ContentType: ContentTypeAny,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -458,7 +458,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			ContentType: ContentTypeModel,
 			Limit:       10,
 			Filters:     SearchFilters{Categories: []string{testHFPipelineTag1}},
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
@@ -479,7 +479,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			ContentType: ContentTypeModel,
 			Sort:        SortDateDesc,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
@@ -500,7 +500,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			ContentType: ContentTypeModel,
 			Sort:        SortCitations,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
@@ -521,7 +521,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			ContentType: ContentTypePaper,
 			Limit:       10,
 			Offset:      20,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
@@ -541,7 +541,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			ContentType: ContentTypeModel,
 			Limit:       10,
 			Offset:      20,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
@@ -552,7 +552,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			Query:       "",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrHFEmptyQuery))
 	})
@@ -571,7 +571,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			Query:       "nonexistent",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 		assert.Empty(t, result.Results)
 		assert.False(t, result.HasMore)
@@ -594,7 +594,7 @@ func TestHuggingFaceSearch(t *testing.T) {
 			ContentType: ContentTypeDataset,
 			Sort:        SortDateDesc,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 }
@@ -617,7 +617,7 @@ func TestHuggingFaceSearchPaperMapping(t *testing.T) {
 		Query:       "test",
 		ContentType: ContentTypePaper,
 		Limit:       10,
-	}, nil)
+	})
 
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
@@ -655,7 +655,7 @@ func TestHuggingFaceSearchModelMapping(t *testing.T) {
 		Query:       "test",
 		ContentType: ContentTypeModel,
 		Limit:       10,
-	}, nil)
+	})
 
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
@@ -692,7 +692,7 @@ func TestHuggingFaceSearchDatasetMapping(t *testing.T) {
 		Query:       "test",
 		ContentType: ContentTypeDataset,
 		Limit:       10,
-	}, nil)
+	})
 
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
@@ -734,7 +734,7 @@ func TestHuggingFaceContentTypeRouting(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		assert.Empty(t, result.Results)
@@ -754,7 +754,7 @@ func TestHuggingFaceContentTypeRouting(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypeModel,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		assert.Empty(t, result.Results)
@@ -774,7 +774,7 @@ func TestHuggingFaceContentTypeRouting(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypeDataset,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		assert.Empty(t, result.Results)
@@ -808,7 +808,7 @@ func TestHuggingFaceContentTypeRouting(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypeAny,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		assert.True(t, papersHit.Load(), "papers API should be hit")
@@ -845,7 +845,7 @@ func TestHuggingFaceSearchPartialFailure(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypeAny,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		assert.Len(t, result.Results, 2)
@@ -864,7 +864,7 @@ func TestHuggingFaceSearchPartialFailure(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypeAny,
 			Limit:       10,
-		}, nil)
+		})
 
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSearchFailed))
@@ -890,7 +890,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		pub, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -919,7 +919,7 @@ func TestHuggingFaceGet(t *testing.T) {
 
 		plugin := newHFTestPlugin(t, server.URL)
 		pub, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1,
-			[]IncludeField{IncludeFullText}, FormatNative, nil)
+			[]IncludeField{IncludeFullText}, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -950,7 +950,7 @@ func TestHuggingFaceGet(t *testing.T) {
 
 		plugin := newHFTestPlugin(t, server.URL)
 		pub, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1,
-			[]IncludeField{IncludeRelated}, FormatNative, nil)
+			[]IncludeField{IncludeRelated}, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -977,7 +977,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		_, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatBibTeX, nil)
+		_, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatBibTeX)
 
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrFormatUnsupported))
@@ -995,7 +995,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		pub, err := plugin.Get(context.Background(), hfSubTypeModel+testHFModelID1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), hfSubTypeModel+testHFModelID1, nil, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -1016,7 +1016,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		pub, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -1034,7 +1034,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		_, err := plugin.Get(context.Background(), hfSubTypePaper+"9999.99999", nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), hfSubTypePaper+"9999.99999", nil, FormatNative)
 
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrGetFailed))
@@ -1044,7 +1044,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		t.Parallel()
 
 		plugin := newHFTestPlugin(t, "http://unused.test/")
-		_, err := plugin.Get(context.Background(), "unknown/foo", nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), "unknown/foo", nil, FormatNative)
 
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrHFNotFound))
@@ -1061,7 +1061,7 @@ func TestHuggingFaceGet(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		_, err := plugin.Get(context.Background(), hfSubTypeModel+testHFModelID1, nil, FormatXML, nil)
+		_, err := plugin.Get(context.Background(), hfSubTypeModel+testHFModelID1, nil, FormatXML)
 
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrFormatUnsupported))
@@ -1084,7 +1084,7 @@ func TestHuggingFaceGet(t *testing.T) {
 
 		plugin := newHFTestPlugin(t, server.URL)
 		pub, err := plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1,
-			[]IncludeField{IncludeFullText}, FormatNative, nil)
+			[]IncludeField{IncludeFullText}, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -1111,11 +1111,12 @@ func TestHuggingFaceCredentialResolution(t *testing.T) {
 
 		plugin := newHFTestPluginWithAPIKey(t, server.URL, testHFAPIKey)
 		creds := &CallCredentials{HFToken: testHFPerCallKey}
-		_, err := plugin.Search(context.Background(), SearchParams{
+		ctx := WithCallCredentials(context.Background(), creds)
+		_, err := plugin.Search(ctx, SearchParams{
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, creds)
+		})
 		require.NoError(t, err)
 	})
 
@@ -1134,7 +1135,7 @@ func TestHuggingFaceCredentialResolution(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
@@ -1153,7 +1154,7 @@ func TestHuggingFaceCredentialResolution(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 }
@@ -1186,7 +1187,7 @@ func TestHuggingFaceHealthTracking(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 
 		health := plugin.Health(context.Background())
 		assert.False(t, health.Healthy)
@@ -1214,7 +1215,7 @@ func TestHuggingFaceHealthTracking(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		assert.False(t, plugin.Health(context.Background()).Healthy)
 
 		// Second call succeeds.
@@ -1222,7 +1223,7 @@ func TestHuggingFaceHealthTracking(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.NoError(t, err)
 		assert.True(t, plugin.Health(context.Background()).Healthy)
 	})
@@ -1248,7 +1249,7 @@ func TestHuggingFaceHTTPErrors(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSearchFailed))
 	})
@@ -1262,7 +1263,7 @@ func TestHuggingFaceHTTPErrors(t *testing.T) {
 		defer server.Close()
 
 		plugin := newHFTestPlugin(t, server.URL)
-		_, err := plugin.Get(context.Background(), hfSubTypePaper+"9999.99999", nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), hfSubTypePaper+"9999.99999", nil, FormatNative)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrGetFailed))
 	})
@@ -1284,7 +1285,7 @@ func TestHuggingFaceHTTPErrors(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.Error(t, err)
 	})
 
@@ -1302,7 +1303,7 @@ func TestHuggingFaceHTTPErrors(t *testing.T) {
 			Query:       "test",
 			ContentType: ContentTypePaper,
 			Limit:       10,
-		}, nil)
+		})
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSearchFailed))
 	})
@@ -1455,15 +1456,15 @@ func TestHuggingFaceConcurrentAccess(t *testing.T) {
 					Query:       "test",
 					ContentType: ContentTypePaper,
 					Limit:       10,
-				}, nil)
+				})
 			case 1:
 				_, _ = plugin.Search(context.Background(), SearchParams{
 					Query:       "test",
 					ContentType: ContentTypeModel,
 					Limit:       10,
-				}, nil)
+				})
 			case 2:
-				_, _ = plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatNative, nil)
+				_, _ = plugin.Get(context.Background(), hfSubTypePaper+testHFPaperID1, nil, FormatNative)
 			case 3:
 				_ = plugin.Health(context.Background())
 			}
@@ -1765,7 +1766,7 @@ func TestHuggingFaceSearchEmptyContentTypeDefaultsPaper(t *testing.T) {
 		Query:       "test",
 		ContentType: "", // empty — should default to papers
 		Limit:       10,
-	}, nil)
+	})
 
 	require.NoError(t, err)
 	assert.Len(t, result.Results, 1)
@@ -1790,14 +1791,14 @@ func TestResolveHFToken(t *testing.T) {
 	t.Run("per_call_overrides_server", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{HFToken: testHFPerCallKey}
-		token := resolveHFToken(creds, testHFAPIKey)
+		token := resolveHFToken(WithCallCredentials(context.Background(), creds), testHFAPIKey)
 		assert.Equal(t, testHFPerCallKey, token)
 	})
 
 	t.Run("empty_per_call_falls_through_to_server", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{HFToken: ""}
-		token := resolveHFToken(creds, testHFAPIKey)
+		token := resolveHFToken(WithCallCredentials(context.Background(), creds), testHFAPIKey)
 		assert.Equal(t, testHFAPIKey, token)
 	})
 
@@ -1883,7 +1884,7 @@ func TestHuggingFaceGetDatasetBibTeXUnsupported(t *testing.T) {
 	defer server.Close()
 
 	plugin := newHFTestPlugin(t, server.URL)
-	_, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatBibTeX, nil)
+	_, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatBibTeX)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrFormatUnsupported))
@@ -1898,7 +1899,7 @@ func TestHuggingFaceGetDatasetServerError(t *testing.T) {
 	defer server.Close()
 
 	plugin := newHFTestPlugin(t, server.URL)
-	_, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatNative, nil)
+	_, err := plugin.Get(context.Background(), hfSubTypeDataset+testHFDatasetID1, nil, FormatNative)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrGetFailed))

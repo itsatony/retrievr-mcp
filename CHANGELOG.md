@@ -5,6 +5,96 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.5.0] - 2026-05-10
+
+Cycle 1 of the v2 multi-cycle plan (`project_plan/retrievr_v2.md`). Headline
+goal: extract retrievr's retrieval logic as an importable Go library so liz,
+nexus, and other in-process consumers no longer pay the MCP HTTP hop. Cycle
+1 is **infrastructure-only** — no new providers, no breaking changes for
+MCP consumers. Wave-1 providers (Exa, Brave, Linkup, Firecrawl, Unpaywall,
+GitHub, Wikipedia) and the EU-GDPR mode arrive in v1.6.0 (cycle 2).
+
+### Added
+- **Public package `pkg/retrievr`** — importable surface with `Client`,
+  `Search`, `Get`, `ListSources`, type aliases for every domain type, and
+  the new credential / intent / EU-mode types. Cycle-1 escape hatch
+  `NewClientFromConfig(configPath, logger)` lets external Go modules wire a
+  Client end-to-end with one call. (Cycle 2 replaces this with a richer
+  `NewClient(opts ...ClientOption)`.)
+- **Context-based credentials.** New `retrievr.WithCredentials(ctx, map[string]string)`
+  and `internal.WithCallCredentials(ctx, *CallCredentials)` carry per-call
+  API keys keyed by source ID. The legacy `*CallCredentials` typed surface
+  remains for the MCP wrapper during cycle 1.
+- **Composable plugin-invocation middleware** (`internal/rtv.pluginchain.go`).
+  Order outermost → innermost: retry → rate-limit → timeout → plugin.
+  Equal-jitter exponential backoff (`RetryConfig`, `DefaultRetryConfig` —
+  3 attempts, 250ms base, 8s cap). Each retry attempt acquires its own
+  rate-limit token (matches liz DC-145).
+- **Intent + per-intent fallback chains.** New `Intent` enum
+  (`deep_research`, `quick_lookup`, `primary_source`, `code_provenance`,
+  `news`, `reference`) on `SearchParams`. New `RouterFallbackConfig` maps
+  intents → primary source set + ordered fallback list. When primary returns
+  zero results (or all-fail), router walks the fallback list sequentially
+  and short-circuits on the first hit. Cycle-1 default: `academic` chain
+  (primary `[s2, openalex]`, fallback `[arxiv, crossref, europmc, pubmed]`)
+  mapped to `IntentDeepResearch` and `IntentPrimarySource`.
+- **`cmd/retrievr-cli`** — thin standalone CLI built on `pkg/retrievr.Client`.
+  Subcommands: `search`, `get`, `sources`. Table or JSON output. Per-call
+  API keys from `RETRIEVR_<SOURCEID>_API_KEY` env vars. Stdlib-only (no
+  cobra).
+- **Result fat-struct stub** (`pkg/retrievr/result.go`). Defines `Result`
+  with `Kind` discriminator + per-kind data blocks (`PaperData`, `WebData`,
+  `CodeData`, `NewsData`, `ModelData`, `DatasetData`, `EncyclopediaData`).
+  Not yet emitted by plugins — plugins still produce `Publication` in cycle
+  1; cycle 2 wires the new shape with a v1 `compat: "v1"` MCP shim.
+- **EU-mode + audit-sink scaffolding** (`pkg/retrievr/eumode.go`,
+  `audit.go`). `EUMode` enum (`off | eu_preferred | eu_strict`), `Region`
+  classifications (EU, UK-adequacy, US, public-research-infrastructure,
+  unknown), `AuditEvent` + `AuditSink` interface. Stubs only in cycle 1 —
+  the gate, mode-filter, six audit hooks, and refusal path land in v1.6.0.
+- **`SourceCapabilities.QueryIntents`** — informational field on every
+  source's capabilities for intent-tag surfacing via `rtv_list_sources`.
+- **Project plan** `project_plan/retrievr_v2.md` (~975 lines) covering
+  cycles 1–3, package layout, middleware diagram, EU-mode hooks, risk
+  register, sign-up checklist.
+
+### Changed
+- **`SourcePlugin` interface** — `Search(ctx, params)` and `Get(ctx, id, include, format)`.
+  The `creds *CallCredentials` parameter is removed; plugins read
+  credentials from ctx via `internal.CredentialFor(ctx, sourceID, fallback)`.
+  All 10 providers (ArXiv, S2, OpenAlex, PubMed, Europe PMC, HuggingFace,
+  CrossRef, DBLP, NASA ADS, bioRxiv) migrated. **Breaking** for any
+  external Go consumer of the interface, but the package was effectively
+  internal-only before this cycle.
+- **`Router.searchOneSource` and `Router.Get`** rewritten to invoke plugins
+  through the middleware chain. Plugin call latency unchanged in the happy
+  path; transient errors now retry with backoff before bubbling up.
+- **`RouterConfig.Retry`** (new YAML field, optional) — `RouterRetryConfig`
+  with `max_attempts`, `base_delay`, `max_delay`, `jitter_fraction`. Zero
+  values fall through to `DefaultRetryConfig`.
+- **`RouterConfig.Fallback`** (new YAML field, optional) — `RouterFallbackConfig`
+  with per-intent chain definitions. Zero values fall through to
+  `DefaultFallbackConfig` (cycle-1 academic chain).
+- **`Router.Search`** resolution precedence is now: explicit `Sources` arg
+  → `params.Intent` chain lookup → `Router.defaultSources`. Behavior with
+  empty `Intent` is byte-identical to v1.1.1.
+
+### Fixed
+- `CredentialFor(ctx, …)` is nil-ctx safe — returns the fallback when ctx is
+  nil, rather than panicking on the value lookup.
+
+### Tests
+- `internal/rtv.pluginchain_test.go` — 15 tests covering chain ordering,
+  per-attempt timeout, equal-jitter backoff math, retry-after-N-attempts,
+  context-cancellation short-circuit, RouterRetryConfig zero-value
+  substitution, transient-error predicate.
+- `internal/rtv.fallback_test.go` — 9 tests covering chain primary
+  resolution, fallback walk on zero-results / all-fail, no-walk when
+  Sources explicit / Intent empty, `DefaultFallbackConfig` shape,
+  `resolveFallbackConfig` zero-value substitution.
+- `pkg/retrievr/smoke_test.go` — exercises every public identifier
+  including the new credentials map, intent surface, and `DefaultFallbackConfig`.
+
 ## [1.1.1] - 2026-04-21
 
 ### Fixed

@@ -230,3 +230,228 @@ After YAML config parsing and validation, `applyEnvOverrides()` checks for `RETR
 - No custom YAML processing or template engine needed.
 - Env vars take precedence over YAML values — operators can override without touching config files.
 - Only API keys are overridable (not arbitrary config fields), limiting the attack surface.
+
+---
+
+## ADR-013: Public `pkg/retrievr` Library Surface
+
+**Status:** Accepted (cycle 1, v1.5.0)
+
+### Context
+
+ADR-001 codified a flat `internal/` package structure that, by Go's
+visibility rules, is unreachable from any module outside `retrievr-mcp/`.
+That worked while retrievr was MCP-only — every consumer reached it through
+the HTTP transport. As liz and (eventually) nexus moved toward
+in-process composition, the MCP hop became a measurable tax: per-call JSON
+marshal/unmarshal, TCP round-trip, and a translation layer that obscured
+typed errors and credential flow.
+
+### Decision
+
+Carve a public `pkg/retrievr` package whose surface is mostly type aliases
+into `internal/`. External consumers import `pkg/retrievr` directly; the
+MCP server (`cmd/retrievr-mcp`) and a new `cmd/retrievr-cli` are now thin
+wrappers around the same `*Client`. Cycle 1 escape hatch:
+`pkg/retrievr.NewClientFromConfig(configPath, logger)` does the full
+bootstrap (config → plugins → rate limits → cache → router → client) so
+external callers don't need to reach into `internal/`. Cycle 2 replaces
+this with a richer `NewClient(opts ...ClientOption)` that takes the config
+struct directly and exposes middleware / EU-mode / reranker / fallback
+hooks via functional options.
+
+### Consequences
+
+- liz, nexus, and any other Go consumer can import retrievr's surface
+  without the MCP hop. The liz integration spike at
+  `liz/internal/retrievr/` validates this end-to-end with a live ArXiv
+  search.
+- The `internal/` package keeps its single-package layout (ADR-001 still
+  stands); `pkg/retrievr` is a thin adapter, not a competing
+  implementation. Cycle 2 may extract specific subpackages
+  (`pkg/retrievr/internal/{rate,cache,dedup,fanout}`) when the middleware
+  refactor lands.
+- The MCP server still embeds the full upstream surface (no separate
+  binary needed). LoC budget on `cmd/retrievr-mcp/` is enforced via CI in
+  cycle 2 to keep the wrapper thin (≤300 LoC).
+- Type aliases in `pkg/retrievr` mean cycle-2 evolution of `Publication`
+  to the fat-struct `Result` is a coordinated change in two places (the
+  `internal` definition + the `pkg/retrievr` re-export), not a breaking
+  surface migration. MCP-side flattening shim handles the wire-format
+  transition.
+
+---
+
+## ADR-014: Context-Based Credentials, Plugin Signature Without `creds`
+
+**Status:** Accepted (cycle 1, v1.5.0)
+
+### Context
+
+Until v1.4.x, `SourcePlugin.Search` and `Get` carried a typed
+`creds *CallCredentials` parameter. That worked for five well-known
+sources (PubMed, S2, OpenAlex, HuggingFace, ADS) but locked the surface
+to a fixed credential schema; adding Wave-1 providers (Exa, Brave,
+Linkup, Firecrawl, GitHub) would have meant adding fields to
+`CallCredentials` for every new source — leaking provider knowledge into
+the upstream type and forcing every caller to change.
+
+### Decision
+
+Drop `creds` from the `SourcePlugin` interface. Credentials flow through
+`context.Context` instead, via two helpers:
+
+- `retrievr.WithCredentials(ctx, map[string]string)` — public,
+  source-ID-keyed map. The intended path for cycle 2+ providers and
+  external Go consumers.
+- `internal.WithCallCredentials(ctx, *CallCredentials)` — legacy typed
+  shape, populated by Router from MCP wrapper input during cycle 1.
+
+`internal.CredentialFor(ctx, sourceID, fallback)` resolves both, preferring
+the map when present. Diverges from the typical "don't put values in
+context" Go advice because credentials are exactly the cross-cutting,
+request-scoped, opaque-to-most-code-paths case context values were
+designed for (`*http.Request` carries auth the same way).
+
+### Consequences
+
+- New providers add a single map key; no upstream-type churn.
+- Plugin signatures shrank by one parameter, eliminating ~40 trivial
+  argument forwards across the 10 existing plugins.
+- The MCP wrapper's JSON unmarshal + ctx attachment is the single
+  translation point. Direct Go callers skip it entirely.
+- Tests that previously passed `*CallCredentials` directly now thread
+  through ctx — adds one line per call site but makes the credential
+  flow explicit. ~280 lines of test churn for 13 files.
+- Cycle 2 retires the legacy typed surface entirely; cycle 1 keeps both
+  to avoid a breaking change for the MCP wrapper.
+
+---
+
+## ADR-015: Plugin-Invocation Middleware Chain — Retry Above Rate-Limit
+
+**Status:** Accepted (cycle 1, v1.5.0)
+
+### Context
+
+`Router.searchOneSource` hard-coded the per-source resilience pipeline:
+rate-limit → timeout → plugin. That was fine for fan-out across stable
+providers, but transient upstream failures (HTTP 429, network blips)
+surfaced as immediate errors with no retry. Adding more layers (cache,
+fallback, metrics, EU-mode gate) would have meant editing one monolithic
+function repeatedly.
+
+### Decision
+
+Extract a closure-based middleware chain — `pluginOp = func(ctx) error`
+with `pluginMW = func(pluginOp) pluginOp`. Three middleware
+constructors land in cycle 1: `withTimeout`, `withRateLimit`, `withRetry`.
+The fixed order is **outermost → innermost**: retry → rate-limit →
+timeout → plugin. Retry sits ABOVE rate-limit so each attempt acquires
+its own bucket token (matches liz DC-145 — putting retry below would
+burn tokens that the inner code shouldn't have been issued).
+
+`withRetry` implements equal-jitter exponential backoff: `delay ∈ [0, base
+× growth^(attempt-1)]`, capped at `MaxDelay`. Default 3 attempts, 250ms
+base, 8s cap. Predicate-based — `context.Canceled` / `DeadlineExceeded`
+are never retried. Cycle 2 narrows the predicate when plugins start
+wrapping upstream HTTP errors with typed `RetryableError{RetryAfter}`.
+
+### Consequences
+
+- Per-source resilience is now configurable via `RouterConfig.Retry` YAML;
+  zero values inherit `DefaultRetryConfig`.
+- Cycle 2's planned cache, fallback (extracted from the current Router
+  level), and metrics middleware drop in cleanly — no more
+  `searchOneSource` surgery.
+- `closure-of-error` shape (rather than generic `Handler[T]`) keeps the
+  surface small. Search and Get callers capture their result types via
+  closure and reuse the same chain machinery without parallel generic
+  instantiations. Cycle 2 reconsiders if a fallback middleware needs
+  per-result-type hooks.
+- 15 dedicated unit tests lock the contract: chain ordering,
+  context-cancellation short-circuit, equal-jitter bounds, geometric
+  growth + MaxDelay cap, RouterRetryConfig zero-value substitution.
+
+---
+
+## ADR-016: Per-Intent Fallback Chains, Three-Level Source Resolution
+
+**Status:** Accepted (cycle 1, v1.5.0)
+
+### Context
+
+ADR-002's "fewer, more powerful tools" principle already lets callers
+target sources via a `sources` parameter, but assumes the caller knows
+which sources to ask. As wave-1 providers expand the source mix to web /
+code / encyclopedia (cycle 2), most callers — especially LLM agents —
+won't have that knowledge a priori. Naive "fan out to every enabled
+source" wastes rate-limit budget on irrelevant providers and dilutes
+ranking. We need a way for the caller to declare *intent* and let
+Router pick.
+
+### Decision
+
+Add an `Intent` enum to `SearchParams` with values `deep_research`,
+`quick_lookup`, `primary_source`, `code_provenance`, `news`, `reference`.
+Add a `RouterFallbackConfig` mapping intents → primary source set + ordered
+fallback list. Source resolution becomes three-level, in this precedence:
+
+1. Explicit `sources` arg → use directly. No fallback walk; the caller is
+   being prescriptive.
+2. `params.Intent` set → look up chain. Fan out across primary set; if
+   primary returns zero merged results (or all-fail), walk fallback list
+   sequentially, short-circuiting on first hit.
+3. Default → `Router.defaultSources`. No fallback walk.
+
+Cycle 1 default config: only the `academic` chain
+(primary `[s2, openalex]`, fallback `[arxiv, crossref, europmc, pubmed]`)
+is meaningfully populated, mapped to `IntentDeepResearch` and
+`IntentPrimarySource`. Wave-1 (cycle 2) adds web/code/news/reference
+chains when the new providers land.
+
+### Consequences
+
+- LLM agents can pick intent without enumerating sources; existing direct-
+  source callers are unaffected (empty `Intent` = legacy behavior).
+- Fallback walk is short-circuit-on-first-hit by design — adding more
+  fallback sources never amplifies cost when the first is healthy.
+- Cycle 2's EU-mode gate (planned ADR-017) composes naturally with the
+  chain: filter the primary + fallback lists pre-fanout, surface skipped
+  sources in the response.
+- 9 dedicated unit tests lock the resolution precedence + walk semantics.
+
+---
+
+## ADR-017: `cmd/retrievr-cli` as the Importable-Surface Validator
+
+**Status:** Accepted (cycle 1, v1.5.0)
+
+### Context
+
+ADR-013 added the public `pkg/retrievr` library surface, but a Go module
+that only ships an MCP-server `main` package + a public library still
+needs evidence that the public surface actually works for an external
+consumer. liz's adapter is one validator (ADR carryover from the spike),
+but liz lives in another repo; we wanted an in-tree binary that exercises
+the same import path with no special compile-time machinery.
+
+### Decision
+
+Add `cmd/retrievr-cli` — a stdlib-only thin wrapper (search / get /
+sources subcommands) that imports `pkg/retrievr` and `internal` only for
+the bootstrap helpers shared with `cmd/retrievr-mcp`. ~500 LoC total,
+zero new module dependencies. Per-call API keys read from
+`RETRIEVR_<SOURCEID>_API_KEY` env vars and threaded through
+`retrievr.WithCredentials(ctx, …)` — exercising the new map-based
+credential surface end-to-end.
+
+### Consequences
+
+- A user can run retrievr against a live API without spinning up the MCP
+  server: `retrievr-cli search --sources=arxiv "transformer attention"`
+  works on a fresh checkout.
+- CI gains a third build target whose breakage signals public-surface
+  regression independently from the MCP server's own evolution.
+- Cycle 2 may add `--stream` (paired with `Client.Stream()`) and
+  `--eu-mode=strict` flags as the upstream surface gains those features.

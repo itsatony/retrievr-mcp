@@ -436,7 +436,7 @@ func TestCrossRefSearch(t *testing.T) {
 
 			if tc.wantErr != nil && tc.name == "search_empty_query" {
 				plugin := newCrossRefTestPlugin(t, "http://unused.test")
-				_, err := plugin.Search(context.Background(), tc.params, nil)
+				_, err := plugin.Search(context.Background(), tc.params)
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -456,7 +456,7 @@ func TestCrossRefSearch(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newCrossRefTestPlugin(t, ts.URL)
-			result, err := plugin.Search(context.Background(), tc.params, nil)
+			result, err := plugin.Search(context.Background(), tc.params)
 
 			if tc.wantErr != nil {
 				require.Error(t, err)
@@ -488,7 +488,7 @@ func TestCrossRefSearchResultMapping(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newCrossRefTestPlugin(t, ts.URL)
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 
@@ -579,7 +579,7 @@ func TestCrossRefGet(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newCrossRefTestPlugin(t, ts.URL)
-			pub, err := plugin.Get(context.Background(), testCRDOI1, nil, tc.format, nil)
+			pub, err := plugin.Get(context.Background(), testCRDOI1, nil, tc.format)
 
 			if tc.wantErrIs != nil {
 				require.Error(t, err)
@@ -605,7 +605,7 @@ func TestCrossRefGetNotFoundIncludesCrossRefSentinel(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newCrossRefTestPlugin(t, ts.URL)
-	_, err := plugin.Get(context.Background(), testCRDOI1, nil, FormatNative, nil)
+	_, err := plugin.Get(context.Background(), testCRDOI1, nil, FormatNative)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrGetFailed)
 	assert.ErrorIs(t, err, ErrCrossRefNotFound, "error chain should include CrossRef-specific not-found sentinel")
@@ -629,7 +629,7 @@ func TestCrossRefSearchWithMailto(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPluginWithMailto(t, ts.URL, testCRMailto)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -644,7 +644,7 @@ func TestCrossRefSearchWithMailto(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -659,7 +659,7 @@ func TestCrossRefSearchWithMailto(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPluginWithMailto(t, ts.URL, testCRMailto)
-		pub, err := plugin.Get(context.Background(), testCRDOI1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), testCRDOI1, nil, FormatNative)
 		require.NoError(t, err)
 		require.NotNil(t, pub)
 	})
@@ -680,7 +680,7 @@ func TestCrossRefHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -693,7 +693,7 @@ func TestCrossRefHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -708,7 +708,7 @@ func TestCrossRefHTTPErrors(t *testing.T) {
 		plugin := newCrossRefTestPlugin(t, ts.URL)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // cancel immediately
-		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 	})
 
@@ -721,7 +721,7 @@ func TestCrossRefHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -876,21 +876,21 @@ func TestCrossRefHealthTracking(t *testing.T) {
 	params := SearchParams{Query: "test", Limit: 10}
 
 	// First call succeeds -> healthy.
-	_, err := plugin.Search(ctx, params, nil)
+	_, err := plugin.Search(ctx, params)
 	require.NoError(t, err)
 	health := plugin.Health(ctx)
 	assert.True(t, health.Healthy)
 	assert.Empty(t, health.LastError)
 
 	// Second call fails -> unhealthy.
-	_, err = plugin.Search(ctx, params, nil)
+	_, err = plugin.Search(ctx, params)
 	require.Error(t, err)
 	health = plugin.Health(ctx)
 	assert.False(t, health.Healthy)
 	assert.NotEmpty(t, health.LastError)
 
 	// Third call succeeds -> healthy again.
-	_, err = plugin.Search(ctx, params, nil)
+	_, err = plugin.Search(ctx, params)
 	require.NoError(t, err)
 	health = plugin.Health(ctx)
 	assert.True(t, health.Healthy)
@@ -1000,8 +1000,8 @@ func TestCrossRefConcurrentSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	for range testCRConcurrentGoroutines {
 		wg.Go(func() {
-			_, _ = plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
-			_, _ = plugin.Get(ctx, testCRDOI1, nil, FormatNative, nil)
+			_, _ = plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
+			_, _ = plugin.Get(ctx, testCRDOI1, nil, FormatNative)
 			_ = plugin.Health(ctx)
 		})
 	}
@@ -1220,7 +1220,7 @@ func TestCrossRefJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].Abstract)
@@ -1238,7 +1238,7 @@ func TestCrossRefJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].Authors)
@@ -1257,7 +1257,7 @@ func TestCrossRefJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Equal(t, testCRDate2, result.Results[0].Published)
@@ -1275,7 +1275,7 @@ func TestCrossRefJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newCrossRefTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].Title)

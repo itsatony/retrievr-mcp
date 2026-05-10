@@ -312,7 +312,7 @@ func TestDBLPSearch(t *testing.T) {
 
 			if tc.wantErr != nil {
 				plugin := newDBLPTestPlugin(t, "http://unused.test")
-				_, err := plugin.Search(context.Background(), tc.params, nil)
+				_, err := plugin.Search(context.Background(), tc.params)
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -328,7 +328,7 @@ func TestDBLPSearch(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newDBLPTestPlugin(t, ts.URL)
-			result, err := plugin.Search(context.Background(), tc.params, nil)
+			result, err := plugin.Search(context.Background(), tc.params)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -352,7 +352,7 @@ func TestDBLPSearchHTTP500(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newDBLPTestPlugin(t, ts.URL)
-	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrSearchFailed)
 }
@@ -371,7 +371,7 @@ func TestDBLPSearchResultMapping(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newDBLPTestPlugin(t, ts.URL)
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 
@@ -431,7 +431,7 @@ func TestDBLPGet(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		pub, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative)
 
 		require.NoError(t, err)
 		require.NotNil(t, pub)
@@ -453,7 +453,7 @@ func TestDBLPGet(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatXML, nil)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatXML)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrFormatUnsupported))
 	})
@@ -466,7 +466,7 @@ func TestDBLPGet(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrGetFailed))
 	})
@@ -479,7 +479,7 @@ func TestDBLPGet(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrGetFailed))
 	})
@@ -493,7 +493,7 @@ func TestDBLPGet(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative)
 		require.Error(t, err)
 		assert.True(t, errors.Is(err, ErrDBLPNotFound))
 	})
@@ -515,7 +515,7 @@ func TestDBLPGetURLConstruction(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newDBLPTestPlugin(t, ts.URL)
-	pub, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative, nil)
+	pub, err := plugin.Get(context.Background(), testDBLPKey1, nil, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 }
@@ -597,7 +597,7 @@ func TestDBLPSingleAuthorInSearchResponse(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newDBLPTestPlugin(t, ts.URL)
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 	require.Len(t, result.Results[0].Authors, 1)
@@ -651,7 +651,7 @@ func TestDBLPTotalAsString(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newDBLPTestPlugin(t, ts.URL)
-			result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+			result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantTotal, result.Total)
 		})
@@ -673,7 +673,7 @@ func TestDBLPHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -686,7 +686,7 @@ func TestDBLPHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -701,7 +701,7 @@ func TestDBLPHTTPErrors(t *testing.T) {
 		plugin := newDBLPTestPlugin(t, ts.URL)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // cancel immediately
-		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 	})
 
@@ -714,7 +714,7 @@ func TestDBLPHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newDBLPTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -745,21 +745,21 @@ func TestDBLPHealthTracking(t *testing.T) {
 	params := SearchParams{Query: "test", Limit: 10}
 
 	// First call succeeds — healthy.
-	_, err := plugin.Search(ctx, params, nil)
+	_, err := plugin.Search(ctx, params)
 	require.NoError(t, err)
 	health := plugin.Health(ctx)
 	assert.True(t, health.Healthy)
 	assert.Empty(t, health.LastError)
 
 	// Second call fails — unhealthy.
-	_, err = plugin.Search(ctx, params, nil)
+	_, err = plugin.Search(ctx, params)
 	require.Error(t, err)
 	health = plugin.Health(ctx)
 	assert.False(t, health.Healthy)
 	assert.NotEmpty(t, health.LastError)
 
 	// Third call succeeds — healthy again.
-	_, err = plugin.Search(ctx, params, nil)
+	_, err = plugin.Search(ctx, params)
 	require.NoError(t, err)
 	health = plugin.Health(ctx)
 	assert.True(t, health.Healthy)
@@ -860,8 +860,8 @@ func TestDBLPConcurrentSafety(t *testing.T) {
 	var wg sync.WaitGroup
 	for range testDBLPConcurrentGoroutines {
 		wg.Go(func() {
-			_, _ = plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
-			_, _ = plugin.Get(ctx, testDBLPKey1, nil, FormatNative, nil)
+			_, _ = plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
+			_, _ = plugin.Get(ctx, testDBLPKey1, nil, FormatNative)
 			_ = plugin.Health(ctx)
 		})
 	}
@@ -979,7 +979,7 @@ func TestDBLPNilAuthors(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newDBLPTestPlugin(t, ts.URL)
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 	assert.Nil(t, result.Results[0].Authors)

@@ -13,6 +13,48 @@ An MCP server that gives LLM agents unified access to academic publications, AI 
 - **Each result** includes title, authors, date, abstract, URL, DOI, and source-specific metadata
 - **rtv_get** retrieves full details for a single publication, including BibTeX, references, and citations
 - **Per-call credentials** let each caller supply their own API keys
+- **Importable Go library** (`pkg/retrievr`) so in-process consumers (liz, nexus) skip the MCP HTTP hop entirely
+
+## Two ways to use retrievr
+
+### As an MCP server (`cmd/retrievr-mcp`)
+
+The default. Spin up the daemon, register with an MCP-aware host (Claude Code, etc.), and call `rtv_search` / `rtv_get` / `rtv_list_sources` over HTTP. See **Quick Start** below.
+
+### As an importable Go library (`pkg/retrievr`)
+
+For Go consumers running on the same host, direct import skips JSON serialization and the TCP round-trip. See [`pkg/retrievr/bootstrap.go`](pkg/retrievr/bootstrap.go):
+
+```go
+import (
+    "context"
+    rtv "github.com/itsatony/retrievr-mcp/pkg/retrievr"
+)
+
+client, cleanup, err := rtv.NewClientFromConfig("configs/retrievr-mcp.yaml", logger)
+if err != nil { /* ... */ }
+defer cleanup()
+
+ctx := rtv.WithCredentials(context.Background(), map[string]string{
+    "s2": os.Getenv("RETRIEVR_S2_API_KEY"),
+})
+result, err := client.Search(ctx, rtv.SearchParams{
+    Query:  "transformer attention",
+    Limit:  10,
+    Intent: rtv.IntentDeepResearch,
+}, nil)
+```
+
+### As a CLI (`cmd/retrievr-cli`)
+
+```bash
+go build -o retrievr-cli ./cmd/retrievr-cli
+./retrievr-cli search --sources=arxiv,s2 --limit=5 "transformer attention"
+./retrievr-cli get arxiv:2401.12345
+./retrievr-cli sources --format=json
+```
+
+The CLI reads per-call API keys from `RETRIEVR_<SOURCEID>_API_KEY` env vars (e.g. `RETRIEVR_S2_API_KEY`).
 
 ## Quick Start
 

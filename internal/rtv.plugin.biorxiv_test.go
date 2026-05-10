@@ -122,7 +122,7 @@ func TestBioRxivSearch(t *testing.T) {
 				DateFrom: testBiorxivDateFrom,
 				DateTo:   testBiorxivDateTo,
 			},
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -143,7 +143,7 @@ func TestBioRxivSearch(t *testing.T) {
 		_, err := plugin.Search(context.Background(), SearchParams{
 			Query: "test",
 			Limit: 10,
-		}, nil)
+		})
 		assert.ErrorIs(t, err, ErrBiorxivDateRequired)
 	})
 
@@ -161,7 +161,7 @@ func TestBioRxivSearch(t *testing.T) {
 			Filters: SearchFilters{
 				DateFrom: testBiorxivDateFrom,
 			},
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		// Both servers return 1 article each → 2 results.
@@ -183,7 +183,7 @@ func TestBioRxivSearch(t *testing.T) {
 			Query:   "test",
 			Limit:   10,
 			Filters: SearchFilters{DateFrom: testBiorxivDateFrom},
-		}, nil)
+		})
 		require.NoError(t, err)
 		assert.Empty(t, result.Results)
 	})
@@ -205,7 +205,7 @@ func TestBioRxivGet(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newBiorxivTestPlugin(t, ts.URL)
-		pub, err := plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative)
 
 		require.NoError(t, err)
 		assert.Equal(t, testBiorxivTitle1, pub.Title)
@@ -229,7 +229,7 @@ func TestBioRxivGet(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newBiorxivDualServerTestPlugin(t, ts.URL)
-		pub, err := plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative)
 
 		require.NoError(t, err)
 		assert.Equal(t, testBiorxivTitle1, pub.Title)
@@ -243,7 +243,7 @@ func TestBioRxivGet(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newBiorxivTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), "10.1101/nonexistent", nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), "10.1101/nonexistent", nil, FormatNative)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), ErrMsgBiorxivNotFound)
 	})
@@ -300,7 +300,7 @@ func TestBioRxivHTTPErrors(t *testing.T) {
 			Query:   "test",
 			Limit:   10,
 			Filters: SearchFilters{DateFrom: testBiorxivDateFrom},
-		}, nil)
+		})
 		require.NoError(t, err)
 		assert.Empty(t, result.Results)
 	})
@@ -313,7 +313,7 @@ func TestBioRxivHTTPErrors(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newBiorxivTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative)
 		assert.Error(t, err)
 	})
 }
@@ -340,8 +340,8 @@ func TestBioRxivConcurrentSafety(t *testing.T) {
 				Query:   "test",
 				Limit:   1,
 				Filters: SearchFilters{DateFrom: testBiorxivDateFrom},
-			}, nil)
-			_, _ = plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative, nil)
+			})
+			_, _ = plugin.Get(context.Background(), testBiorxivDOI1, nil, FormatNative)
 			_ = plugin.Health(context.Background())
 		}(i)
 	}

@@ -361,12 +361,12 @@ func (p *HuggingFacePlugin) Health(_ context.Context) SourceHealth {
 // Search executes a search query against the HuggingFace Hub API.
 // Routes to papers, models, and/or datasets sub-APIs based on content_type.
 // When multiple sub-APIs are queried, calls are made concurrently.
-func (p *HuggingFacePlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
+func (p *HuggingFacePlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrHFEmptyQuery
 	}
 
-	token := resolveHFToken(creds, p.apiKey)
+	token := resolveHFToken(ctx, p.apiKey)
 
 	// Determine which sub-APIs to query based on content_type AND config.
 	// Empty content_type is treated as ContentTypePaper (the default from tools.go).
@@ -497,8 +497,8 @@ func (p *HuggingFacePlugin) searchDatasets(ctx context.Context, params SearchPar
 
 // Get retrieves a single item by its HuggingFace identifier.
 // The rawID contains a sub-type prefix: paper/<arxivID>, model/<org/name>, dataset/<org/name>.
-func (p *HuggingFacePlugin) Get(ctx context.Context, rawID string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error) {
-	token := resolveHFToken(creds, p.apiKey)
+func (p *HuggingFacePlugin) Get(ctx context.Context, rawID string, include []IncludeField, format ContentFormat) (*Publication, error) {
+	token := resolveHFToken(ctx, p.apiKey)
 
 	switch {
 	case strings.HasPrefix(rawID, hfSubTypePaper):
@@ -715,11 +715,8 @@ func (p *HuggingFacePlugin) doRequestRaw(ctx context.Context, reqURL, token stri
 
 // resolveHFToken extracts the effective HF token from per-call credentials
 // and server default, following the three-level resolution chain.
-func resolveHFToken(creds *CallCredentials, serverDefault string) string {
-	if creds != nil {
-		return creds.ResolveForSource(SourceHuggingFace, serverDefault)
-	}
-	return serverDefault
+func resolveHFToken(ctx context.Context, serverDefault string) string {
+	return CredentialFor(ctx, SourceHuggingFace, serverDefault)
 }
 
 // ---------------------------------------------------------------------------

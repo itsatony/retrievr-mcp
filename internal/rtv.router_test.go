@@ -48,8 +48,8 @@ type mockPlugin struct {
 	availableFormats []ContentFormat
 	healthState      SourceHealth
 
-	searchFunc func(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error)
-	getFunc    func(ctx context.Context, id string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error)
+	searchFunc func(ctx context.Context, params SearchParams) (*SearchResult, error)
+	getFunc    func(ctx context.Context, id string, include []IncludeField, format ContentFormat) (*Publication, error)
 	initFunc   func(ctx context.Context, cfg PluginConfig) error
 }
 
@@ -62,16 +62,16 @@ func (m *mockPlugin) NativeFormat() ContentFormat           { return m.nativeFor
 func (m *mockPlugin) AvailableFormats() []ContentFormat     { return m.availableFormats }
 func (m *mockPlugin) Health(_ context.Context) SourceHealth { return m.healthState }
 
-func (m *mockPlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
+func (m *mockPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if m.searchFunc != nil {
-		return m.searchFunc(ctx, params, creds)
+		return m.searchFunc(ctx, params)
 	}
 	return &SearchResult{}, nil
 }
 
-func (m *mockPlugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error) {
+func (m *mockPlugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat) (*Publication, error) {
 	if m.getFunc != nil {
-		return m.getFunc(ctx, id, include, format, creds)
+		return m.getFunc(ctx, id, include, format)
 	}
 	return nil, fmt.Errorf("%w: not implemented", ErrGetFailed)
 }
@@ -105,14 +105,14 @@ func newMockPlugin(sourceID string, results []Publication) *mockPlugin {
 			Healthy:   true,
 			RateLimit: 10.0,
 		},
-		searchFunc: func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+		searchFunc: func(_ context.Context, _ SearchParams) (*SearchResult, error) {
 			return &SearchResult{
 				Total:   len(results),
 				Results: results,
 				HasMore: false,
 			}, nil
 		},
-		getFunc: func(_ context.Context, id string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+		getFunc: func(_ context.Context, id string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
 			for _, pub := range results {
 				// Strip prefix for comparison.
 				_, rawID, err := ParsePrefixedID(pub.ID)
@@ -666,7 +666,7 @@ func TestRouterSearchPartialFailure(t *testing.T) {
 
 	pubsA := []Publication{testPub(mockSourceA, "arxiv:1", testDOI1, nil)}
 	failPlugin := newMockPlugin(mockSourceB, nil)
-	failPlugin.searchFunc = func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+	failPlugin.searchFunc = func(_ context.Context, _ SearchParams) (*SearchResult, error) {
 		return nil, fmt.Errorf("upstream error")
 	}
 
@@ -691,7 +691,7 @@ func TestRouterSearchAllSourcesFail(t *testing.T) {
 
 	failPlugin := func(id string) *mockPlugin {
 		mp := newMockPlugin(id, nil)
-		mp.searchFunc = func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+		mp.searchFunc = func(_ context.Context, _ SearchParams) (*SearchResult, error) {
 			return nil, fmt.Errorf("upstream error")
 		}
 		return mp
@@ -715,7 +715,7 @@ func TestRouterSearchSourceTimeout(t *testing.T) {
 	t.Parallel()
 
 	slowPlugin := newMockPlugin(mockSourceA, nil)
-	slowPlugin.searchFunc = func(ctx context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+	slowPlugin.searchFunc = func(ctx context.Context, _ SearchParams) (*SearchResult, error) {
 		select {
 		case <-time.After(testPluginSleepLong):
 			return &SearchResult{}, nil
@@ -750,7 +750,7 @@ func TestRouterSearchCacheHit(t *testing.T) {
 
 	var callCount atomic.Int32
 	plugin := newMockPlugin(mockSourceA, nil)
-	plugin.searchFunc = func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+	plugin.searchFunc = func(_ context.Context, _ SearchParams) (*SearchResult, error) {
 		callCount.Add(1)
 		return &SearchResult{
 			Total:   1,
@@ -781,7 +781,7 @@ func TestRouterSearchCacheDisabled(t *testing.T) {
 
 	var callCount atomic.Int32
 	plugin := newMockPlugin(mockSourceA, nil)
-	plugin.searchFunc = func(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+	plugin.searchFunc = func(_ context.Context, _ SearchParams) (*SearchResult, error) {
 		callCount.Add(1)
 		return &SearchResult{
 			Total:   1,
@@ -822,7 +822,7 @@ func TestRouterSearchLimitMultipliedForHeadroom(t *testing.T) {
 	var receivedLimit int
 
 	plugin := newMockPlugin(mockSourceA, nil)
-	plugin.searchFunc = func(_ context.Context, params SearchParams, _ *CallCredentials) (*SearchResult, error) {
+	plugin.searchFunc = func(_ context.Context, params SearchParams) (*SearchResult, error) {
 		receivedLimit = params.Limit
 		return &SearchResult{}, nil
 	}
@@ -918,7 +918,7 @@ func TestRouterGetPluginError(t *testing.T) {
 	t.Parallel()
 
 	failPlugin := newMockPlugin(mockSourceA, nil)
-	failPlugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+	failPlugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
 		return nil, fmt.Errorf("upstream failure")
 	}
 
@@ -934,7 +934,7 @@ func TestRouterGetPrefixStripped(t *testing.T) {
 
 	var receivedID string
 	plugin := newMockPlugin(mockSourceA, nil)
-	plugin.getFunc = func(_ context.Context, id string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+	plugin.getFunc = func(_ context.Context, id string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
 		receivedID = id
 		return &Publication{ID: "arxiv:" + id, Source: mockSourceA}, nil
 	}
@@ -951,7 +951,7 @@ func TestRouterGetBibTeXFormat(t *testing.T) {
 
 	var receivedFormat ContentFormat
 	plugin := newMockPlugin(mockSourceA, nil)
-	plugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+	plugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, format ContentFormat) (*Publication, error) {
 		receivedFormat = format
 		return &Publication{
 			ID:          "arxiv:2401.12345",
@@ -991,7 +991,7 @@ func TestRouterGetBibTeXMetrics(t *testing.T) {
 	t.Parallel()
 
 	plugin := newMockPlugin(mockSourceA, nil)
-	plugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+	plugin.getFunc = func(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
 		return &Publication{
 			ID:          "arxiv:2401.12345",
 			Source:      mockSourceA,

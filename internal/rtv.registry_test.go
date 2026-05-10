@@ -36,10 +36,10 @@ func (f *failingPlugin) ContentTypes() []ContentType       { return nil }
 func (f *failingPlugin) Capabilities() SourceCapabilities  { return SourceCapabilities{} }
 func (f *failingPlugin) NativeFormat() ContentFormat       { return FormatJSON }
 func (f *failingPlugin) AvailableFormats() []ContentFormat { return nil }
-func (f *failingPlugin) Search(_ context.Context, _ SearchParams, _ *CallCredentials) (*SearchResult, error) {
+func (f *failingPlugin) Search(_ context.Context, _ SearchParams) (*SearchResult, error) {
 	return nil, nil
 }
-func (f *failingPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat, _ *CallCredentials) (*Publication, error) {
+func (f *failingPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
 	return nil, nil
 }
 func (f *failingPlugin) Initialize(_ context.Context, _ PluginConfig) error {

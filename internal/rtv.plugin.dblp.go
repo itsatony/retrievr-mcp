@@ -336,7 +336,7 @@ func (p *DBLPPlugin) Health(_ context.Context) SourceHealth {
 // ---------------------------------------------------------------------------
 
 // Search executes a search query against the DBLP publication search API.
-func (p *DBLPPlugin) Search(ctx context.Context, params SearchParams, _ *CallCredentials) (*SearchResult, error) {
+func (p *DBLPPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrDBLPEmptyQuery
 	}
@@ -373,7 +373,7 @@ func (p *DBLPPlugin) Search(ctx context.Context, params SearchParams, _ *CallCre
 
 // Get retrieves a single publication by its DBLP key using the direct /rec/ endpoint.
 // The ID will already have the source prefix stripped (e.g., "journals/corr/abs-2401-12345").
-func (p *DBLPPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+func (p *DBLPPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat) (*Publication, error) {
 	reqURL := buildDBLPGetURL(p.baseURL, id)
 
 	var xmlResp dblpRecXMLResponse

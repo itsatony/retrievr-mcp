@@ -298,7 +298,7 @@ func (p *ArXivPlugin) Health(_ context.Context) SourceHealth {
 // ---------------------------------------------------------------------------
 
 // Search executes a search query against the ArXiv API.
-func (p *ArXivPlugin) Search(ctx context.Context, params SearchParams, _ *CallCredentials) (*SearchResult, error) {
+func (p *ArXivPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	query, err := buildArxivQuery(params)
 	if err != nil {
 		return nil, err
@@ -333,7 +333,7 @@ func (p *ArXivPlugin) Search(ctx context.Context, params SearchParams, _ *CallCr
 // ---------------------------------------------------------------------------
 
 // Get retrieves a single publication by its ArXiv ID.
-func (p *ArXivPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+func (p *ArXivPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat) (*Publication, error) {
 	reqURL := buildArxivGetURL(p.baseURL, id)
 
 	feed, err := p.doRequest(ctx, reqURL)

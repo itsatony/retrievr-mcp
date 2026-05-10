@@ -96,7 +96,7 @@ func TestIntegrationArXivSearch(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -133,7 +133,7 @@ func TestIntegrationS2Search(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 
 	// S2 has very aggressive anonymous rate limits. If we get a rate limit
 	// or auth error, skip rather than fail — this is expected without a
@@ -174,7 +174,7 @@ func TestIntegrationOpenAlexSearch(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -206,7 +206,7 @@ func TestIntegrationEuropePMCSearch(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -242,7 +242,7 @@ func TestIntegrationArXivGet(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       1,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Results)
 
@@ -250,7 +250,7 @@ func TestIntegrationArXivGet(t *testing.T) {
 
 	// Get by raw ID (strip prefix).
 	rawID := stripSourcePrefix(result.Results[0].ID)
-	pub, err := plugin.Get(ctx, rawID, nil, FormatNative, nil)
+	pub, err := plugin.Get(ctx, rawID, nil, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 	assert.NotEmpty(t, pub.Title)
@@ -283,7 +283,7 @@ func TestIntegrationBibTeXGet(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       1,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotEmpty(t, result.Results)
 
@@ -474,7 +474,7 @@ func TestIntegrationCrossRefSearch(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -509,7 +509,7 @@ func TestIntegrationDBLPSearch(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -549,7 +549,7 @@ func TestIntegrationADSSearch(t *testing.T) {
 		ContentType: ContentTypePaper,
 		Sort:        SortRelevance,
 		Limit:       integrationSearchLimit,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	assert.GreaterOrEqual(t, len(result.Results), 1)
@@ -580,7 +580,7 @@ func TestIntegrationBioRxivGet(t *testing.T) {
 	}))
 
 	// Use a known bioRxiv DOI.
-	pub, err := plugin.Get(ctx, "10.1101/2024.01.03.574089", nil, FormatNative, nil)
+	pub, err := plugin.Get(ctx, "10.1101/2024.01.03.574089", nil, FormatNative)
 	if err != nil {
 		t.Skipf("bioRxiv get failed (may be rate limited): %v", err)
 	}

@@ -246,7 +246,7 @@ func (p *BioRxivPlugin) Health(_ context.Context) SourceHealth {
 
 // Search browses preprints by date range. Requires params.Filters.DateFrom.
 // Returns ErrBiorxivDateRequired if no date_from filter is provided.
-func (p *BioRxivPlugin) Search(ctx context.Context, params SearchParams, _ *CallCredentials) (*SearchResult, error) {
+func (p *BioRxivPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Filters.DateFrom == "" {
 		return nil, ErrBiorxivDateRequired
 	}
@@ -307,7 +307,7 @@ func (p *BioRxivPlugin) Search(ctx context.Context, params SearchParams, _ *Call
 // ---------------------------------------------------------------------------
 
 // Get retrieves a single preprint by DOI. Tries each configured server.
-func (p *BioRxivPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+func (p *BioRxivPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat) (*Publication, error) {
 	// Try each configured server for the DOI.
 	for _, server := range p.servers {
 		reqURL := buildBiorxivGetURL(p.baseURL, server, id)

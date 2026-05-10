@@ -476,7 +476,7 @@ func TestS2Search(t *testing.T) {
 
 			if tc.wantErr != nil {
 				plugin := newS2TestPlugin(t, "http://unused.test")
-				_, err := plugin.Search(context.Background(), tc.params, nil)
+				_, err := plugin.Search(context.Background(), tc.params)
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -492,7 +492,7 @@ func TestS2Search(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newS2TestPlugin(t, ts.URL)
-			result, err := plugin.Search(context.Background(), tc.params, nil)
+			result, err := plugin.Search(context.Background(), tc.params)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -521,7 +521,7 @@ func TestS2SearchWithAPIKey(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPluginWithAPIKey(t, ts.URL, testS2APIKey)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -538,7 +538,8 @@ func TestS2SearchWithAPIKey(t *testing.T) {
 
 		plugin := newS2TestPluginWithAPIKey(t, ts.URL, testS2APIKey)
 		creds := &CallCredentials{S2APIKey: perCallKey}
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, creds)
+		ctx := WithCallCredentials(context.Background(), creds)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -553,7 +554,7 @@ func TestS2SearchWithAPIKey(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 }
@@ -574,7 +575,7 @@ func TestS2SearchResultMapping(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newS2TestPlugin(t, ts.URL)
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 
@@ -678,7 +679,7 @@ func TestS2Get(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newS2TestPlugin(t, ts.URL)
-			pub, err := plugin.Get(context.Background(), tc.id, nil, tc.format, nil)
+			pub, err := plugin.Get(context.Background(), tc.id, nil, tc.format)
 
 			if tc.wantErr != nil {
 				require.Error(t, err)
@@ -715,7 +716,7 @@ func TestS2GetNotFound(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newS2TestPlugin(t, ts.URL)
-	_, err := plugin.Get(context.Background(), "nonexistent", nil, FormatNative, nil)
+	_, err := plugin.Get(context.Background(), "nonexistent", nil, FormatNative)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrGetFailed)
 }
@@ -759,7 +760,7 @@ func TestS2GetWithCitationsAndReferences(t *testing.T) {
 	t.Run("with_citations", func(t *testing.T) {
 		t.Parallel()
 		pub, err := plugin.Get(context.Background(), testS2PaperID1,
-			[]IncludeField{IncludeCitations}, FormatNative, nil)
+			[]IncludeField{IncludeCitations}, FormatNative)
 		require.NoError(t, err)
 		require.NotNil(t, pub)
 		require.Len(t, pub.Citations, 1)
@@ -771,7 +772,7 @@ func TestS2GetWithCitationsAndReferences(t *testing.T) {
 	t.Run("with_references", func(t *testing.T) {
 		t.Parallel()
 		pub, err := plugin.Get(context.Background(), testS2PaperID1,
-			[]IncludeField{IncludeReferences}, FormatNative, nil)
+			[]IncludeField{IncludeReferences}, FormatNative)
 		require.NoError(t, err)
 		require.NotNil(t, pub)
 		require.Len(t, pub.References, 1)
@@ -782,7 +783,7 @@ func TestS2GetWithCitationsAndReferences(t *testing.T) {
 	t.Run("with_both", func(t *testing.T) {
 		t.Parallel()
 		pub, err := plugin.Get(context.Background(), testS2PaperID1,
-			[]IncludeField{IncludeCitations, IncludeReferences}, FormatNative, nil)
+			[]IncludeField{IncludeCitations, IncludeReferences}, FormatNative)
 		require.NoError(t, err)
 		require.NotNil(t, pub)
 		assert.Len(t, pub.Citations, 1)
@@ -810,7 +811,7 @@ func TestS2GetWithAPIKey(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newS2TestPluginWithAPIKey(t, ts.URL, testS2APIKey)
-	pub, err := plugin.Get(context.Background(), testS2PaperID1, nil, FormatNative, nil)
+	pub, err := plugin.Get(context.Background(), testS2PaperID1, nil, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 	assert.Equal(t, testS2Title1, pub.Title)
@@ -955,21 +956,21 @@ func TestS2HealthTracking(t *testing.T) {
 	assert.Empty(t, health.LastError)
 
 	// First search succeeds — stays healthy.
-	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 	require.NoError(t, err)
 	health = plugin.Health(context.Background())
 	assert.True(t, health.Healthy)
 	assert.Empty(t, health.LastError)
 
 	// Second search fails (500) — becomes unhealthy.
-	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 	require.Error(t, err)
 	health = plugin.Health(context.Background())
 	assert.False(t, health.Healthy)
 	assert.NotEmpty(t, health.LastError)
 
 	// Third search succeeds — recovers to healthy.
-	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 	require.NoError(t, err)
 	health = plugin.Health(context.Background())
 	assert.True(t, health.Healthy)
@@ -991,7 +992,7 @@ func TestS2HTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1004,7 +1005,7 @@ func TestS2HTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1017,7 +1018,7 @@ func TestS2HTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testS2PaperID1, nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), testS2PaperID1, nil, FormatNative)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrGetFailed)
 	})
@@ -1034,7 +1035,7 @@ func TestS2HTTPErrors(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately.
 
-		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1048,7 +1049,7 @@ func TestS2HTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1161,8 +1162,8 @@ func TestS2ConcurrentAccess(t *testing.T) {
 	for range testS2ConcurrentGoroutines {
 		wg.Go(func() {
 			// Mix of Search, Get, and Health calls.
-			_, _ = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
-			_, _ = plugin.Get(context.Background(), testS2PaperID1, nil, FormatNative, nil)
+			_, _ = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
+			_, _ = plugin.Get(context.Background(), testS2PaperID1, nil, FormatNative)
 			_ = plugin.Health(context.Background())
 		})
 	}
@@ -1196,7 +1197,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 
@@ -1218,7 +1219,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].PDFURL)
@@ -1237,7 +1238,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Nil(t, result.Results[0].SourceMetadata[s2MetaKeyJournal])
@@ -1256,7 +1257,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Nil(t, result.Results[0].Categories)
@@ -1276,7 +1277,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Equal(t, "2024", result.Results[0].Published)
@@ -1296,7 +1297,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].Published)
@@ -1315,7 +1316,7 @@ func TestS2JSONParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newS2TestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		assert.Len(t, result.Results, 2)
 		assert.Equal(t, testS2Title1, result.Results[0].Title)
@@ -1397,13 +1398,13 @@ func TestResolveS2APIKey(t *testing.T) {
 	t.Run("empty_per_call_uses_server_default", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{}
-		assert.Equal(t, "server-key", resolveS2APIKey(creds, "server-key"))
+		assert.Equal(t, "server-key", resolveS2APIKey(WithCallCredentials(context.Background(), creds),"server-key"))
 	})
 
 	t.Run("per_call_overrides_server", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{S2APIKey: "per-call-key"}
-		assert.Equal(t, "per-call-key", resolveS2APIKey(creds, "server-key"))
+		assert.Equal(t, "per-call-key", resolveS2APIKey(WithCallCredentials(context.Background(), creds),"server-key"))
 	})
 
 	t.Run("both_empty", func(t *testing.T) {

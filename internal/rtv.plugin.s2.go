@@ -285,13 +285,13 @@ func (p *S2Plugin) Health(_ context.Context) SourceHealth {
 // ---------------------------------------------------------------------------
 
 // Search executes a search query against the Semantic Scholar API.
-func (p *S2Plugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
+func (p *S2Plugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrS2EmptyQuery
 	}
 
 	reqURL := buildS2SearchURL(p.baseURL, params)
-	apiKey := resolveS2APIKey(creds, p.apiKey)
+	apiKey := resolveS2APIKey(ctx, p.apiKey)
 
 	var response s2SearchResponse
 	if err := p.doRequest(ctx, reqURL, apiKey, &response); err != nil {
@@ -320,8 +320,8 @@ func (p *S2Plugin) Search(ctx context.Context, params SearchParams, creds *CallC
 // ---------------------------------------------------------------------------
 
 // Get retrieves a single publication by its Semantic Scholar paper ID.
-func (p *S2Plugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error) {
-	apiKey := resolveS2APIKey(creds, p.apiKey)
+func (p *S2Plugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat) (*Publication, error) {
+	apiKey := resolveS2APIKey(ctx, p.apiKey)
 	reqURL := buildS2GetURL(p.baseURL, id)
 
 	var paper s2Paper
@@ -473,11 +473,8 @@ func (p *S2Plugin) recordError(err error) {
 
 // resolveS2APIKey extracts the effective API key from per-call credentials
 // and server default, following the three-level resolution chain.
-func resolveS2APIKey(creds *CallCredentials, serverDefault string) string {
-	if creds != nil {
-		return creds.ResolveForSource(SourceS2, serverDefault)
-	}
-	return serverDefault
+func resolveS2APIKey(ctx context.Context, serverDefault string) string {
+	return CredentialFor(ctx, SourceS2, serverDefault)
 }
 
 // ---------------------------------------------------------------------------

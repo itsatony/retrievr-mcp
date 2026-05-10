@@ -584,7 +584,7 @@ func TestOASearch(t *testing.T) {
 
 			if tc.wantErr != nil {
 				plugin := newOATestPlugin(t, "http://unused.test")
-				_, err := plugin.Search(context.Background(), tc.params, nil)
+				_, err := plugin.Search(context.Background(), tc.params)
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -600,7 +600,7 @@ func TestOASearch(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newOATestPlugin(t, ts.URL)
-			result, err := plugin.Search(context.Background(), tc.params, nil)
+			result, err := plugin.Search(context.Background(), tc.params)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -629,7 +629,7 @@ func TestOASearchWithAPIKey(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPluginWithAPIKey(t, ts.URL, testOAAPIKey)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -646,7 +646,8 @@ func TestOASearchWithAPIKey(t *testing.T) {
 
 		plugin := newOATestPluginWithAPIKey(t, ts.URL, testOAAPIKey)
 		creds := &CallCredentials{OpenAlexAPIKey: perCallKey}
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, creds)
+		ctx := WithCallCredentials(context.Background(), creds)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -661,7 +662,7 @@ func TestOASearchWithAPIKey(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 }
@@ -684,7 +685,7 @@ func TestOASearchWithMailto(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPluginWithMailto(t, ts.URL, testOAMailto)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -699,7 +700,7 @@ func TestOASearchWithMailto(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 }
@@ -718,7 +719,7 @@ func TestOASearchResultMapping(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newOATestPlugin(t, ts.URL)
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 
@@ -817,7 +818,7 @@ func TestOAGet(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newOATestPlugin(t, ts.URL)
-			pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, tc.format, nil)
+			pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, tc.format)
 
 			if tc.wantErrIs != nil {
 				require.Error(t, err)
@@ -845,7 +846,7 @@ func TestOAGetWithAPIKey(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newOATestPluginWithAPIKey(t, ts.URL, testOAAPIKey)
-	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, nil)
+	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 }
@@ -863,7 +864,8 @@ func TestOAGetWithPerCallAPIKey(t *testing.T) {
 
 	plugin := newOATestPluginWithAPIKey(t, ts.URL, testOAAPIKey)
 	creds := &CallCredentials{OpenAlexAPIKey: perCallKey}
-	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, creds)
+	ctx := WithCallCredentials(context.Background(), creds)
+	pub, err := plugin.Get(ctx, testOAWorkID1, nil, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 }
@@ -879,7 +881,7 @@ func TestOAGetWithMailto(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newOATestPluginWithMailto(t, ts.URL, testOAMailto)
-	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, nil)
+	pub, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 }
@@ -893,7 +895,7 @@ func TestOAGetNotFoundIncludesOANotFoundSentinel(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	plugin := newOATestPlugin(t, ts.URL)
-	_, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative, nil)
+	_, err := plugin.Get(context.Background(), testOAWorkID1, nil, FormatNative)
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrGetFailed)
 	assert.ErrorIs(t, err, ErrOANotFound, "error chain should include OA-specific not-found sentinel")
@@ -1312,21 +1314,21 @@ func TestOAHealthTracking(t *testing.T) {
 	params := SearchParams{Query: "test", Limit: 10}
 
 	// First call succeeds → healthy.
-	_, err := plugin.Search(ctx, params, nil)
+	_, err := plugin.Search(ctx, params)
 	require.NoError(t, err)
 	health := plugin.Health(ctx)
 	assert.True(t, health.Healthy)
 	assert.Empty(t, health.LastError)
 
 	// Second call fails → unhealthy.
-	_, err = plugin.Search(ctx, params, nil)
+	_, err = plugin.Search(ctx, params)
 	require.Error(t, err)
 	health = plugin.Health(ctx)
 	assert.False(t, health.Healthy)
 	assert.NotEmpty(t, health.LastError)
 
 	// Third call succeeds → healthy again.
-	_, err = plugin.Search(ctx, params, nil)
+	_, err = plugin.Search(ctx, params)
 	require.NoError(t, err)
 	health = plugin.Health(ctx)
 	assert.True(t, health.Healthy)
@@ -1348,7 +1350,7 @@ func TestOAHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1361,7 +1363,7 @@ func TestOAHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1376,7 +1378,7 @@ func TestOAHTTPErrors(t *testing.T) {
 		plugin := newOATestPlugin(t, ts.URL)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // cancel immediately
-		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 	})
 
@@ -1389,7 +1391,7 @@ func TestOAHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1509,8 +1511,8 @@ func TestOAConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	for range testOAConcurrentGoroutines {
 		wg.Go(func() {
-			_, _ = plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
-			_, _ = plugin.Get(ctx, testOAWorkID1, nil, FormatNative, nil)
+			_, _ = plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
+			_, _ = plugin.Get(ctx, testOAWorkID1, nil, FormatNative)
 			_ = plugin.Health(ctx)
 		})
 	}
@@ -1541,7 +1543,7 @@ func TestOAJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 	})
@@ -1560,7 +1562,7 @@ func TestOAJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		// PDFURL should come from OA URL if primary location is nil.
@@ -1579,7 +1581,7 @@ func TestOAJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].Abstract)
@@ -1597,7 +1599,7 @@ func TestOAJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Equal(t, "2024", result.Results[0].Published)
@@ -1615,7 +1617,7 @@ func TestOAJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 		assert.Empty(t, result.Results[0].Categories)
@@ -1631,7 +1633,7 @@ func TestOAJSONEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newOATestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 2)
 		assert.Equal(t, testOATitle1, result.Results[0].Title)
@@ -1654,13 +1656,13 @@ func TestResolveOAAPIKey(t *testing.T) {
 	t.Run("per_call_overrides_server", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{OpenAlexAPIKey: "per-call-key"}
-		assert.Equal(t, "per-call-key", resolveOAAPIKey(creds, "server-key"))
+		assert.Equal(t, "per-call-key", resolveOAAPIKey(WithCallCredentials(context.Background(), creds),"server-key"))
 	})
 
 	t.Run("empty_per_call_falls_back", func(t *testing.T) {
 		t.Parallel()
 		creds := &CallCredentials{}
-		assert.Equal(t, "server-key", resolveOAAPIKey(creds, "server-key"))
+		assert.Equal(t, "server-key", resolveOAAPIKey(WithCallCredentials(context.Background(), creds),"server-key"))
 	})
 
 	t.Run("both_empty", func(t *testing.T) {

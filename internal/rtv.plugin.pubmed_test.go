@@ -594,7 +594,7 @@ func TestPubMedSearch(t *testing.T) {
 
 			if tc.wantErr != nil {
 				plugin := newPMTestPlugin(t, "http://unused.test")
-				_, err := plugin.Search(context.Background(), tc.params, nil)
+				_, err := plugin.Search(context.Background(), tc.params)
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -622,7 +622,7 @@ func TestPubMedSearch(t *testing.T) {
 			defer ts.Close()
 
 			plugin := newPMTestPlugin(t, ts.URL+"/")
-			result, err := plugin.Search(context.Background(), tc.params, nil)
+			result, err := plugin.Search(context.Background(), tc.params)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			assert.Equal(t, tc.wantTotal, result.Total)
@@ -700,7 +700,8 @@ func TestPubMedSearchWithAPIKey(t *testing.T) {
 				plugin = newPMTestPlugin(t, ts.URL+"/")
 			}
 
-			_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, tc.callCreds)
+			ctx := WithCallCredentials(context.Background(), tc.callCreds)
+			_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 			require.NoError(t, err)
 		})
 	}
@@ -731,7 +732,7 @@ func TestPubMedSearchToolAndEmailParams(t *testing.T) {
 	defer ts.Close()
 
 	plugin := newPMTestPlugin(t, ts.URL+"/")
-	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 }
 
@@ -756,7 +757,7 @@ func TestPubMedSearchResultMapping(t *testing.T) {
 	defer ts.Close()
 
 	plugin := newPMTestPlugin(t, ts.URL+"/")
-	result, err := plugin.Search(context.Background(), SearchParams{Query: "CRISPR", Limit: 10}, nil)
+	result, err := plugin.Search(context.Background(), SearchParams{Query: "CRISPR", Limit: 10})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 
@@ -863,7 +864,7 @@ func TestPubMedGet(t *testing.T) {
 			defer ts.Close()
 
 			plugin := newPMTestPlugin(t, ts.URL+"/")
-			pub, err := plugin.Get(context.Background(), tc.id, nil, tc.format, nil)
+			pub, err := plugin.Get(context.Background(), tc.id, nil, tc.format)
 
 			if tc.wantErr != nil {
 				require.Error(t, err)
@@ -906,7 +907,7 @@ func TestPubMedGetWithFullText(t *testing.T) {
 	defer ts.Close()
 
 	plugin := newPMTestPlugin(t, ts.URL+"/")
-	pub, err := plugin.Get(context.Background(), testPMPMID1, []IncludeField{IncludeFullText}, FormatNative, nil)
+	pub, err := plugin.Get(context.Background(), testPMPMID1, []IncludeField{IncludeFullText}, FormatNative)
 	require.NoError(t, err)
 	require.NotNil(t, pub)
 	require.NotNil(t, pub.FullText)
@@ -990,7 +991,7 @@ func TestPubMedFetchPMCFullTextErrors(t *testing.T) {
 				defer cancel()
 			}
 
-			pub, err := plugin.Get(ctx, testPMPMID1, []IncludeField{IncludeFullText}, FormatNative, nil)
+			pub, err := plugin.Get(ctx, testPMPMID1, []IncludeField{IncludeFullText}, FormatNative)
 
 			// Get should succeed — PMC full text failure is non-fatal.
 			require.NoError(t, err)
@@ -1096,14 +1097,14 @@ func TestPubMedHTTPErrors(t *testing.T) {
 
 			// Test search errors.
 			if tc.wantErrSearch != nil {
-				_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+				_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 				require.Error(t, err)
 				assert.True(t, errors.Is(err, tc.wantErrSearch), "search: expected %v, got %v", tc.wantErrSearch, err)
 			}
 
 			// Test get errors.
 			if tc.wantErrGet != nil {
-				_, err := plugin.Get(context.Background(), testPMPMID1, nil, FormatNative, nil)
+				_, err := plugin.Get(context.Background(), testPMPMID1, nil, FormatNative)
 				require.Error(t, err)
 				assert.True(t, errors.Is(err, tc.wantErrGet), "get: expected %v, got %v", tc.wantErrGet, err)
 			}
@@ -1129,7 +1130,7 @@ func TestPubMedContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately.
 
-	_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrSearchFailed), "expected ErrSearchFailed, got %v", err)
 }
@@ -1155,7 +1156,7 @@ func TestPubMedContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testShortTimeout)
 	defer cancel()
 
-	_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrSearchFailed), "expected ErrSearchFailed, got %v", err)
 }
@@ -1189,7 +1190,7 @@ func TestPubMedConcurrentSearch(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result, err := plugin.Search(context.Background(), SearchParams{Query: "concurrent", Limit: 10}, nil)
+			result, err := plugin.Search(context.Background(), SearchParams{Query: "concurrent", Limit: 10})
 			if err != nil || result == nil || len(result.Results) == 0 {
 				errCount.Add(1)
 			}
@@ -1229,7 +1230,7 @@ func TestPubMedHealthTracking(t *testing.T) {
 	assert.Empty(t, health.LastError)
 
 	// After successful search, still healthy.
-	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 	health = plugin.Health(context.Background())
 	assert.True(t, health.Healthy)
@@ -1242,7 +1243,7 @@ func TestPubMedHealthTracking(t *testing.T) {
 	defer errorServer.Close()
 
 	errorPlugin := newPMTestPlugin(t, errorServer.URL+"/")
-	_, err = errorPlugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err = errorPlugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.Error(t, err)
 	health = errorPlugin.Health(context.Background())
 	assert.False(t, health.Healthy)
@@ -1558,7 +1559,7 @@ func TestResolvePMAPIKey(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			result := resolvePMAPIKey(tc.creds, tc.serverDefault)
+			result := resolvePMAPIKey(WithCallCredentials(context.Background(), tc.creds),tc.serverDefault)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

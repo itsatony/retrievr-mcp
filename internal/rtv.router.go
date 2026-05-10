@@ -48,6 +48,7 @@ const (
 	logMsgListSources        = "list sources"
 	logMsgCacheHit           = "cache hit"
 	logMsgCacheMiss          = "cache miss"
+	logMsgFallbackAttempt    = "fallback chain attempt"
 )
 
 // ---------------------------------------------------------------------------
@@ -85,7 +86,32 @@ type Router struct {
 	credentials    *CredentialResolver
 	metrics        *Metrics
 	logger         *slog.Logger
+	retry          RetryConfig
+	fallback       RouterFallbackConfig
 }
+
+// DefaultFallbackConfig returns the cycle-1 default chains. Only the
+// "academic" chain is meaningfully populated (we have ten scholarly
+// providers and no web sources yet); other intents resolve to defaultSources
+// during cycle 1 and gain real chains in cycle 2 when wave-1 providers land.
+func DefaultFallbackConfig() RouterFallbackConfig {
+	return RouterFallbackConfig{
+		Chains: map[string]FallbackChain{
+			fallbackChainAcademic: {
+				Primary:  []string{SourceS2, SourceOpenAlex},
+				Fallback: []string{SourceArXiv, SourceCrossRef, SourceEuropePMC, SourcePubMed},
+			},
+		},
+		IntentToChain: map[string]string{
+			string(IntentDeepResearch):  fallbackChainAcademic,
+			string(IntentPrimarySource): fallbackChainAcademic,
+		},
+	}
+}
+
+const (
+	fallbackChainAcademic = "academic"
+)
 
 // NewRouter creates a Router wired to the given plugins and infrastructure.
 // The plugins map is defensively copied. A nil logger is replaced with a discard logger.
@@ -123,7 +149,51 @@ func NewRouter(
 		credentials:    creds,
 		metrics:        metrics,
 		logger:         logger,
+		retry:          resolveRetryConfig(cfg.Retry),
+		fallback:       resolveFallbackConfig(cfg.Fallback),
 	}
+}
+
+// resolveFallbackConfig returns the user-supplied config if it has any
+// chains, otherwise falls back to DefaultFallbackConfig. We intentionally
+// do NOT merge: callers wanting custom chains should supply a complete
+// RouterFallbackConfig, not partial overrides (avoids surprising defaults
+// surviving when the operator thinks they removed an intent).
+func resolveFallbackConfig(c RouterFallbackConfig) RouterFallbackConfig {
+	if len(c.Chains) == 0 && len(c.IntentToChain) == 0 {
+		return DefaultFallbackConfig()
+	}
+	return c
+}
+
+// resolveRetryConfig folds RouterRetryConfig (YAML shape, zero values allowed)
+// into the canonical RetryConfig, substituting defaults for any unset field.
+func resolveRetryConfig(c RouterRetryConfig) RetryConfig {
+	def := DefaultRetryConfig()
+	out := RetryConfig{
+		MaxAttempts:    c.MaxAttempts,
+		BaseDelay:      c.BaseDelay.Duration,
+		MaxDelay:       c.MaxDelay.Duration,
+		JitterFraction: c.JitterFraction,
+	}
+	if out.MaxAttempts <= 0 {
+		out.MaxAttempts = def.MaxAttempts
+	}
+	if out.BaseDelay <= 0 {
+		out.BaseDelay = def.BaseDelay
+	}
+	if out.MaxDelay <= 0 {
+		out.MaxDelay = def.MaxDelay
+	}
+	if c.JitterFraction == 0 {
+		// Distinguish "explicit 0" from "unset" — RouterRetryConfig is YAML-
+		// origin; zero from YAML is most likely "unset", so substitute the
+		// equal-jitter default. Callers wanting deterministic backoff (no
+		// jitter) should construct RetryConfig directly via NewRouter+test
+		// harness, not via YAML config.
+		out.JitterFraction = def.JitterFraction
+	}
+	return out
 }
 
 // ---------------------------------------------------------------------------
@@ -182,8 +252,19 @@ func (r *Router) Search(
 ) (*MergedSearchResult, error) {
 	start := time.Now()
 
-	// Step 1: Resolve sources.
-	resolved := r.resolveSources(sources)
+	// Step 1: Resolve sources. Three precedence levels:
+	//   (a) explicit `sources` arg — overrides everything; no fallback walking.
+	//   (b) params.Intent set — chain-based primary set + ordered fallback list.
+	//   (c) default — Router.defaultSources, no fallback walking.
+	var resolved, fallbackList []string
+	switch {
+	case len(sources) > 0:
+		resolved = r.resolveSources(sources)
+	case params.Intent != "":
+		resolved, fallbackList = r.resolveByIntent(params.Intent)
+	default:
+		resolved = r.resolveSources(nil)
+	}
 	if len(resolved) == 0 {
 		return nil, fmt.Errorf("%w: %s", ErrSearchFailed, errDetailNoValidSources)
 	}
@@ -279,9 +360,23 @@ func (r *Router) Search(
 		}
 	}
 
-	// All sources failed.
+	// All sources failed in the primary set. If a fallback chain is configured
+	// for this intent, walk it now: each fallback source is queried in order
+	// until one yields any hit or the list is exhausted. Otherwise return.
 	if len(sourcesFailed) == len(resolved) {
-		return nil, fmt.Errorf("%w: "+errDetailAllSourcesFailed, ErrAllSourcesFailed, len(resolved))
+		if len(fallbackList) == 0 {
+			return nil, fmt.Errorf("%w: "+errDetailAllSourcesFailed, ErrAllSourcesFailed, len(resolved))
+		}
+		// Walk fallback. Continues from current sourcesQueried/sourcesFailed.
+		extra := r.walkFallback(ctx, fallbackList, fanoutParams, creds, requestID)
+		sourcesQueried, sourcesFailed, allResults = applyFallbackWalk(sourcesQueried, sourcesFailed, allResults, extra)
+		if len(allResults) == 0 {
+			return nil, fmt.Errorf("%w: "+errDetailAllSourcesFailed, ErrAllSourcesFailed, len(sourcesQueried))
+		}
+	} else if len(allResults) == 0 && len(fallbackList) > 0 {
+		// Primary returned successfully but with zero hits. Walk fallback.
+		extra := r.walkFallback(ctx, fallbackList, fanoutParams, creds, requestID)
+		sourcesQueried, sourcesFailed, allResults = applyFallbackWalk(sourcesQueried, sourcesFailed, allResults, extra)
 	}
 
 	// Step 6-7: Dedup.
@@ -339,34 +434,120 @@ func (r *Router) searchOneSource(
 	plugin := r.plugins[sourceID]
 
 	// Credential resolution. The resolved credential string is not used here —
-	// plugins resolve credentials internally via creds.ResolveForSource(). We only
-	// need the deterministic bucket key for per-credential rate limiting.
+	// plugins read credentials from ctx via CredentialFor. We only need the
+	// deterministic bucket key for per-credential rate limiting.
 	serverDefault := r.serverDefaults[sourceID]
 	_, bucketKey := r.credentials.Resolve(sourceID, creds, serverDefault)
 
-	// Rate limit wait.
-	// Double %w wrapping is intentional (Go 1.20+ multi-error): errors.Is()
-	// matches both the sentinel (ErrSearchFailed) and the underlying cause.
-	if r.rateLimits != nil {
-		throttled, err := r.rateLimits.Wait(ctx, sourceID, bucketKey)
-		if err != nil {
-			return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err), duration: time.Since(start)}
-		}
-		if throttled {
-			r.metrics.RecordRateLimitWait(sourceID)
-		}
+	// Attach legacy *CallCredentials to ctx so plugins can read it via
+	// CredentialFor (the new map-based path is mirrored in by pkg/retrievr.Client).
+	ctx = WithCallCredentials(ctx, creds)
+
+	// Build the per-source resilience chain. Order outermost → innermost:
+	// retry → rate-limit → timeout → plugin. Retry above rate-limit so each
+	// attempt consumes its own bucket token (matches liz DC-145).
+	var result *SearchResult
+	op := func(opCtx context.Context) error {
+		var e error
+		result, e = plugin.Search(opCtx, params)
+		return e
 	}
-
-	// Per-source timeout.
-	childCtx, cancel := context.WithTimeout(ctx, r.timeout)
-	defer cancel()
-
-	result, err := plugin.Search(childCtx, params, creds)
-	if err != nil {
+	chain := chainPluginMW(
+		withRetry(r.retry, r.logger, sourceID, nil),
+		withRateLimit(r.rateLimits, r.metrics, sourceID, bucketKey),
+		withTimeout(r.timeout),
+	)
+	if err := chain(op)(ctx); err != nil {
 		return sourceResult{sourceID: sourceID, err: fmt.Errorf("%w: %s: %w", ErrSearchFailed, sourceID, err), duration: time.Since(start)}
 	}
 
 	return sourceResult{sourceID: sourceID, result: result, duration: time.Since(start)}
+}
+
+// walkFallback queries each fallback source in order, stopping at the first
+// source that returns at least one result. Returns the per-source results
+// collected (whether successful or failed). Does NOT mutate Router state.
+func (r *Router) walkFallback(
+	ctx context.Context,
+	fallbackList []string,
+	params SearchParams,
+	creds *CallCredentials,
+	requestID string,
+) []sourceResult {
+	collected := make([]sourceResult, 0, len(fallbackList))
+	for _, sourceID := range fallbackList {
+		if err := ctx.Err(); err != nil {
+			return collected
+		}
+		r.logger.Debug(logMsgFallbackAttempt,
+			slog.String(LogKeyRequestID, requestID),
+			slog.String(LogKeySource, sourceID),
+		)
+		res := r.searchOneSource(ctx, sourceID, params, creds)
+		collected = append(collected, res)
+		// Short-circuit on first hit. err == nil + at least one Result.
+		if res.err == nil && res.result != nil && len(res.result.Results) > 0 {
+			return collected
+		}
+	}
+	return collected
+}
+
+// applyFallbackWalk merges per-source fallback results into the running
+// accumulators (sourcesQueried, sourcesFailed, allResults).
+func applyFallbackWalk(
+	sourcesQueried, sourcesFailed []string,
+	allResults []Publication,
+	extra []sourceResult,
+) ([]string, []string, []Publication) {
+	for _, sr := range extra {
+		sourcesQueried = append(sourcesQueried, sr.sourceID)
+		if sr.err != nil {
+			sourcesFailed = append(sourcesFailed, sr.sourceID)
+			continue
+		}
+		if sr.result != nil {
+			allResults = append(allResults, sr.result.Results...)
+		}
+	}
+	return sourcesQueried, sourcesFailed, allResults
+}
+
+// resolveByIntent returns the primary source set + ordered fallback list for
+// the given intent. When intent is empty or unmapped, returns
+// (defaultSources, nil) — preserving legacy behavior.
+//
+// Both lists are filtered through the plugin registry (unknown source IDs
+// are dropped silently) but NOT deduplicated against each other; a source
+// that appears in both primary and fallback for some chain is fine.
+func (r *Router) resolveByIntent(intent Intent) (primary, fallback []string) {
+	if intent == "" {
+		return r.filterRegistered(r.defaultSources), nil
+	}
+	chainName, ok := r.fallback.IntentToChain[string(intent)]
+	if !ok {
+		return r.filterRegistered(r.defaultSources), nil
+	}
+	chain, ok := r.fallback.Chains[chainName]
+	if !ok {
+		return r.filterRegistered(r.defaultSources), nil
+	}
+	return r.filterRegistered(chain.Primary), r.filterRegistered(chain.Fallback)
+}
+
+// filterRegistered returns sources filtered to only those present in the
+// plugin map, preserving order.
+func (r *Router) filterRegistered(sources []string) []string {
+	if len(sources) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(sources))
+	for _, s := range sources {
+		if _, ok := r.plugins[s]; ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // resolveSources returns the list of source IDs to query, filtered to only
@@ -423,35 +604,35 @@ func (r *Router) Get(
 		slog.String(LogKeyPubID, rawID),
 	)
 
-	// Step 4: Credential resolution + rate limit wait.
-	// Only the bucket key is needed here; plugins resolve credentials internally.
+	// Step 4: Credential resolution. Plugins read credentials from ctx via
+	// CredentialFor; here we only need the deterministic bucket key for the
+	// per-credential rate limiter.
 	serverDefault := r.serverDefaults[sourceID]
 	_, bucketKey := r.credentials.Resolve(sourceID, creds, serverDefault)
 
-	if r.rateLimits != nil {
-		throttled, err := r.rateLimits.Wait(ctx, sourceID, bucketKey)
-		if err != nil {
-			r.metrics.RecordGet(sourceID, metricStatusError)
-			return nil, fmt.Errorf("%w: %w", ErrGetFailed, err)
-		}
-		if throttled {
-			r.metrics.RecordRateLimitWait(sourceID)
-		}
-	}
-
-	// Step 5: Per-source timeout + plugin call.
-	// When BibTeX is requested, call the plugin with FormatNative and generate
-	// BibTeX centrally after retrieval. This avoids per-plugin BibTeX duplication.
+	// Step 5: Plugin call through the resilience chain (retry → rate-limit →
+	// timeout). When BibTeX is requested, call the plugin with FormatNative
+	// and generate BibTeX centrally after retrieval to avoid per-plugin
+	// BibTeX duplication.
 	pluginFormat := format
 	if format == FormatBibTeX {
 		pluginFormat = FormatNative
 	}
 
-	childCtx, cancel := context.WithTimeout(ctx, r.timeout)
-	defer cancel()
+	ctx = WithCallCredentials(ctx, creds)
 
-	pub, err := plugin.Get(childCtx, rawID, include, pluginFormat, creds)
-	if err != nil {
+	var pub *Publication
+	op := func(opCtx context.Context) error {
+		var e error
+		pub, e = plugin.Get(opCtx, rawID, include, pluginFormat)
+		return e
+	}
+	chain := chainPluginMW(
+		withRetry(r.retry, r.logger, sourceID, nil),
+		withRateLimit(r.rateLimits, r.metrics, sourceID, bucketKey),
+		withTimeout(r.timeout),
+	)
+	if err := chain(op)(ctx); err != nil {
 		r.metrics.RecordGet(sourceID, metricStatusError)
 		return nil, fmt.Errorf("%w: %s: %w", ErrGetFailed, sourceID, err)
 	}

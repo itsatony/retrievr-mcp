@@ -382,12 +382,12 @@ func (p *OpenAlexPlugin) Health(_ context.Context) SourceHealth {
 // ---------------------------------------------------------------------------
 
 // Search executes a search query against the OpenAlex works API.
-func (p *OpenAlexPlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
+func (p *OpenAlexPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrOAEmptyQuery
 	}
 
-	apiKey := resolveOAAPIKey(creds, p.apiKey)
+	apiKey := resolveOAAPIKey(ctx, p.apiKey)
 	reqURL := buildOASearchURL(p.baseURL, params, p.mailto, apiKey)
 
 	var response oaSearchResponse
@@ -417,8 +417,8 @@ func (p *OpenAlexPlugin) Search(ctx context.Context, params SearchParams, creds 
 // ---------------------------------------------------------------------------
 
 // Get retrieves a single work by its OpenAlex ID.
-func (p *OpenAlexPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error) {
-	apiKey := resolveOAAPIKey(creds, p.apiKey)
+func (p *OpenAlexPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat) (*Publication, error) {
+	apiKey := resolveOAAPIKey(ctx, p.apiKey)
 	reqURL := buildOAGetURL(p.baseURL, id, p.mailto, apiKey)
 
 	var work oaWork
@@ -508,11 +508,8 @@ func (p *OpenAlexPlugin) recordError(err error) {
 
 // resolveOAAPIKey extracts the effective API key from per-call credentials
 // and server default, following the three-level resolution chain.
-func resolveOAAPIKey(creds *CallCredentials, serverDefault string) string {
-	if creds != nil {
-		return creds.ResolveForSource(SourceOpenAlex, serverDefault)
-	}
-	return serverDefault
+func resolveOAAPIKey(ctx context.Context, serverDefault string) string {
+	return CredentialFor(ctx, SourceOpenAlex, serverDefault)
 }
 
 // ---------------------------------------------------------------------------

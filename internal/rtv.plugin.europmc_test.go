@@ -384,7 +384,7 @@ func TestEuropePMCSearch(t *testing.T) {
 			defer server.Close()
 
 			plugin := newEMCTestPlugin(t, server.URL+"/")
-			result, err := plugin.Search(context.Background(), tt.params, nil)
+			result, err := plugin.Search(context.Background(), tt.params)
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -422,7 +422,7 @@ func TestEuropePMCSearchResultMapping(t *testing.T) {
 	result, err := plugin.Search(context.Background(), SearchParams{
 		Query: "CRISPR",
 		Limit: 10,
-	}, nil)
+	})
 
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
@@ -520,7 +520,7 @@ func TestEuropePMCGet(t *testing.T) {
 			defer server.Close()
 
 			plugin := newEMCTestPlugin(t, server.URL+"/")
-			pub, err := plugin.Get(context.Background(), tt.id, nil, tt.format, nil)
+			pub, err := plugin.Get(context.Background(), tt.id, nil, tt.format)
 
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -563,7 +563,7 @@ func TestEuropePMCGetWithFullText(t *testing.T) {
 
 	plugin := newEMCTestPlugin(t, server.URL+"/")
 	pub, err := plugin.Get(context.Background(), testEMCPMID1,
-		[]IncludeField{IncludeFullText}, FormatNative, nil)
+		[]IncludeField{IncludeFullText}, FormatNative)
 
 	require.NoError(t, err)
 	require.NotNil(t, pub)
@@ -617,7 +617,7 @@ func TestEuropePMCFetchFullTextErrors(t *testing.T) {
 
 			plugin := newEMCTestPlugin(t, server.URL+"/")
 			pub, err := plugin.Get(context.Background(), testEMCPMID1,
-				[]IncludeField{IncludeFullText}, FormatNative, nil)
+				[]IncludeField{IncludeFullText}, FormatNative)
 
 			require.NoError(t, err, "full text failure should be non-fatal")
 			require.NotNil(t, pub)
@@ -650,7 +650,7 @@ func TestEuropePMCGetFullTextSkippedForNonOA(t *testing.T) {
 
 	plugin := newEMCTestPlugin(t, server.URL+"/")
 	pub, err := plugin.Get(context.Background(), testEMCPMID2,
-		[]IncludeField{IncludeFullText}, FormatNative, nil)
+		[]IncludeField{IncludeFullText}, FormatNative)
 
 	require.NoError(t, err)
 	require.NotNil(t, pub)
@@ -681,7 +681,7 @@ func TestEuropePMCGetFullTextEmptyBody(t *testing.T) {
 
 	plugin := newEMCTestPlugin(t, server.URL+"/")
 	pub, err := plugin.Get(context.Background(), testEMCPMID1,
-		[]IncludeField{IncludeFullText}, FormatNative, nil)
+		[]IncludeField{IncludeFullText}, FormatNative)
 
 	require.NoError(t, err)
 	require.NotNil(t, pub)
@@ -735,7 +735,7 @@ func TestEuropePMCHTTPErrors(t *testing.T) {
 			_, err := plugin.Search(context.Background(), SearchParams{
 				Query: "test",
 				Limit: 10,
-			}, nil)
+			})
 
 			require.Error(t, err)
 			assert.True(t, errors.Is(err, tt.wantErr), "expected %v, got %v", tt.wantErr, err)
@@ -761,7 +761,7 @@ func TestEuropePMCContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel immediately
 
-	_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 	require.Error(t, err)
 }
 
@@ -787,7 +787,7 @@ func TestEuropePMCContextTimeout(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, searchErr := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, searchErr := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.Error(t, searchErr)
 }
 
@@ -820,7 +820,7 @@ func TestEuropePMCConcurrentSearch(t *testing.T) {
 			_, err := plugin.Search(context.Background(), SearchParams{
 				Query: "concurrent test",
 				Limit: 10,
-			}, nil)
+			})
 			errs[idx] = err
 		}(i)
 	}
@@ -849,7 +849,7 @@ func TestEuropePMCHealthTracking(t *testing.T) {
 
 	plugin := newEMCTestPlugin(t, successServer.URL+"/")
 
-	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 
 	health := plugin.Health(context.Background())
@@ -864,7 +864,7 @@ func TestEuropePMCHealthTracking(t *testing.T) {
 	defer failServer.Close()
 
 	plugin.baseURL = failServer.URL + "/"
-	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.Error(t, err)
 
 	health = plugin.Health(context.Background())
@@ -873,7 +873,7 @@ func TestEuropePMCHealthTracking(t *testing.T) {
 
 	// Third: successful again — should recover.
 	plugin.baseURL = successServer.URL + "/"
-	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 	require.NoError(t, err)
 
 	health = plugin.Health(context.Background())

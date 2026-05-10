@@ -423,7 +423,7 @@ func TestArXivSearch(t *testing.T) {
 			if tc.wantErr != nil {
 				// No server needed for error cases that fail before HTTP.
 				plugin := newArxivTestPlugin(t, "http://unused.test")
-				_, err := plugin.Search(context.Background(), tc.params, nil)
+				_, err := plugin.Search(context.Background(), tc.params)
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tc.wantErr)
 				return
@@ -439,7 +439,7 @@ func TestArXivSearch(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newArxivTestPlugin(t, ts.URL)
-			result, err := plugin.Search(context.Background(), tc.params, nil)
+			result, err := plugin.Search(context.Background(), tc.params)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 
@@ -465,7 +465,7 @@ func TestArXivSearchResultMapping(t *testing.T) {
 	result, err := plugin.Search(context.Background(), SearchParams{
 		Query: "attention",
 		Limit: 10,
-	}, nil)
+	})
 	require.NoError(t, err)
 	require.Len(t, result.Results, 1)
 
@@ -572,7 +572,7 @@ func TestArXivGet(t *testing.T) {
 			t.Cleanup(ts.Close)
 
 			plugin := newArxivTestPlugin(t, ts.URL)
-			pub, err := plugin.Get(context.Background(), tc.id, nil, tc.format, nil)
+			pub, err := plugin.Get(context.Background(), tc.id, nil, tc.format)
 
 			if tc.wantErr != nil {
 				require.Error(t, err)
@@ -910,21 +910,21 @@ func TestArXivHealthTracking(t *testing.T) {
 	assert.Empty(t, health.LastError)
 
 	// First search succeeds — stays healthy.
-	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+	_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 	require.NoError(t, err)
 	health = plugin.Health(context.Background())
 	assert.True(t, health.Healthy)
 	assert.Empty(t, health.LastError)
 
 	// Second search fails (500) — becomes unhealthy.
-	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 	require.Error(t, err)
 	health = plugin.Health(context.Background())
 	assert.False(t, health.Healthy)
 	assert.NotEmpty(t, health.LastError)
 
 	// Third search succeeds — recovers to healthy.
-	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+	_, err = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 	require.NoError(t, err)
 	health = plugin.Health(context.Background())
 	assert.True(t, health.Healthy)
@@ -946,7 +946,7 @@ func TestArXivHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newArxivTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -959,7 +959,7 @@ func TestArXivHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newArxivTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), testArxivID1, nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), testArxivID1, nil, FormatNative)
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrGetFailed)
 	})
@@ -976,7 +976,7 @@ func TestArXivHTTPErrors(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel() // Cancel immediately.
 
-		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -990,7 +990,7 @@ func TestArXivHTTPErrors(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newArxivTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrSearchFailed)
 	})
@@ -1081,8 +1081,8 @@ func TestArXivConcurrentAccess(t *testing.T) {
 	for range testArxivConcurrentGoroutines {
 		wg.Go(func() {
 			// Mix of Search, Get, and Health calls.
-			_, _ = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
-			_, _ = plugin.Get(context.Background(), testArxivID1, nil, FormatNative, nil)
+			_, _ = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
+			_, _ = plugin.Get(context.Background(), testArxivID1, nil, FormatNative)
 			_ = plugin.Health(context.Background())
 		})
 	}
@@ -1118,7 +1118,7 @@ func TestArXivXMLParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newArxivTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 
@@ -1150,7 +1150,7 @@ func TestArXivXMLParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newArxivTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 1)
 
@@ -1178,7 +1178,7 @@ func TestArXivXMLParsingEdgeCases(t *testing.T) {
 		t.Cleanup(ts.Close)
 
 		plugin := newArxivTestPlugin(t, ts.URL)
-		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		result, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 		require.Len(t, result.Results, 2)
 		assert.Equal(t, testArxivTitle1, result.Results[0].Title)

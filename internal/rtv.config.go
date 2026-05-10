@@ -89,7 +89,7 @@ type ServerConfig struct {
 	LogFormat string `yaml:"log_format" validate:"required,oneof=json text"`
 }
 
-// RouterConfig holds source routing, dedup, and cache settings.
+// RouterConfig holds source routing, dedup, cache, and resilience settings.
 type RouterConfig struct {
 	DefaultSources   []string `yaml:"default_sources" validate:"required,min=1"`
 	PerSourceTimeout Duration `yaml:"per_source_timeout" validate:"required"`
@@ -97,6 +97,51 @@ type RouterConfig struct {
 	CacheEnabled     bool     `yaml:"cache_enabled"`
 	CacheTTL         Duration `yaml:"cache_ttl"`
 	CacheMaxEntries  int      `yaml:"cache_max_entries" validate:"min=0"`
+
+	// Retry governs the cycle-1 plugin-invocation retry middleware.
+	// Zero values trigger DefaultRetryConfig().
+	Retry RouterRetryConfig `yaml:"retry"`
+
+	// Fallback declares per-intent primary + fallback source chains.
+	// Zero/empty falls back to default chains via DefaultFallbackConfig().
+	Fallback RouterFallbackConfig `yaml:"fallback"`
+}
+
+// RouterRetryConfig is the YAML-friendly mirror of RetryConfig.
+// Zero values fall back to DefaultRetryConfig() at NewRouter time.
+type RouterRetryConfig struct {
+	MaxAttempts    int      `yaml:"max_attempts"     validate:"min=0"`
+	BaseDelay      Duration `yaml:"base_delay"`
+	MaxDelay       Duration `yaml:"max_delay"`
+	JitterFraction float64  `yaml:"jitter_fraction"  validate:"min=0,max=1"`
+}
+
+// RouterFallbackConfig declares per-intent primary source sets + fallback
+// chains. When SearchParams.Intent is non-empty AND the caller did not pass
+// an explicit Sources allowlist, Router resolves the chain via this config.
+//
+// Cycle-1: only the academic chain is meaningfully populated. Wave-1 (cycle 2)
+// adds web/code/news/reference chains when the new providers land.
+type RouterFallbackConfig struct {
+	// Chains maps a chain name (e.g. "academic", "web") to its primary +
+	// fallback source ID lists.
+	Chains map[string]FallbackChain `yaml:"chains"`
+
+	// IntentToChain maps an Intent value to a chain name in Chains.
+	IntentToChain map[string]string `yaml:"intent_to_chain"`
+}
+
+// FallbackChain describes the primary fan-out set and the ordered fallback
+// list walked when the primary set yields zero results.
+type FallbackChain struct {
+	// Primary source IDs are fanned out concurrently, like the legacy
+	// defaultSources path.
+	Primary []string `yaml:"primary"`
+
+	// Fallback source IDs are walked sequentially after the primary set
+	// returned zero merged results. The first fallback that yields any hit
+	// short-circuits the walk.
+	Fallback []string `yaml:"fallback"`
 }
 
 // ---------------------------------------------------------------------------

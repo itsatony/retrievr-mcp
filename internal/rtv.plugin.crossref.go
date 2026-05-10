@@ -324,7 +324,7 @@ func (p *CrossRefPlugin) Health(_ context.Context) SourceHealth {
 // ---------------------------------------------------------------------------
 
 // Search executes a search query against the CrossRef works API.
-func (p *CrossRefPlugin) Search(ctx context.Context, params SearchParams, _ *CallCredentials) (*SearchResult, error) {
+func (p *CrossRefPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrCrossRefEmptyQuery
 	}
@@ -365,7 +365,7 @@ func (p *CrossRefPlugin) Search(ctx context.Context, params SearchParams, _ *Cal
 
 // Get retrieves a single work by its DOI.
 // The id parameter is the raw DOI (prefix already stripped by the router).
-func (p *CrossRefPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+func (p *CrossRefPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat) (*Publication, error) {
 	reqURL := buildCrossRefGetURL(p.baseURL, id, p.mailto)
 
 	var envelope crossrefEnvelope

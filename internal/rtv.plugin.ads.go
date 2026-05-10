@@ -272,12 +272,12 @@ func (p *ADSPlugin) Health(_ context.Context) SourceHealth {
 // SourcePlugin interface: Search
 // ---------------------------------------------------------------------------
 
-func (p *ADSPlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
+func (p *ADSPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	if params.Query == "" {
 		return nil, ErrADSEmptyQuery
 	}
 
-	apiKey := resolveADSAPIKey(creds, p.apiKey)
+	apiKey := resolveADSAPIKey(ctx, p.apiKey)
 	reqURL := buildADSSearchURL(p.baseURL, params)
 
 	var response adsSearchResponse
@@ -306,8 +306,8 @@ func (p *ADSPlugin) Search(ctx context.Context, params SearchParams, creds *Call
 // SourcePlugin interface: Get
 // ---------------------------------------------------------------------------
 
-func (p *ADSPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error) {
-	apiKey := resolveADSAPIKey(creds, p.apiKey)
+func (p *ADSPlugin) Get(ctx context.Context, id string, _ []IncludeField, format ContentFormat) (*Publication, error) {
+	apiKey := resolveADSAPIKey(ctx, p.apiKey)
 	reqURL := buildADSGetURL(p.baseURL, id)
 
 	var response adsSearchResponse
@@ -396,11 +396,8 @@ func (p *ADSPlugin) recordError(err error) {
 // Credential resolution
 // ---------------------------------------------------------------------------
 
-func resolveADSAPIKey(creds *CallCredentials, serverDefault string) string {
-	if creds != nil {
-		return creds.ResolveForSource(SourceADS, serverDefault)
-	}
-	return serverDefault
+func resolveADSAPIKey(ctx context.Context, serverDefault string) string {
+	return CredentialFor(ctx, SourceADS, serverDefault)
 }
 
 // ---------------------------------------------------------------------------

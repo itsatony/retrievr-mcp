@@ -165,6 +165,39 @@ type FullTextContent struct {
 }
 
 // ---------------------------------------------------------------------------
+// Intent — declarative search-mode selector
+//
+// Cycle-1 task #4: Intent lets the caller declare what they're trying to do,
+// letting Router pick the right primary source set + fallback chain instead
+// of forcing the caller to enumerate sources. When unset, Router falls back
+// to defaultSources (legacy behavior).
+// ---------------------------------------------------------------------------
+
+// Intent classifies the caller's high-level retrieval mode.
+type Intent string
+
+// Intent constants.
+const (
+	IntentDeepResearch   Intent = "deep_research"
+	IntentQuickLookup    Intent = "quick_lookup"
+	IntentPrimarySource  Intent = "primary_source"
+	IntentCodeProvenance Intent = "code_provenance"
+	IntentNews           Intent = "news"
+	IntentReference      Intent = "reference"
+)
+
+// IsValidIntent returns true if the given string maps to a known Intent.
+// The empty string is intentionally NOT valid — callers must opt in.
+func IsValidIntent(i string) bool {
+	switch Intent(i) {
+	case IntentDeepResearch, IntentQuickLookup, IntentPrimarySource,
+		IntentCodeProvenance, IntentNews, IntentReference:
+		return true
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
 // Search types
 // ---------------------------------------------------------------------------
 
@@ -176,6 +209,11 @@ type SearchParams struct {
 	Sort        SortOrder     `json:"sort"`
 	Limit       int           `json:"limit"`
 	Offset      int           `json:"offset"`
+	// Intent selects a primary source set + fallback chain via the
+	// configured RouterFallbackConfig. When empty, Router uses
+	// DefaultSources (legacy behavior). When set, an explicit Sources
+	// argument to Router.Search still overrides intent-based resolution.
+	Intent Intent `json:"intent,omitempty"`
 }
 
 // SearchFilters contains optional filters to narrow search results.
@@ -266,6 +304,12 @@ type SourceCapabilities struct {
 	CategoriesHint           string          `json:"categories_hint,omitempty"`
 	NativeFormat             ContentFormat   `json:"native_format"`
 	AvailableFormats         []ContentFormat `json:"available_formats"`
+	// QueryIntents is the set of Intents this provider is reasonable to
+	// dispatch for. Used informationally by Router for chain validation
+	// and surfaced via rtv_list_sources so callers (and LLM agents) can
+	// pick sources by intent. Defaults to nil for cycle-1 plugins; cycle 2
+	// fills in real intent tags when wave-1 providers land.
+	QueryIntents []Intent `json:"query_intents,omitempty"`
 }
 
 // SourceHealth represents the current health and rate-limit status of a source.

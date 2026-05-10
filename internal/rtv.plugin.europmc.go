@@ -352,7 +352,7 @@ func (p *EuropePMCPlugin) Health(_ context.Context) SourceHealth {
 
 // Search executes a search query against the Europe PMC REST API.
 // Single-phase workflow: search → JSON results → map to publications.
-func (p *EuropePMCPlugin) Search(ctx context.Context, params SearchParams, _ *CallCredentials) (*SearchResult, error) {
+func (p *EuropePMCPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	query := buildEMCSearchQuery(params)
 	if query == "" {
 		return nil, ErrEuropePMCEmptyQuery
@@ -387,7 +387,7 @@ func (p *EuropePMCPlugin) Search(ctx context.Context, params SearchParams, _ *Ca
 // ---------------------------------------------------------------------------
 
 // Get retrieves a single publication by its Europe PMC identifier.
-func (p *EuropePMCPlugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat, _ *CallCredentials) (*Publication, error) {
+func (p *EuropePMCPlugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat) (*Publication, error) {
 	reqURL := buildEMCGetURL(p.baseURL, id)
 
 	var response emcSearchResponse

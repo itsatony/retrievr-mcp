@@ -122,7 +122,7 @@ func TestADSSearch(t *testing.T) {
 		result, err := plugin.Search(context.Background(), SearchParams{
 			Query: "stellar evolution",
 			Limit: 10,
-		}, nil)
+		})
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -156,14 +156,14 @@ func TestADSSearch(t *testing.T) {
 				DateFrom: "2024-01",
 				DateTo:   "2024-06",
 			},
-		}, nil)
+		})
 		require.NoError(t, err)
 	})
 
 	t.Run("empty_query", func(t *testing.T) {
 		t.Parallel()
 		plugin := &ADSPlugin{}
-		_, err := plugin.Search(context.Background(), SearchParams{Query: ""}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: ""})
 		assert.ErrorIs(t, err, ErrADSEmptyQuery)
 	})
 
@@ -180,7 +180,7 @@ func TestADSSearch(t *testing.T) {
 		result, err := plugin.Search(context.Background(), SearchParams{
 			Query: "nonexistent topic xyz",
 			Limit: 10,
-		}, nil)
+		})
 		require.NoError(t, err)
 		assert.Equal(t, 0, result.Total)
 		assert.Empty(t, result.Results)
@@ -209,7 +209,7 @@ func TestADSGet(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newADSTestPlugin(t, ts.URL)
-		pub, err := plugin.Get(context.Background(), testADSBibcode1, nil, FormatNative, nil)
+		pub, err := plugin.Get(context.Background(), testADSBibcode1, nil, FormatNative)
 
 		require.NoError(t, err)
 		assert.Equal(t, testADSTitle1, pub.Title)
@@ -230,7 +230,7 @@ func TestADSGet(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newADSTestPlugin(t, ts.URL)
-		_, err := plugin.Get(context.Background(), "INVALID_BIBCODE", nil, FormatNative, nil)
+		_, err := plugin.Get(context.Background(), "INVALID_BIBCODE", nil, FormatNative)
 		assert.True(t, errors.Is(err, ErrADSNotFound))
 	})
 }
@@ -251,7 +251,7 @@ func TestADSAuthHeader(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newADSTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -265,7 +265,8 @@ func TestADSAuthHeader(t *testing.T) {
 
 		plugin := newADSTestPlugin(t, ts.URL)
 		creds := &CallCredentials{ADSAPIKey: testADSPerCallKey}
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, creds)
+		ctx := WithCallCredentials(context.Background(), creds)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 
@@ -282,7 +283,7 @@ func TestADSAuthHeader(t *testing.T) {
 			Enabled: true,
 			BaseURL: ts.URL,
 		})
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		require.NoError(t, err)
 	})
 }
@@ -384,7 +385,7 @@ func TestADSHTTPErrors(t *testing.T) {
 		defer ts.Close()
 
 		plugin := newADSTestPlugin(t, ts.URL)
-		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 10})
 		assert.Error(t, err)
 		assert.True(t, errors.Is(err, ErrSearchFailed))
 	})
@@ -400,7 +401,7 @@ func TestADSHTTPErrors(t *testing.T) {
 		plugin := newADSTestPlugin(t, ts.URL)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10}, nil)
+		_, err := plugin.Search(ctx, SearchParams{Query: "test", Limit: 10})
 		assert.Error(t, err)
 	})
 }
@@ -451,8 +452,8 @@ func TestADSConcurrentSafety(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func(idx int) {
 			defer func() { done <- struct{}{} }()
-			_, _ = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1}, nil)
-			_, _ = plugin.Get(context.Background(), testADSBibcode1, nil, FormatNative, nil)
+			_, _ = plugin.Search(context.Background(), SearchParams{Query: "test", Limit: 1})
+			_, _ = plugin.Get(context.Background(), testADSBibcode1, nil, FormatNative)
 			_ = plugin.Health(context.Background())
 		}(i)
 	}

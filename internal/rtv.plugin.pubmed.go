@@ -460,13 +460,13 @@ func (p *PubMedPlugin) Health(_ context.Context) SourceHealth {
 // Search executes a two-phase search against the PubMed E-utilities API:
 // 1. esearch.fcgi → PMIDs + count + WebEnv/QueryKey
 // 2. efetch.fcgi  → PubmedArticle XML records
-func (p *PubMedPlugin) Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error) {
+func (p *PubMedPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	query := buildPMSearchQuery(params)
 	if query == "" {
 		return nil, ErrPubMedEmptyQuery
 	}
 
-	apiKey := resolvePMAPIKey(creds, p.apiKey)
+	apiKey := resolvePMAPIKey(ctx, p.apiKey)
 
 	// Phase 1: esearch — get PMIDs and total count.
 	esearchURL := buildPMESearchURL(p.baseURL, query, params, p.toolName, p.email, apiKey)
@@ -511,8 +511,8 @@ func (p *PubMedPlugin) Search(ctx context.Context, params SearchParams, creds *C
 // ---------------------------------------------------------------------------
 
 // Get retrieves a single publication by its PubMed ID (PMID).
-func (p *PubMedPlugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error) {
-	apiKey := resolvePMAPIKey(creds, p.apiKey)
+func (p *PubMedPlugin) Get(ctx context.Context, id string, include []IncludeField, format ContentFormat) (*Publication, error) {
+	apiKey := resolvePMAPIKey(ctx, p.apiKey)
 
 	efetchURL := buildPMGetURL(p.baseURL, id, p.toolName, p.email, apiKey)
 	articleSet, err := p.doEFetchRequest(ctx, efetchURL)
@@ -683,11 +683,8 @@ func (p *PubMedPlugin) recordError(err error) {
 
 // resolvePMAPIKey extracts the effective API key from per-call credentials
 // and server default, following the three-level resolution chain.
-func resolvePMAPIKey(creds *CallCredentials, serverDefault string) string {
-	if creds != nil {
-		return creds.ResolveForSource(SourcePubMed, serverDefault)
-	}
-	return serverDefault
+func resolvePMAPIKey(ctx context.Context, serverDefault string) string {
+	return CredentialFor(ctx, SourcePubMed, serverDefault)
 }
 
 // ---------------------------------------------------------------------------

@@ -29,13 +29,18 @@ type SourcePlugin interface {
 
 	// Search executes a search query against this source.
 	// Must respect ctx cancellation. Must handle its own rate limiting.
-	// Credentials from the call override config-level defaults.
-	Search(ctx context.Context, params SearchParams, creds *CallCredentials) (*SearchResult, error)
+	//
+	// Credentials are read from ctx via CredentialFor(ctx, "<source-id>", fallback).
+	// Both the new map-keyed surface (pkg/retrievr.WithCredentials) and the
+	// legacy *CallCredentials path resolve through the same helper.
+	Search(ctx context.Context, params SearchParams) (*SearchResult, error)
 
 	// Get retrieves a single item by its source-specific ID.
 	// The ID will already have the source prefix stripped (e.g., "2401.12345" not "arxiv:2401.12345").
 	// format=FormatNative means "use NativeFormat()".
-	Get(ctx context.Context, id string, include []IncludeField, format ContentFormat, creds *CallCredentials) (*Publication, error)
+	//
+	// Credentials are read from ctx (see Search godoc).
+	Get(ctx context.Context, id string, include []IncludeField, format ContentFormat) (*Publication, error)
 
 	// Initialize is called once at startup with the plugin's config.
 	Initialize(ctx context.Context, cfg PluginConfig) error

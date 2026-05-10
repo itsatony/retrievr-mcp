@@ -331,7 +331,7 @@ func (p *HuggingFacePlugin) Initialize(_ context.Context, cfg PluginConfig) erro
 		timeout = DefaultPluginTimeout
 	}
 
-	p.httpClient = &http.Client{Timeout: timeout}
+	p.httpClient = NewEgressClient(timeout)
 	p.healthy = true
 
 	return nil

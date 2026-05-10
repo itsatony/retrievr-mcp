@@ -18,6 +18,7 @@ const (
 	flagNameFormat  = "format"
 	flagNameIntent  = "intent"
 	flagNameSort    = "sort"
+	flagNameStream  = "stream"
 
 	formatTable = "table"
 	formatJSON  = "json"
@@ -55,6 +56,7 @@ func runSearch(ctx context.Context, client *retrievr.Client, args []string) int 
 	limit := fs.Int(flagNameLimit, defaultSearchLimit, "")
 	sort := fs.String(flagNameSort, "", "")
 	format := fs.String(flagNameFormat, formatTable, "")
+	stream := fs.Bool(flagNameStream, false, "")
 
 	if err := fs.Parse(args); err != nil {
 		return exitCodeUsage
@@ -83,6 +85,10 @@ func runSearch(ctx context.Context, client *retrievr.Client, args []string) int 
 	}
 	if *sort != "" {
 		params.Sort = retrievr.SortOrder(*sort)
+	}
+
+	if *stream {
+		return runStreamingSearch(ctx, client, params, sources)
 	}
 
 	result, err := client.Search(ctx, params, sources)
@@ -141,6 +147,34 @@ func splitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// runStreamingSearch consumes Client.Stream and prints per-source events
+// as they arrive. Useful for slow providers (e.g., Perplexity Sonar at
+// 5–13s median) where progressive rendering beats waiting for a full merge.
+func runStreamingSearch(ctx context.Context, client *retrievr.Client, params retrievr.SearchParams, sources []string) int {
+	ch, err := client.Stream(ctx, params, sources)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "retrievr-cli: stream failed: %v\n", err)
+		return exitCodeError
+	}
+	for ev := range ch {
+		if ev.Err != nil {
+			fmt.Fprintf(os.Stderr, "[%s] error: %v\n", ev.Source, ev.Err)
+			continue
+		}
+		if ev.Result == nil {
+			continue
+		}
+		for _, pub := range ev.Result.Results {
+			title := pub.Title
+			if len(title) > 80 {
+				title = title[:77] + "..."
+			}
+			fmt.Printf("[%s] %s\t%s\n", ev.Source, pub.ID, title)
+		}
+	}
+	return exitCodeSuccess
 }
 
 // firstTen returns the first 10 chars of s (suitable for YYYY-MM-DD dates),

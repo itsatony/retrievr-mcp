@@ -157,3 +157,12 @@ sources:
     rate_limit_burst: 5
     extra:
       email: "contact@example.com"  # REQUIRED by Unpaywall TOS
+
+  perplexity:
+    enabled: false               # Wave-2 Sonar; bumps timeout (Sonar median 5-13s)
+    api_key: ""                  # Bearer token; or RETRIEVR_PERPLEXITY_API_KEY env
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+    extra:
+      model: "sonar"             # sonar | sonar-pro | sonar-reasoning

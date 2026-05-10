@@ -59,6 +59,7 @@ const (
 const (
 	ErrMsgEUModeProviderConflict = "eu_strict mode is incompatible with the requested non-EU sources"
 	ErrMsgConfigDriftDetected    = "providers.yaml SHA256 does not match the checked-in signature"
+	ErrMsgCompatV1Sunset         = "rtv_search compat:\"v1\" was sunset in v2.0.0 — omit the compat field or pass \"v2\" (see CHANGELOG migration guide)"
 )
 
 // EUModeProviderConflictError is returned when a caller asks for eu_strict
@@ -106,6 +107,11 @@ var (
 	// EU-mode sentinels (Cycle 2).
 	ErrEUModeProviderConflict = errors.New(ErrMsgEUModeProviderConflict)
 	ErrConfigDriftDetected    = errors.New(ErrMsgConfigDriftDetected)
+
+	// v2.0.0 sunset of MCP compat:"v1" — explicit attempts to read the
+	// legacy Publication shape now return this error. Migration: omit the
+	// compat field (default v2) or set compat:"v2" explicitly.
+	ErrCompatV1Sunset = errors.New(ErrMsgCompatV1Sunset)
 )
 
 // ---------------------------------------------------------------------------

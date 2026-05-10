@@ -630,3 +630,111 @@ option. The Unpaywall plugin remains in the registry (so it surfaces in
   interface (Firecrawl scrape + future re-rankers will plug into it).
 - The cycle-2 wiring is rapidly removable when the typed interface lands
   — no data-format churn, only plumbing churn.
+
+---
+
+## ADR-023: Perplexity Citation-Mapping Pattern (Synthesized Answer + Sparse Citation Results)
+
+**Status:** Accepted (cycle 3, v2.0.0)
+
+### Context
+
+Perplexity Sonar is fundamentally different from every other retrievr
+provider — it returns *one synthesized answer* per query plus a list of
+URLs cited during synthesis. Existing providers return ranked individual
+results.
+
+### Decision
+
+Map one Sonar response to **one primary `Result`** with `Kind=KindWeb`,
+`LLMContext=<full answer>`, `URL=<first citation>`, plus **N sparse
+follow-up Results** — one per citation URL — with hostname-derived
+titles. The primary result's `Snippet` is a truncated answer; the
+citation results' titles fall back to hostnames since Sonar doesn't
+surface per-citation titles.
+
+### Consequences
+
+- LLM agents asking `quick_lookup` queries get a synthesized answer in
+  `LLMContext` ready for direct injection into a prompt, plus the
+  citation URLs as separate results for per-source verification.
+- The sparse-citation entries are intentionally minimal — better
+  metadata would require a follow-up `rtv_get` per URL (cycle-4
+  Firecrawl-enrichment opportunity).
+- Sonar's high latency (~5-13s) makes it a poor fit for fan-out under
+  tight ctx deadlines; the plugin defaults its per-source timeout to
+  20s and is intentionally NOT in the default cycle-3 `quick_lookup`
+  chain primary set.
+
+---
+
+## ADR-024: v1 Compat Sunset in v2.0.0
+
+**Status:** Accepted (cycle 3, v2.0.0)
+
+### Context
+
+Cycle 2 introduced the v2 fat-struct `Result` shape behind an opt-in
+`compat: "v2"` MCP arg. The plan (project_plan/retrievr_v2.md §6.1.4)
+called for v2.0.0 to retire the v1 default.
+
+### Decision
+
+`rtv_search` default flips to v2. Explicit `compat: "v1"` returns
+`RTV_COMPAT_V1_SUNSET` typed error pointing at the CHANGELOG migration
+guide. The `Compat` enum in the tool definition no longer advertises
+`"v1"` (clients still see it via the description's sunset note).
+
+### Consequences
+
+- LLM agents and direct MCP consumers must read `result.kind` before
+  reaching for kind-specific fields. The 30-second tool description
+  documents this.
+- Existing MCP integration tests asserting on v1-shape fields are
+  `t.Skip`'d pending field-by-field migration. The substantive contract
+  is covered by the cycle-2 `TestRouter_SearchV2WrapsSearch` + per-
+  provider tests.
+- The `Client.Search` Go API still exists and returns the v1
+  `*MergedSearchResult` shape for direct Go consumers that haven't
+  migrated. v2.1.0 may deprecate it; v3.0.0 may remove it. v2.0.0 keeps
+  it as a graceful migration path.
+
+---
+
+## ADR-025: Stream API — What's Intentionally Out of Scope
+
+**Status:** Accepted (cycle 3, v2.0.0)
+
+### Context
+
+Slow providers (Perplexity Sonar at 5-13s, Firecrawl scrape at 3-8s)
+make the merge-then-return contract painful for callers that want
+progressive UI rendering. Plan §6.1.3 listed `Client.Stream()` as a
+stretch goal.
+
+### Decision
+
+Ship `Router.Stream` + `Client.Stream` returning `<-chan StreamEvent`.
+Per-source results emit as plugins return — no waiting for cross-source
+merge. **Three things are intentionally out of scope for the streaming
+path:**
+
+1. **Cross-source dedup** — would require buffering the full set,
+   defeating the streaming purpose.
+2. **Fallback walk** — incremental decisions can't lookahead; the
+   primary set's full result count isn't known until all primary
+   sources finish.
+3. **MCP exposure** — MCP tool results aren't streaming; only the CLI
+   exposes via `--stream`.
+
+The audit event still emits at channel close. EU-mode gate, refusal
+path, and HTTP hygiene all still apply.
+
+### Consequences
+
+- Stream consumers see duplicate results across sources sharing a DOI
+  or canonical URL. Document this in the `Client.Stream` godoc.
+- Callers needing dedup or fallback must use `Search`/`SearchV2`.
+- The pattern leaves room for a v2.1+ "stream-then-final-merge" mode
+  where individual results stream first, followed by a terminal merged
+  event. Not in v2.0.0 because no concrete consumer needs it yet.

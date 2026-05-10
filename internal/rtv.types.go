@@ -85,6 +85,9 @@ const (
 	SourceGitHub    = "github"
 	SourceWikipedia = "wikipedia"
 	SourceUnpaywall = "unpaywall"
+
+	// Cycle-3 Wave-2 providers.
+	SourcePerplexity = "perplexity"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -109,7 +112,9 @@ var validSourceIDs = map[string]bool{
 	SourceFirecrawl: true,
 	SourceGitHub:    true,
 	SourceWikipedia: true,
-	SourceUnpaywall: true,
+	SourceUnpaywall:  true,
+	// Wave-2.
+	SourcePerplexity: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -128,7 +133,7 @@ func AllSourceIDs() []string {
 
 // SourceCount is the number of known source plugins. Cycle-2 Wave-1
 // increments this as each provider lands.
-const SourceCount = 17
+const SourceCount = 18
 
 // ---------------------------------------------------------------------------
 // Domain structs

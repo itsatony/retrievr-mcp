@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 17 // 10 cycle-1 + Exa + Brave + Linkup + Firecrawl + GitHub + Wikipedia + Unpaywall (cycle-2 tasks #11–17)
+	testRegistryExpectedFactoryCount = 18 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3 task #20)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -130,6 +130,7 @@ func TestInitializePlugins(t *testing.T) {
 				SourceGitHub:      {Enabled: true}, // Cycle 2 Wave-1
 				SourceWikipedia:   {Enabled: true}, // Cycle 2 Wave-1
 				SourceUnpaywall:   {Enabled: true}, // Cycle 2 Wave-1 (enrichment)
+				SourcePerplexity:  {Enabled: true}, // Cycle 3 Wave-2
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

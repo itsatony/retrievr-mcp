@@ -377,6 +377,9 @@ sources:
   unpaywall:
     enabled: false
     timeout: "10s"
+  perplexity:
+    enabled: false
+    timeout: "20s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

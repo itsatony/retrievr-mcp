@@ -218,7 +218,7 @@ func (p *BioRxivPlugin) Initialize(_ context.Context, cfg PluginConfig) error {
 		timeout = DefaultPluginTimeout
 	}
 
-	p.httpClient = &http.Client{Timeout: timeout}
+	p.httpClient = NewEgressClient(timeout)
 	p.healthy = true
 
 	return nil

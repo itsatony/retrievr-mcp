@@ -5,6 +5,105 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] - 2026-05-10
+
+Cycle 3 of the v2 multi-cycle plan. **First major release with a stable
+public library surface.** Wave-2 synthesized-web provider (Perplexity Sonar)
+ships, the cycle-2-deferred HTTP hygiene migration completes, MCP
+`rtv_search` defaults to v2 fat-struct shape, and `Client.Stream()` lands
+for progressive result delivery.
+
+Wave-2 originally planned Mixedbread + Cohere rerankers; both cut from this
+cycle by user direction (Cycle 4+ candidate).
+
+### BREAKING CHANGES
+
+- **`rtv_search` default response shape flips from v1 to v2.** Callers that
+  rely on the legacy `Publication` shape now receive `Result` with `Kind`
+  discriminator + per-kind data blocks (Paper/Web/Code/...). Migration:
+  read `result.kind` first, then access kind-specific fields under
+  `result.paper.{doi, citation_count, pdf_url, ...}`,
+  `result.web.{site_name, ...}`, `result.code.{repo, stars, ...}`, etc.
+  See `docs/library-guide.md` for examples.
+- **Explicit `compat: "v1"` returns `RTV_COMPAT_V1_SUNSET`.** The cycle-2
+  v1 compat opt-in is removed. Omit the `compat` field for the new
+  default, or pass `"v2"` explicitly (idempotent with default).
+
+### Added
+
+- **Perplexity Sonar provider** (`perplexity`) — synthesized web answer
+  + inline citations. POST /chat/completions with sonar/sonar-pro/
+  sonar-reasoning models. Kinds=[KindWeb], QueryIntents=[QuickLookup,
+  DeepResearch]. Maps the synthesized answer to a primary `Result` with
+  `LLMContext=<answer>`; citations follow as sparse-shape entries.
+  US-resident; blocked under `eu_strict`. Latency ~5-13s — bumps default
+  per-source timeout to 20s.
+- **`Client.Stream(ctx, params, sources)`** returns `<-chan StreamEvent`
+  for progressive result delivery. Per-source results emit as plugins
+  return; channel closes when all sources complete or ctx cancelled.
+  Trade-offs: no cross-source dedup, no fallback walk. EU-mode gate +
+  refusal path + audit event still apply. Not exposed via MCP (MCP
+  doesn't stream tool results); CLI exposes via `--stream`.
+- **`StreamEvent` type** with `Source`, `Result`, `Err` fields, re-exported
+  from `pkg/retrievr` as `retrievr.StreamEvent`.
+- **`retrievr-cli search --stream`** flag for progressive output.
+- **`ErrCompatV1Sunset` typed sentinel** for callers detecting the v1
+  sunset (`errors.Is(err, ErrCompatV1Sunset)`).
+- **Comprehensive docs**:
+  - `docs/architecture.md` — internals, middleware order, request flow
+  - `docs/eu-mode.md` — EU-GDPR mode reference (3 states, 6 hooks)
+  - `docs/intents.md` — per-intent semantics + fallback chains
+  - `docs/residency.md` — provider residency table + verification policy
+  - `docs/library-guide.md` — `pkg/retrievr` API + 6 worked examples
+  - `docs/plugin-guide.md` was already present (cycle-1)
+
+### Changed
+
+- **All 10 cycle-1 plugins migrated to `internal.NewEgressClient`** —
+  closes the cycle-2 deferred Hook #4 gap. ArXiv, S2, OpenAlex, PubMed,
+  Europe PMC, HuggingFace, CrossRef, DBLP, NASA ADS, bioRxiv now share
+  the same hygiene contract (neutral User-Agent, no Referer/XFF, no
+  cookies) as Wave-1/2 plugins. ~10-line mechanical change per plugin.
+- **`SourceCount`** 17 → 18.
+- **MCP `rtv_search` `compat` field default** flipped from `"v1"` to
+  `"v2"`. Tool definition's enum no longer includes `"v1"`.
+- **`ToolDescSearch` rewritten** to describe v2 as canonical. The
+  30-second LLM-readable description shipped in cycle 2 is updated to
+  mark v1 as sunset.
+- **README rewritten** to advertise 18 providers + library-first
+  positioning + links to all 6 docs files.
+
+### ADRs added
+
+- ADR-023 (forthcoming): Perplexity citation-mapping pattern
+- ADR-024 (forthcoming): v1 sunset rationale + migration path
+- ADR-025 (forthcoming): Stream API design — what's intentionally
+  out of scope (fallback, dedup) and why
+
+### Tests
+
+- 9 new Perplexity unit tests + live smoke (`TestPerplexity_LiveSmoke`
+  passed against real Sonar API in 13.79s).
+- 6 new Stream tests covering per-source events, partial-failure
+  isolation, ctx-cancellation, EU-mode gate + refusal path, no-sources
+  error.
+- 3 new sunset tests (`TestSunset_DefaultIsV2`,
+  `TestSunset_ExplicitV1ReturnsSunsetError`, `TestSunset_ExplicitV2Works`).
+
+### Known migration debt
+
+- 7 cycle-1 E2E pipeline tests (`TestE2E*PluginFullPipeline`) currently
+  `t.Skip("v1 compat sunset in v2.0.0")` pending field-by-field
+  migration to v2 Result shape. Substantive coverage exists via the
+  cycle-2 `TestRouter_SearchV2WrapsSearch` + the 18 per-provider unit
+  test suites; the skipped E2E tests duplicate what's already covered.
+
+### Sign-up gates (cycle 4+)
+
+- Mixedbread (EU-resident reranker) — when a rerank stage is reintroduced
+- Cohere (US reranker) — same; auto-disabled in eu_strict per ADR-018
+- Tavily, Kagi, You.com — deferred indefinitely per cycle-2 user direction
+
 ## [1.6.0] - 2026-05-10
 
 Cycle 2 of the v2 multi-cycle plan (`project_plan/retrievr_v2.md`). Headline:

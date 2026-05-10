@@ -4,7 +4,15 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![MCP](https://img.shields.io/badge/MCP-2025--11--25-purple)
 
-An MCP server that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repositories, and encyclopedia articles. **17 source APIs** — ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv, plus Wave-1 web/code/encyclopedia providers (Exa, Brave, Linkup [EU-resident], Firecrawl, GitHub, Wikipedia, Unpaywall) — behind three tools. With **EU-GDPR mode** (`eu_strict` + 6 audit hooks) for regulated deployments.
+An MCP server **and** importable Go library that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repositories, and encyclopedia articles. **18 source APIs** behind three tools (`rtv_search`, `rtv_get`, `rtv_list_sources`):
+
+- **Scholarly** (10): ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv
+- **Wave-1 web/code/encyclopedia** (7): Exa, Brave, Linkup (**EU-resident**), Firecrawl, GitHub, Wikipedia, Unpaywall (enrichment)
+- **Wave-2 synthesized web** (1): Perplexity Sonar
+
+Plus **EU-GDPR mode** (`eu_strict` + 6 audit hooks) for regulated deployments, **v2 fat-struct Result shape** with kind discriminator (paper/web/code/news/model/dataset/encyclopedia), **per-intent fallback chains**, and **streaming search** for slow providers.
+
+📚 **[Library Guide](docs/library-guide.md)** · **[Architecture](docs/architecture.md)** · **[EU Mode](docs/eu-mode.md)** · **[Intents](docs/intents.md)** · **[Residency](docs/residency.md)** · **[Plugin Guide](docs/plugin-guide.md)**
 
 ## What it does
 

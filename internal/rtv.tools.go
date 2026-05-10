@@ -194,9 +194,9 @@ func SearchToolDefinition() mcp.Tool {
 			),
 		),
 		mcp.WithString(FieldCompat,
-			mcp.Description("Response shape: \"v1\" (default; legacy Publication shape) or \"v2\" (Result with kind discriminator + per-kind data blocks)."),
-			mcp.DefaultString(CompatV1),
-			mcp.Enum(CompatV1, CompatV2),
+			mcp.Description("Response shape. v2.0.0 default is \"v2\" (Result with kind discriminator + per-kind data blocks). \"v1\" (legacy Publication shape) was SUNSET in v2.0.0 — explicit compat:\"v1\" returns RTV_COMPAT_V1_SUNSET; omit the field for the new default."),
+			mcp.DefaultString(CompatV2),
+			mcp.Enum(CompatV2),
 		),
 	)
 }
@@ -259,7 +259,13 @@ func NewSearchHandler(router *Router) server.ToolHandlerFunc {
 		limit := req.GetInt(FieldLimit, DefaultSearchLimit)
 		offset := req.GetInt(FieldOffset, DefaultSearchOffset)
 		intent := Intent(req.GetString(FieldIntent, ""))
-		compat := req.GetString(FieldCompat, CompatV1)
+		// v2.0.0 sunset: default response shape is v2 (fat-struct Result).
+		// Explicit compat:"v1" returns ErrCompatV1Sunset. Explicit
+		// compat:"v2" still works (idempotent with default).
+		compat := req.GetString(FieldCompat, CompatV2)
+		if compat == CompatV1 {
+			return mcp.NewToolResultError(NewMCPErrorFromErr(ErrCompatV1Sunset, "")), nil
+		}
 
 		// Extract optional filters and credentials from raw arguments.
 		args := req.GetArguments()
@@ -276,21 +282,10 @@ func NewSearchHandler(router *Router) server.ToolHandlerFunc {
 			Intent:      intent,
 		}
 
-		// v2 callers opt into the fat-struct shape; v1 (default) preserves
-		// the cycle-1 Publication wire format.
-		if compat == CompatV2 {
-			result, err := router.SearchV2(ctx, params, sources, creds)
-			if err != nil {
-				return mcp.NewToolResultError(NewMCPErrorFromErr(err, "")), nil
-			}
-			return marshalToolResult(result)
-		}
-
-		result, err := router.Search(ctx, params, sources, creds)
+		result, err := router.SearchV2(ctx, params, sources, creds)
 		if err != nil {
 			return mcp.NewToolResultError(NewMCPErrorFromErr(err, "")), nil
 		}
-
 		return marshalToolResult(result)
 	}
 }

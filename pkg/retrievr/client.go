@@ -67,6 +67,32 @@ func (c *Client) Search(ctx context.Context, params SearchParams, sources []stri
 	return c.router.Search(ctx, params, sources, creds)
 }
 
+// StreamEvent re-exports internal.StreamEvent for cross-module Stream consumers.
+type StreamEvent = internal.StreamEvent
+
+// Stream runs a search and forwards per-source SearchResults as they
+// arrive on the returned channel. The channel closes when all sources
+// complete or ctx is cancelled. Cycle 3 entry point — useful for slow
+// providers (Perplexity Sonar median 5–13s) where the caller wants to
+// render hits incrementally.
+//
+// Trade-offs vs. Search:
+//   - No cross-source dedup (the streamed results may include duplicates
+//     across sources sharing a DOI/URL).
+//   - No fallback walk (streaming can't decide without buffering).
+//   - EU-mode gate, refusal path, audit event, and HTTP hygiene all still apply.
+//
+// Not exposed via MCP — MCP tool results aren't streaming. retrievr-cli
+// exposes via the --stream flag.
+func (c *Client) Stream(ctx context.Context, params SearchParams, sources []string) (<-chan StreamEvent, error) {
+	if c.router == nil {
+		return nil, ErrNotImplemented
+	}
+	ctx = mirrorCredsToInternal(ctx)
+	creds := legacyCredsFromContext(ctx)
+	return c.router.Stream(ctx, params, sources, creds)
+}
+
 // SearchV2 runs Search and returns the v2 fat-struct shape with per-kind
 // data blocks (Result.Kind discriminator + Paper / Web / Code / etc.).
 // Cycle-2 entry point for v2 callers; cycle-1 Search keeps returning v1

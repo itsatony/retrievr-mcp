@@ -47,6 +47,9 @@ func PluginFactories() map[string]PluginFactory {
 		SourceGitHub:    func() SourcePlugin { return &GitHubPlugin{} },
 		SourceWikipedia: func() SourcePlugin { return &WikipediaPlugin{} },
 		SourceUnpaywall: func() SourcePlugin { return &UnpaywallPlugin{} },
+
+		// Cycle-3 Wave-2 providers.
+		SourcePerplexity: func() SourcePlugin { return &PerplexityPlugin{} },
 	}
 }
 

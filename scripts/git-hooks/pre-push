@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# retrievr-mcp pre-push hook — local mirror of .github/workflows/ci.yaml.
+#
+# Runs `make ci` (which executes the same 7 steps GitHub CI runs) before
+# every push so format/lint/test/coverage failures are caught locally.
+#
+# Install: `make install-hooks` (from the repo root).
+# Bypass:  `git push --no-verify` (use sparingly — the CI failure mode
+#          this hook prevents wastes minutes per occurrence).
+
+set -e
+
+# Push to a non-default remote? Skip — assumes only the default remote
+# pushes to the GitHub Actions trigger. Tweak this if your repo has
+# multiple branch-watching remotes.
+remote="$1"
+if [ "$remote" != "origin" ] && [ -n "$remote" ]; then
+    exit 0
+fi
+
+# Run from repo root (hook may be invoked from a subdirectory).
+cd "$(git rev-parse --show-toplevel)"
+
+# Read stdin: each line is "<local_ref> <local_sha> <remote_ref> <remote_sha>".
+# We don't gate per-ref — any non-zero local_sha (i.e., we're pushing
+# something) means run CI. Empty stdin (e.g., delete-only push) → skip.
+have_push=0
+while read -r _local_ref local_sha _remote_ref _remote_sha; do
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        have_push=1
+    fi
+done
+
+if [ "$have_push" -eq 0 ]; then
+    exit 0
+fi
+
+echo "pre-push: running 'make ci' (matches .github/workflows/ci.yaml)"
+echo "          bypass with --no-verify if you really need to skip"
+echo
+
+if make ci; then
+    echo
+    echo "pre-push: CI sim green — pushing"
+    exit 0
+else
+    echo
+    echo "pre-push: CI sim FAILED — push aborted."
+    echo "          Fix the failure above, or 'git push --no-verify' to override."
+    exit 1
+fi

@@ -64,6 +64,18 @@ go build -o retrievr-cli ./cmd/retrievr-cli
 
 The CLI reads per-call API keys from `RETRIEVR_<SOURCEID>_API_KEY` env vars (e.g. `RETRIEVR_S2_API_KEY`).
 
+## Contributing
+
+Local CI sim mirrors `.github/workflows/ci.yaml` step-for-step:
+
+```bash
+make ci              # full pipeline: tidy, build, vet, gofmt, golangci-lint, race tests, ≥80% coverage
+make ci-fast         # quick iteration (skips lint + race + coverage)
+make install-hooks   # auto-run `make ci` before every git push
+```
+
+Run `make help` for the full target list. The pre-push hook is the recommended path — it has caught every CI failure since v1.5.0 (gofmt drift + lint warnings + EU-mode wiring gaps) in under 2 minutes locally vs. waiting for CI to fail and re-pushing.
+
 ## Quick Start
 
 ### Connect to Claude Code

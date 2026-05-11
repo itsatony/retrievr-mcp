@@ -124,6 +124,20 @@ func TestAllSourceIDs(t *testing.T) {
 	assert.Len(t, ids, SourceCount)
 }
 
+// TestIsValidContentTypeMultimodal locks in the v3 ContentType vocabulary
+// added in cycle 1 / v2.2.0. Empty string remains intentionally invalid.
+func TestIsValidContentTypeMultimodal(t *testing.T) {
+	valid := []ContentType{
+		ContentTypePaper, ContentTypeModel, ContentTypeDataset, ContentTypeAny,
+		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost,
+	}
+	for _, ct := range valid {
+		assert.True(t, IsValidContentType(string(ct)), "expected %q to be valid", ct)
+	}
+	assert.False(t, IsValidContentType(""), "empty string is invalid by design")
+	assert.False(t, IsValidContentType("nonexistent"))
+}
+
 // ---------------------------------------------------------------------------
 // JSON round-trip tests
 // ---------------------------------------------------------------------------

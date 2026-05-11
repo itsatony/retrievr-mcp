@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] - 2026-05-11
+
+Minor release. First cycle of the v3 "Multimodal Retrieval" initiative
+(`project_plan/retrievr_v3.md`). Pure type-model extension — no new plugins,
+no behavioral change for the existing 18 sources. Lays the ContentType +
+`Publication` + dedup foundation for cycles 2–5 (video / place / image /
+post providers).
+
+### Added
+
+- **Four new `ContentType` values**: `video`, `place`, `image`, `post`.
+  ContentTypeAny continues to match the full set including the new values.
+- **`IsValidContentType(string) bool`** helper. Empty string is intentionally
+  invalid; ContentTypeAny is valid.
+- **`Publication` multimodal fields** (all optional, ContentType-gated):
+  `ThumbnailURL`, `DurationSeconds`, `Lat`, `Lon`, `Address`, `MediaURL`,
+  `MediaMime`, `EngagementScore`, `Language`. Paper / model / dataset
+  results leave these nil — existing snapshots stay byte-stable.
+- **SourceMetadata key constants** for v3 dedup: `MetaKeyYouTubeID` (video),
+  `MetaKeyOSMID` (place), `MetaKeyWikimediaFile` (image), `MetaKeyAtprotoURI`
+  (post). Plugins populate these so Router.dedup() can merge cross-source
+  duplicates within a content class.
+- **`rtv_search` `content_type` enum** extended with the four new values.
+  Default remains `paper`; existing callers see no behavior change.
+- **`ErrBibTeXUnsupported`** sentinel + `bibtexSupported(ContentType) bool`.
+  GenerateBibTeX returns this typed error for video/place/image/post rather
+  than emitting a misleading `@misc` entry. paper/model/dataset/"" continue
+  to work unchanged.
+
+### Changed
+
+- **`Router.dedup()` refactored** to dispatch by `ContentType` using a
+  single composite `(family, value)` index. Dedup-key family per class:
+    - paper / model / dataset / "" / any → DOI, then ArXiv ID (unchanged)
+    - video → `SourceMetadata["youtube_id"]`
+    - place → `SourceMetadata["osm_id"]`, then `(lat, lon)` rounded to 5 dp
+    - image → `SourceMetadata["wikimedia_file"]`, then `MediaURL`
+    - post  → `SourceMetadata["atproto_uri"]`, then `URL`
+  Cross-class dedup is impossible by construction — a video and a paper
+  with identical string keys never collide.
+
+### Tests
+
+- **15 new tests** in `rtv.dedup_multimodal_test.go` + `rtv.bibtex_multimodal_test.go`
+  + `rtv.types_test.go` + `rtv.tools_test.go`:
+    - video dedup by `youtube_id` (merge, differ, empty-key non-collision)
+    - place dedup by `osm_id` and by coord rounding (5 dp), divergent coords kept,
+      missing coords kept
+    - image dedup by `wikimedia_file` and by `MediaURL` fallback
+    - post dedup by `atproto_uri` and by `URL` fallback
+    - cross-class non-merge (paper + video with overlapping metadata; place + video)
+    - paper-by-DOI regression guard (v2 behavior unchanged)
+    - GenerateBibTeX returns `ErrBibTeXUnsupported` for v3 types
+    - GenerateBibTeX still works for paper/model/dataset/""
+    - `content_type` enum schema contains all 8 values
+    - `IsValidContentType` accepts all 8 values, rejects empty + unknown
+
+### Migration notes
+
+- **No action required.** Pre-1.0 Go interface stability promises do not
+  apply; nothing in v2.1.0 callers breaks. The MCP tool surface is
+  additive-only — new enum values accepted, old defaults preserved.
+
 ## [2.1.0] - 2026-05-10
 
 Minor release. Adds a multi-tenant authentication mode where the server

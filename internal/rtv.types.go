@@ -14,7 +14,29 @@ const (
 	ContentTypeModel   ContentType = "model"
 	ContentTypeDataset ContentType = "dataset"
 	ContentTypeAny     ContentType = "any"
+
+	// v3 multimodal additions (cycle 1 / v2.2.0). Each new ContentType
+	// has its own dedup-key family in dedup() — cross-class dedup is
+	// intentionally disabled (a video about a place is not a duplicate
+	// of the place result).
+	ContentTypeVideo ContentType = "video"
+	ContentTypePlace ContentType = "place"
+	ContentTypeImage ContentType = "image"
+	ContentTypePost  ContentType = "post"
 )
+
+// IsValidContentType returns true if the given string maps to a known
+// ContentType. The empty string is intentionally NOT valid — callers must
+// opt in. ContentTypeAny is treated as a wildcard match for routing but is
+// still a valid value here.
+func IsValidContentType(ct string) bool {
+	switch ContentType(ct) {
+	case ContentTypePaper, ContentTypeModel, ContentTypeDataset, ContentTypeAny,
+		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost:
+		return true
+	}
+	return false
+}
 
 // ---------------------------------------------------------------------------
 // Content format constants
@@ -135,6 +157,17 @@ func AllSourceIDs() []string {
 // increments this as each provider lands.
 const SourceCount = 18
 
+// SourceMetadata key constants for v3 multimodal dedup keys. Plugins
+// populate these on Publication.SourceMetadata so Router.dedup() can
+// merge cross-source duplicates within a content class. Cross-class
+// dedup is disabled — these keys are scoped by ContentType in dedup().
+const (
+	MetaKeyYouTubeID     = "youtube_id"     // video
+	MetaKeyOSMID         = "osm_id"         // place
+	MetaKeyWikimediaFile = "wikimedia_file" // image
+	MetaKeyAtprotoURI    = "atproto_uri"    // post
+)
+
 // ---------------------------------------------------------------------------
 // Domain structs
 // ---------------------------------------------------------------------------
@@ -161,9 +194,28 @@ type Publication struct {
 	Citations     []Reference      `json:"citations,omitempty"`      //
 	Related       []Reference      `json:"related,omitempty"`        //
 	License       string           `json:"license,omitempty"`        //
+
+	// v3 multimodal fields (cycle 1 / v2.2.0). All optional; semantics
+	// gated by ContentType:
+	//   - video: ThumbnailURL, DurationSeconds, MediaURL, MediaMime, Language, EngagementScore
+	//   - place: Lat, Lon, Address
+	//   - image: ThumbnailURL, MediaURL, MediaMime, License
+	//   - post:  EngagementScore, Language, ThumbnailURL (preview media)
+	// Paper/model/dataset results leave these nil.
+	ThumbnailURL    string   `json:"thumbnail_url,omitempty"`
+	DurationSeconds *int     `json:"duration_seconds,omitempty"`
+	Lat             *float64 `json:"lat,omitempty"`
+	Lon             *float64 `json:"lon,omitempty"`
+	Address         string   `json:"address,omitempty"`
+	MediaURL        string   `json:"media_url,omitempty"`
+	MediaMime       string   `json:"media_mime,omitempty"`
+	EngagementScore *int     `json:"engagement_score,omitempty"`
+	Language        string   `json:"language,omitempty"`
+
 	// SourceMetadata holds source-specific key-value pairs that vary by plugin
-	// (e.g., journal name, venue, volume, MeSH terms). The value type is `any`
-	// because different sources store strings, integers, booleans, and slices.
+	// (e.g., journal name, venue, volume, MeSH terms, youtube_id, osm_id,
+	// wikimedia_file, atproto_uri). The value type is `any` because different
+	// sources store strings, integers, booleans, and slices.
 	SourceMetadata map[string]any `json:"source_metadata,omitempty"`
 }
 

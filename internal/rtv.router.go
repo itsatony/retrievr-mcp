@@ -952,45 +952,104 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 // Deduplication
 // ---------------------------------------------------------------------------
 
+// Dedup-key family constants. Index maps in dedup() are keyed by
+// (family, value); the family bucket guarantees cross-class dedup is
+// impossible (a video and a paper with the same string key never collide).
+const (
+	dedupFamilyDOI       = "doi"
+	dedupFamilyArXivID   = "arxiv_id"
+	dedupFamilyYouTubeID = "youtube_id"
+	dedupFamilyOSMID     = "osm_id"
+	dedupFamilyCoord     = "coord"
+	dedupFamilyWikimedia = "wikimedia_file"
+	dedupFamilyMediaURL  = "media_url"
+	dedupFamilyAtproto   = "atproto_uri"
+	dedupFamilyPostURL   = "post_url"
+
+	// dedupCoordPrecisionFmt rounds lat/lon to 5 decimal places (~1 m),
+	// applied to place results lacking osm_id. Two places within ~1 m of
+	// each other are considered the same point of interest.
+	dedupCoordPrecisionFmt = "%.5f,%.5f"
+)
+
 // dedup removes duplicate publications from the merged result list using
-// exact-match on DOI or ArXiv ID. The first occurrence (by deterministic
+// per-ContentType exact-match keys. The first occurrence (by deterministic
 // source order) becomes the primary; duplicates contribute to AlsoFoundIn,
 // and their citation counts and source metadata are merged.
+//
+// Dedup-key family by ContentType:
+//   - paper / model / dataset / "" / any → DOI, then ArXiv ID
+//   - video → SourceMetadata["youtube_id"]
+//   - place → SourceMetadata["osm_id"], then (lat,lon) rounded to 5 dp
+//   - image → SourceMetadata["wikimedia_file"], then MediaURL
+//   - post  → SourceMetadata["atproto_uri"], then URL
+//
+// Cross-class merging is impossible by construction: index keys carry a
+// family tag, so a video with key "X" and a paper with key "X" never collide.
 func dedup(results []Publication) []Publication {
 	if len(results) == 0 {
 		return results
 	}
 
-	// Index maps: identifier → index of first occurrence.
-	doiIndex := make(map[string]int, len(results))
-	arxivIndex := make(map[string]int, len(results))
+	// Single composite index keyed by (family, value). Cross-family collisions
+	// are impossible because the family is part of the key.
+	type dkey struct {
+		family string
+		value  string
+	}
+	index := make(map[dkey]int, len(results)*2)
 	keep := make([]bool, len(results))
 	for i := range keep {
 		keep[i] = true
 	}
 
-	for i := range results {
-		// Check DOI dedup. When a duplicate is found, `continue` intentionally
-		// skips the ArXiv ID registration below. This means a duplicate's
-		// secondary identifiers are not indexed — transitive cross-identifier
-		// dedup is out of scope per the "exact-match dedup only" design.
-		if results[i].DOI != "" {
-			if primaryIdx, exists := doiIndex[results[i].DOI]; exists {
-				keep[i] = false
-				mergeInto(&results[primaryIdx], &results[i])
-				continue
-			}
-			doiIndex[results[i].DOI] = i
+	// tryDedup checks the (family, value) index. On hit, marks i as a
+	// duplicate, merges into the primary, and returns true. On miss,
+	// registers i as the primary for this key and returns false.
+	// Empty values are skipped (returns false without indexing).
+	tryDedup := func(family, value string, i int) bool {
+		if value == "" {
+			return false
 		}
+		k := dkey{family: family, value: value}
+		if primaryIdx, exists := index[k]; exists {
+			keep[i] = false
+			mergeInto(&results[primaryIdx], &results[i])
+			return true
+		}
+		index[k] = i
+		return false
+	}
 
-		// Check ArXiv ID dedup.
-		if results[i].ArXivID != "" {
-			if primaryIdx, exists := arxivIndex[results[i].ArXivID]; exists {
-				keep[i] = false
-				mergeInto(&results[primaryIdx], &results[i])
+	for i := range results {
+		switch results[i].ContentType {
+		case ContentTypeVideo:
+			tryDedup(dedupFamilyYouTubeID, stringFromMeta(results[i].SourceMetadata, MetaKeyYouTubeID), i)
+		case ContentTypePlace:
+			if tryDedup(dedupFamilyOSMID, stringFromMeta(results[i].SourceMetadata, MetaKeyOSMID), i) {
 				continue
 			}
-			arxivIndex[results[i].ArXivID] = i
+			if results[i].Lat != nil && results[i].Lon != nil {
+				tryDedup(dedupFamilyCoord, fmt.Sprintf(dedupCoordPrecisionFmt, *results[i].Lat, *results[i].Lon), i)
+			}
+		case ContentTypeImage:
+			if tryDedup(dedupFamilyWikimedia, stringFromMeta(results[i].SourceMetadata, MetaKeyWikimediaFile), i) {
+				continue
+			}
+			tryDedup(dedupFamilyMediaURL, results[i].MediaURL, i)
+		case ContentTypePost:
+			if tryDedup(dedupFamilyAtproto, stringFromMeta(results[i].SourceMetadata, MetaKeyAtprotoURI), i) {
+				continue
+			}
+			tryDedup(dedupFamilyPostURL, results[i].URL, i)
+		default:
+			// paper / model / dataset / "" / any — DOI + ArXiv ID family.
+			// DOI hit short-circuits ArXivID indexing (matches v2 behavior:
+			// secondary identifiers of a duplicate are not back-indexed).
+			if tryDedup(dedupFamilyDOI, results[i].DOI, i) {
+				continue
+			}
+			tryDedup(dedupFamilyArXivID, results[i].ArXivID, i)
 		}
 	}
 
@@ -1002,6 +1061,24 @@ func dedup(results []Publication) []Publication {
 		}
 	}
 	return compacted
+}
+
+// stringFromMeta returns the string value of meta[key] or "" if absent or
+// non-string. Used by dedup() to read v3 multimodal dedup keys from the
+// SourceMetadata map without panicking on type-asserts.
+func stringFromMeta(meta map[string]any, key string) string {
+	if meta == nil {
+		return ""
+	}
+	v, ok := meta[key]
+	if !ok {
+		return ""
+	}
+	s, ok := v.(string)
+	if !ok {
+		return ""
+	}
+	return s
 }
 
 // mergeInto merges metadata from a duplicate publication into the primary.

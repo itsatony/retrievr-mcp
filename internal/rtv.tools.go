@@ -77,7 +77,7 @@ const (
 const (
 	FieldDescQuery       = "Search query string"
 	FieldDescSources     = "List of source IDs to search (e.g., [\"arxiv\", \"s2\"]). Defaults to server-configured sources."
-	FieldDescContentType = "Type of content to search for: paper, model, dataset, or any"
+	FieldDescContentType = "Type of content to search for: paper, model, dataset, video, place, image, post, or any"
 	FieldDescSort        = "Sort order for results: relevance, date_desc, date_asc, or citations"
 	FieldDescLimit       = "Maximum number of results to return (1-100)"
 	FieldDescOffset      = "Number of results to skip for pagination"
@@ -156,6 +156,11 @@ func SearchToolDefinition() mcp.Tool {
 				string(ContentTypeModel),
 				string(ContentTypeDataset),
 				string(ContentTypeAny),
+				// v3 multimodal additions (v2.2.0 / cycle 1).
+				string(ContentTypeVideo),
+				string(ContentTypePlace),
+				string(ContentTypeImage),
+				string(ContentTypePost),
 			),
 		),
 		mcp.WithString(FieldSort,

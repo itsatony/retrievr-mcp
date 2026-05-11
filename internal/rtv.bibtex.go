@@ -148,6 +148,12 @@ func GenerateBibTeX(pub *Publication) (string, error) {
 	if strings.TrimSpace(pub.Title) == "" {
 		return "", fmt.Errorf("%w: %s", ErrBibTeXGeneration, bibtexErrDetailEmptyTitle)
 	}
+	// v3 multimodal types (video/place/image/post) have no meaningful BibTeX
+	// representation — refuse rather than emit a misleading @misc entry.
+	// paper/model/dataset/"" continue to work (paper → @article, others → @misc).
+	if !bibtexSupported(pub.ContentType) {
+		return "", fmt.Errorf("%w: %s", ErrBibTeXUnsupported, string(pub.ContentType))
+	}
 
 	entryType := bibtexEntryType(pub.ContentType)
 	citeKey := generateCiteKey(pub)
@@ -226,6 +232,18 @@ func GenerateBibTeX(pub *Publication) (string, error) {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+// bibtexSupported reports whether GenerateBibTeX can produce a meaningful
+// entry for the given content type. v3 multimodal types (video/place/image/
+// post) are explicitly unsupported. Empty / paper / model / dataset / any
+// remain supported (paper → @article; others → @misc).
+func bibtexSupported(ct ContentType) bool {
+	switch ct {
+	case ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost:
+		return false
+	}
+	return true
+}
 
 // bibtexEntryType returns the BibTeX entry type for the given content type.
 func bibtexEntryType(ct ContentType) string {

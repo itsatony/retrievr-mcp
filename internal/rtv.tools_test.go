@@ -30,6 +30,39 @@ func TestSearchToolDefinition(t *testing.T) {
 	assert.Contains(t, tool.InputSchema.Properties, FieldCredentials)
 }
 
+// TestSearchToolDefinitionContentTypeEnum locks in the v3 multimodal
+// additions (cycle 1 / v2.2.0) to the rtv_search content_type enum.
+// Regression guard against accidental enum-shrink.
+func TestSearchToolDefinitionContentTypeEnum(t *testing.T) {
+	t.Parallel()
+	tool := SearchToolDefinition()
+	prop, ok := tool.InputSchema.Properties[FieldContentType].(map[string]any)
+	require.True(t, ok, "content_type property must be a JSON-schema object")
+	rawEnum, ok := prop["enum"]
+	require.True(t, ok, "content_type must declare an enum")
+	values := make(map[string]bool)
+	switch e := rawEnum.(type) {
+	case []any:
+		for _, v := range e {
+			if s, ok := v.(string); ok {
+				values[s] = true
+			}
+		}
+	case []string:
+		for _, s := range e {
+			values[s] = true
+		}
+	default:
+		t.Fatalf("unexpected enum type %T", rawEnum)
+	}
+	for _, expected := range []ContentType{
+		ContentTypePaper, ContentTypeModel, ContentTypeDataset, ContentTypeAny,
+		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost,
+	} {
+		assert.True(t, values[string(expected)], "content_type enum must include %q", expected)
+	}
+}
+
 func TestGetToolDefinition(t *testing.T) {
 	t.Parallel()
 	tool := GetToolDefinition()

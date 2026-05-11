@@ -25,6 +25,7 @@ const (
 	ErrMsgCredentialRequired  = "this source requires credentials for the requested operation"
 	ErrMsgCacheKeyGeneration  = "failed to generate cache key"
 	ErrMsgBibTeXGeneration    = "failed to generate bibtex"
+	ErrMsgBibTeXUnsupported   = "bibtex generation is not supported for this content type"
 )
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,7 @@ var (
 	ErrCredentialRequired  = errors.New(ErrMsgCredentialRequired)
 	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)
 	ErrBibTeXGeneration    = errors.New(ErrMsgBibTeXGeneration)
+	ErrBibTeXUnsupported   = errors.New(ErrMsgBibTeXUnsupported)
 
 	// EU-mode sentinels (Cycle 2).
 	ErrEUModeProviderConflict = errors.New(ErrMsgEUModeProviderConflict)

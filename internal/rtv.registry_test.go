@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 18 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3 task #20)
+	testRegistryExpectedFactoryCount = 20 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -113,24 +113,26 @@ func TestInitializePlugins(t *testing.T) {
 		t.Parallel()
 		cfg := &Config{
 			Sources: map[string]PluginConfig{
-				SourceArXiv:       {Enabled: true},
-				SourceS2:          {Enabled: true},
-				SourceOpenAlex:    {Enabled: true},
-				SourcePubMed:      {Enabled: true},
-				SourceEuropePMC:   {Enabled: true},
-				SourceHuggingFace: {Enabled: true},
-				SourceCrossRef:    {Enabled: true},
-				SourceBioRxiv:     {Enabled: true},
-				SourceDBLP:        {Enabled: true},
-				SourceADS:         {Enabled: true},
-				SourceExa:         {Enabled: true}, // Cycle 2 Wave-1
-				SourceBrave:       {Enabled: true}, // Cycle 2 Wave-1
-				SourceLinkup:      {Enabled: true}, // Cycle 2 Wave-1 (EU-resident)
-				SourceFirecrawl:   {Enabled: true}, // Cycle 2 Wave-1
-				SourceGitHub:      {Enabled: true}, // Cycle 2 Wave-1
-				SourceWikipedia:   {Enabled: true}, // Cycle 2 Wave-1
-				SourceUnpaywall:   {Enabled: true}, // Cycle 2 Wave-1 (enrichment)
-				SourcePerplexity:  {Enabled: true}, // Cycle 3 Wave-2
+				SourceArXiv:              {Enabled: true},
+				SourceS2:                 {Enabled: true},
+				SourceOpenAlex:           {Enabled: true},
+				SourcePubMed:             {Enabled: true},
+				SourceEuropePMC:          {Enabled: true},
+				SourceHuggingFace:        {Enabled: true},
+				SourceCrossRef:           {Enabled: true},
+				SourceBioRxiv:            {Enabled: true},
+				SourceDBLP:               {Enabled: true},
+				SourceADS:                {Enabled: true},
+				SourceExa:                {Enabled: true}, // Cycle 2 Wave-1
+				SourceBrave:              {Enabled: true}, // Cycle 2 Wave-1
+				SourceLinkup:             {Enabled: true}, // Cycle 2 Wave-1 (EU-resident)
+				SourceFirecrawl:          {Enabled: true}, // Cycle 2 Wave-1
+				SourceGitHub:             {Enabled: true}, // Cycle 2 Wave-1
+				SourceWikipedia:          {Enabled: true}, // Cycle 2 Wave-1
+				SourceUnpaywall:          {Enabled: true}, // Cycle 2 Wave-1 (enrichment)
+				SourcePerplexity:         {Enabled: true}, // Cycle 3 Wave-2
+				SourceYouTube:            {Enabled: true}, // v3 cycle 2 / v2.3.0
+				SourceScrapingdogYouTube: {Enabled: true}, // v3 cycle 2 / v2.3.0
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

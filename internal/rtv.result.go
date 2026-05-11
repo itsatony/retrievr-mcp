@@ -31,12 +31,19 @@ const (
 	KindNews         ResultKind = "news"
 	KindCode         ResultKind = "code"
 	KindEncyclopedia ResultKind = "encyclopedia"
+
+	// v3 multimodal kinds (cycle 2+ / v2.3.0+).
+	KindVideo ResultKind = "video"
+	KindPlace ResultKind = "place"
+	KindImage ResultKind = "image"
+	KindPost  ResultKind = "post"
 )
 
 // IsValidResultKind returns true if the given string is a known kind.
 func IsValidResultKind(k string) bool {
 	switch ResultKind(k) {
-	case KindPaper, KindModel, KindDataset, KindWeb, KindNews, KindCode, KindEncyclopedia:
+	case KindPaper, KindModel, KindDataset, KindWeb, KindNews, KindCode, KindEncyclopedia,
+		KindVideo, KindPlace, KindImage, KindPost:
 		return true
 	}
 	return false
@@ -83,6 +90,9 @@ type Result struct {
 	News         *NewsData         `json:"news,omitempty"`
 	Code         *CodeData         `json:"code,omitempty"`
 	Encyclopedia *EncyclopediaData `json:"encyclopedia,omitempty"`
+
+	// v3 multimodal blocks (cycle 2+ / v2.3.0+).
+	Video *VideoData `json:"video,omitempty"`
 
 	// Raw provider response (opt-in via WithIncludeRaw).
 	Raw json.RawMessage `json:"raw,omitempty"`
@@ -171,6 +181,23 @@ type DatasetData struct {
 	Tasks     []string `json:"tasks,omitempty"`
 	Modality  []string `json:"modality,omitempty"`
 	License   string   `json:"license,omitempty"`
+}
+
+// VideoData carries video-specific fields (YouTube, etc.). Cycle 2 / v2.3.0.
+// Top-level Result.URL holds the watch URL; Title, Authors (channel name as
+// Author.Name), Published, Language stay on Result. ThumbnailURL and
+// DurationSeconds live here so consumers can render previews without
+// re-fetching.
+type VideoData struct {
+	ChannelName     string `json:"channel_name,omitempty"`
+	ChannelID       string `json:"channel_id,omitempty"`
+	VideoID         string `json:"video_id,omitempty"` // platform-native, e.g. YouTube videoId
+	ThumbnailURL    string `json:"thumbnail_url,omitempty"`
+	DurationSeconds int    `json:"duration_seconds,omitempty"`
+	ViewCount       *int   `json:"view_count,omitempty"`
+	LikeCount       *int   `json:"like_count,omitempty"`
+	PublishedAt     string `json:"published_at,omitempty"`
+	LiveBroadcast   string `json:"live_broadcast,omitempty"` // "none" | "live" | "upcoming"
 }
 
 // EncyclopediaData carries reference-style article fields (Wikipedia, etc.).

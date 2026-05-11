@@ -166,3 +166,24 @@ sources:
     rate_limit_burst: 1
     extra:
       model: "sonar"             # sonar | sonar-pro | sonar-reasoning
+
+  youtube:
+    enabled: false               # v3 cycle 2 (v2.3.0). Set true + supply api_key or RETRIEVR_YOUTUBE_API_KEY env
+    api_key: ""                  # YouTube Data API v3 key (Google Cloud project)
+    timeout: "10s"
+    rate_limit: 1.0              # Soft cap; real cap is daily quota (10k units = ~100 searches/key)
+    rate_limit_burst: 1
+    extra:
+      safe_search: "moderate"    # none | moderate | strict
+      # region_code: "DE"        # ISO 3166-1 alpha-2; uncomment to bias regional results
+      # relevance_language: "en" # ISO 639-1
+
+  scrapingdog_youtube:
+    enabled: false               # v3 cycle 2 (v2.3.0). Paid fallback when youtube quota is exhausted. ~$0.005/query.
+    api_key: ""                  # Scrapingdog API key; or RETRIEVR_SCRAPINGDOG_YOUTUBE_API_KEY env
+    timeout: "15s"               # Scraping path can be slower than the official API
+    rate_limit: 2.0
+    rate_limit_burst: 2
+    extra:
+      country: "us"              # ISO 3166-1 alpha-2
+      language: "en"             # ISO 639-1

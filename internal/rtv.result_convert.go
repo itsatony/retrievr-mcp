@@ -45,6 +45,15 @@ const (
 	smetaSections  = "sections"
 	smetaLanguages = "languages"
 	smetaRevision  = "revision"
+
+	// v3 video-kind keys (cycle 2 / v2.3.0). The youtube_id, thumbnail and
+	// duration are also surfaced on Publication itself (cycle-1 fields), but
+	// channel info / view count / like count / live state live in metadata.
+	smetaChannelName   = "channel_name"
+	smetaChannelID     = "channel_id"
+	smetaViewCount     = "view_count"
+	smetaLikeCount     = "like_count"
+	smetaLiveBroadcast = "live_broadcast"
 )
 
 // kindForSource picks the Kind for a Publication produced by sourceID.
@@ -70,6 +79,14 @@ func kindForSource(p Publication, plugin SourcePlugin) ResultKind {
 		return KindDataset
 	case ContentTypePaper:
 		return KindPaper
+	case ContentTypeVideo:
+		return KindVideo
+	case ContentTypePlace:
+		return KindPlace
+	case ContentTypeImage:
+		return KindImage
+	case ContentTypePost:
+		return KindPost
 	}
 	return KindPaper
 }
@@ -154,6 +171,8 @@ func (r *Router) toResult(p Publication, rank int) Result {
 			Languages: metaStringSlice(p.SourceMetadata, smetaLanguages),
 			Revision:  metaString(p.SourceMetadata, smetaRevision),
 		}
+	case KindVideo:
+		res.Video = videoDataFromPublication(p)
 	}
 
 	// Provenance — single tag for now; cycle-3 will append for each
@@ -224,6 +243,31 @@ func modelDataFromPublication(p Publication) *ModelData {
 		md.Likes = &v
 	}
 	return md
+}
+
+// videoDataFromPublication builds the kind-specific VideoData block.
+// Reads Publication.ThumbnailURL/DurationSeconds (v3 cycle-1 fields) +
+// SourceMetadata[youtube_id, channel_name, channel_id, view_count, like_count,
+// live_broadcast, published_at].
+func videoDataFromPublication(p Publication) *VideoData {
+	vd := &VideoData{
+		ChannelName:   metaString(p.SourceMetadata, smetaChannelName),
+		ChannelID:     metaString(p.SourceMetadata, smetaChannelID),
+		VideoID:       metaString(p.SourceMetadata, MetaKeyYouTubeID),
+		ThumbnailURL:  p.ThumbnailURL,
+		PublishedAt:   metaString(p.SourceMetadata, smetaPublishedAt),
+		LiveBroadcast: metaString(p.SourceMetadata, smetaLiveBroadcast),
+	}
+	if p.DurationSeconds != nil {
+		vd.DurationSeconds = *p.DurationSeconds
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaViewCount); ok {
+		vd.ViewCount = &v
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaLikeCount); ok {
+		vd.LikeCount = &v
+	}
+	return vd
 }
 
 func datasetDataFromPublication(p Publication) *DatasetData {

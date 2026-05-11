@@ -110,6 +110,10 @@ const (
 
 	// Cycle-3 Wave-2 providers.
 	SourcePerplexity = "perplexity"
+
+	// v3 cycle 2 / v2.3.0 — video providers.
+	SourceYouTube            = "youtube"
+	SourceScrapingdogYouTube = "scrapingdog_youtube"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -137,6 +141,9 @@ var validSourceIDs = map[string]bool{
 	SourceUnpaywall: true,
 	// Wave-2.
 	SourcePerplexity: true,
+	// v3 cycle 2 — video.
+	SourceYouTube:            true,
+	SourceScrapingdogYouTube: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -154,8 +161,9 @@ func AllSourceIDs() []string {
 }
 
 // SourceCount is the number of known source plugins. Cycle-2 Wave-1
-// increments this as each provider lands.
-const SourceCount = 18
+// increments this as each provider lands. v3 cycle 2 / v2.3.0 added
+// SourceYouTube + SourceScrapingdogYouTube → 20.
+const SourceCount = 20
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

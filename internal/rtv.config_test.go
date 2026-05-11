@@ -380,6 +380,12 @@ sources:
   perplexity:
     enabled: false
     timeout: "20s"
+  youtube:
+    enabled: false
+    timeout: "10s"
+  scrapingdog_youtube:
+    enabled: false
+    timeout: "15s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

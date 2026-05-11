@@ -50,6 +50,10 @@ func PluginFactories() map[string]PluginFactory {
 
 		// Cycle-3 Wave-2 providers.
 		SourcePerplexity: func() SourcePlugin { return &PerplexityPlugin{} },
+
+		// v3 cycle 2 / v2.3.0 — video.
+		SourceYouTube:            func() SourcePlugin { return &YouTubePlugin{} },
+		SourceScrapingdogYouTube: func() SourcePlugin { return &ScrapingdogYouTubePlugin{} },
 	}
 }
 

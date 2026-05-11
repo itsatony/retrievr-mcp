@@ -5,6 +5,96 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] - 2026-05-11
+
+Minor release. Second cycle of the v3 "Multimodal Retrieval" initiative
+(`project_plan/retrievr_v3.md`). First multimodal content class lands:
+**video search** via the official YouTube Data API v3 (primary) and the
+Scrapingdog YouTube SERP API (paid fallback). Cross-provider dedup on
+`youtube_id` flows end-to-end through Router.Search.
+
+### Added
+
+- **`KindVideo` ResultKind** + **`VideoData` per-kind block** on `Result`
+  (channel_name, channel_id, video_id, thumbnail_url, duration_seconds,
+  view_count, like_count, published_at, live_broadcast). Cycle 1's
+  `ContentTypeVideo` now flows through the v2 wire as `Result.Kind="video"`
+  with `Result.Video.*` populated. `kindForSource` maps ContentType →
+  ResultKind for all four v3 multimodal types (video/place/image/post),
+  preparing the converter for cycles 3–5.
+- **`YouTubePlugin`** (`SourceYouTube = "youtube"`):
+  - Search via `GET /youtube/v3/search` (snippet only — lightweight),
+    Get via `GET /youtube/v3/videos` (adds duration + view/like counts).
+  - API key via `X-Retrievr-Cred-youtube` per-call header or
+    `RETRIEVR_YOUTUBE_API_KEY` env / YAML.
+  - ISO 8601 duration parser (`PT1H2M3S` → 3723 seconds).
+  - Thumbnail picker (maxres → standard → high → medium → default).
+  - Date filter mapped to `publishedAfter` / `publishedBefore`.
+  - Sort: `relevance` → `relevance`; `date_*` → `date`.
+  - `quotaExceeded` / `dailyLimitExceeded` / `rateLimitExceeded` API
+    error reasons map to `ErrRateLimitExceeded` **without flipping
+    Health.Healthy=false** — quota exhaustion is throttling, not failure.
+  - `keyInvalid` → `ErrCredentialInvalid`. 401/403 → `ErrCredentialInvalid`.
+  - Residency: `US` + `DPACoveredBySCC`. Blocked under `eu_strict`.
+- **`ScrapingdogYouTubePlugin`** (`SourceScrapingdogYouTube = "scrapingdog_youtube"`):
+  - Paid SERP fallback. `GET https://api.scrapingdog.com/youtube/search/`.
+  - Wall-clock duration parser (`H:MM:SS` / `M:SS`).
+  - View-count parser (`1.2K`, `1.2M`, `1,234,567`, `1.5B`).
+  - YouTube watch URL → videoId extractor (handles `youtube.com/watch?v=`,
+    `youtu.be/`, plus query-param trailers like `&list=`).
+  - Skips non-video results (channel pages, playlists) silently.
+  - 402 Payment Required also maps to `ErrCredentialInvalid` (Scrapingdog's
+    "out of credits" path).
+  - Residency: `US`. Blocked under `eu_strict`.
+  - No `Get` — Scrapingdog's per-video endpoint is a separate product;
+    callers should resolve detail via the `youtube` plugin.
+- **SourceMetadata video keys**: `smetaChannelName`, `smetaChannelID`,
+  `smetaViewCount`, `smetaLikeCount`, `smetaLiveBroadcast`. Converter
+  reads them when populating `Result.Video`.
+- **Config blocks** for both providers in `configs/retrievr-mcp.yaml`
+  (disabled by default; flip `enabled: true` + set `api_key`).
+
+### Changed
+
+- **`SourceCount`** bumped 18 → 20 (added `youtube`, `scrapingdog_youtube`).
+- **Plugin registry** registers both new factories.
+- Test fixtures `TestLoadConfigAllSources` + `TestE2EConfigToTypesToErrors`
+  + `TestInitializePlugins/all_sources_enabled` updated to include the
+  two new sources. `testRegistryExpectedFactoryCount` bumped to 20.
+
+### Tests
+
+- **27 new tests** total:
+  - 17 in `rtv.plugin.youtube_test.go`: identity, capabilities, content
+    types, residency, happy-path search wire shape (video-only filter,
+    snippet → Publication mapping), per-call credential override,
+    missing credential, quota-exceeded (with Health.Healthy stays true
+    invariant), keyInvalid, 401, full Get with duration + view + like
+    counts, not-found, empty ID, limit clamping to cap, date filter
+    formatting, sort=date mapping, helper unit tests
+    (`parseISO8601DurationSeconds`, `pickBestThumbnail`), live smoke
+    (gated on `YOUTUBE_API_KEY`).
+  - 9 in `rtv.plugin.scrapingdog_youtube_test.go`: identity, capabilities,
+    residency, happy path (channel + thumbnail + duration + view count
+    parsing), skips non-video URLs, per-call credential, missing
+    credential, 402/429 error mapping, no-Get, limit clamps, helpers
+    (`extractYouTubeVideoID` with 8 cases incl. youtu.be short URL and
+    `&list=` trailer; `parseClockDurationSeconds`; `parseViewCount`
+    with NaN/Inf hardening).
+  - 1 in `rtv.video_xprovider_dedup_test.go`: end-to-end Router.Search
+    proves a video appearing on both `youtube` and `scrapingdog_youtube`
+    merges to a single Result via `MetaKeyYouTubeID`, with the other
+    provider recorded in `AlsoFoundIn`.
+
+### Migration notes
+
+- **No action required** for existing deployments. New sources default to
+  `enabled: false`. Set `auth.mode: per_request` for multi-tenant quota
+  isolation (no server-side YouTube key).
+- **eu_strict deployments** see no video coverage — both providers are
+  US-resident. Plan acknowledges this gap; an EU YouTube replacement does
+  not exist.
+
 ## [2.2.0] - 2026-05-11
 
 Minor release. First cycle of the v3 "Multimodal Retrieval" initiative

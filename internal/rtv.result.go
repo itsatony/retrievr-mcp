@@ -94,6 +94,7 @@ type Result struct {
 	// v3 multimodal blocks (cycle 2+ / v2.3.0+).
 	Video *VideoData `json:"video,omitempty"`
 	Place *PlaceData `json:"place,omitempty"`
+	Image *ImageData `json:"image,omitempty"`
 
 	// Raw provider response (opt-in via WithIncludeRaw).
 	Raw json.RawMessage `json:"raw,omitempty"`
@@ -221,6 +222,22 @@ type PlaceData struct {
 	Categories  []string `json:"categories,omitempty"` // POI categories (TomTom)
 	PlaceType   string   `json:"place_type,omitempty"` // city | street | poi | building | ...
 	Importance  float64  `json:"importance,omitempty"` // 0-1 ranking signal (Nominatim/Photon)
+}
+
+// ImageData carries image-specific fields (Wikimedia, Europeana, Brave).
+// Cycle 4 / v2.5.0. License is first-class because openly-licensed image
+// reuse REQUIRES attribution + license tracking to be safe — consumers
+// should refuse to use an image with no License populated.
+type ImageData struct {
+	MediaURL     string `json:"media_url,omitempty"`     // full-resolution URL
+	ThumbnailURL string `json:"thumbnail_url,omitempty"` // preview URL (smaller)
+	MediaMime    string `json:"media_mime,omitempty"`    // image/jpeg, image/png, image/svg+xml, ...
+	Width        int    `json:"width,omitempty"`
+	Height       int    `json:"height,omitempty"`
+	License      string `json:"license,omitempty"`     // human-readable, e.g. "CC BY-SA 3.0"
+	LicenseURL   string `json:"license_url,omitempty"` // canonical license page
+	Artist       string `json:"artist,omitempty"`      // attribution / author
+	SourcePage   string `json:"source_page,omitempty"` // page describing the image (provider-side)
 }
 
 // EncyclopediaData carries reference-style article fields (Wikipedia, etc.).

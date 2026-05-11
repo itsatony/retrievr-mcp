@@ -5,6 +5,109 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.5.0] - 2026-05-11
+
+Minor release. Fourth cycle of the v3 "Multimodal Retrieval" initiative
+(`project_plan/retrievr-v3.md`). Third multimodal content class lands:
+**image search** with two new EU/public-research providers plus an
+extension of the existing Brave plugin for web image SERP.
+**License is first-class** — openly-licensed reuse requires it.
+
+### Added
+
+- **`KindImage` ResultKind** + **`ImageData` per-kind block**:
+  media_url, thumbnail_url, media_mime, width, height, license,
+  license_url, artist, source_page. Converter routes `ContentTypeImage`
+  → `Result.Image`. License + LicenseURL + Artist are first-class so
+  downstream consumers can refuse to use unlicensed images.
+- **`WikimediaPlugin`** (`SourceWikimedia = "wikimedia"`):
+  - MediaWiki API single-call shape via `generator=search` +
+    `prop=imageinfo` (no second roundtrip per result).
+  - License + LicenseUrl + Artist extracted from `extmetadata`;
+    Artist's surrounding HTML tags stripped via shared `stripHTMLTags`.
+  - Composite ID `wikimedia:File:Mona_Lisa.jpg` matches the dedup key
+    (`MetaKeyWikimediaFile`) so cross-provider merging is automatic.
+  - Stable result order via `sortByIndex` (MediaWiki returns pages as
+    a map → insertion order non-deterministic).
+  - Residency: `public-research-infrastructure` — admissible under
+    `eu_strict` with the `include_public_research` opt-in.
+- **`EuropeanaPlugin`** (`SourceEuropeana = "europeana"`):
+  - `/record/v2/search.json` with `qf=TYPE:IMAGE` + `media=true`.
+  - Europeana's wskey passed via `X-Retrievr-Cred-europeana` per-call
+    or `RETRIEVR_EUROPEANA_API_KEY` env.
+  - MIME inferred from URL extension (Europeana doesn't surface it).
+  - License taken from `Rights` (Europeana's rights are URLs).
+  - Residency: `EU` + `DPASigned` (The Hague, NL). Admissible under
+    `eu_strict`.
+- **Brave image-search extension**:
+  - New `/res/v1/images/search` dispatch when
+    `params.ContentType == ContentTypeImage`. Web/news path unchanged.
+  - `ContentTypes()` now reports `[Any, Image]`. `Capabilities().Kinds`
+    adds `KindImage`.
+  - **License intentionally NOT fabricated** — Brave's image SERP
+    doesn't carry license info, so `Publication.License` stays empty
+    as the explicit "unverified" signal.
+  - Brave is NOT a new SourceID; existing API key continues to cover
+    image search.
+- **SourceMetadata image keys**: `smetaWidth`, `smetaHeight`,
+  `smetaLicenseURL`, `smetaArtist`, `smetaSourcePage`. Converter reads
+  them for `Result.Image`.
+- **Config blocks** for `wikimedia` and `europeana` in
+  `configs/retrievr-mcp.yaml` (disabled by default; Wikimedia carries
+  a `user_agent` placeholder).
+
+### Changed
+
+- **`SourceCount`** bumped 23 → 25 (Brave gets new behavior without a
+  new SourceID).
+- **Plugin registry** registers Wikimedia + Europeana factories.
+- **Brave's `Capabilities().Kinds`** gains `KindImage`.
+- Test fixtures `TestLoadConfigAllSources` +
+  `TestE2EConfigToTypesToErrors` + `TestInitializePlugins/all_sources_enabled`
+  + `testRegistryExpectedFactoryCount` updated for 25 sources.
+
+### Tests
+
+- **27 new tests** total:
+  - 10 in `rtv.plugin.wikimedia_test.go`: identity, capabilities,
+    residency (public-research tag for eu_strict opt-in), happy path
+    with license + artist + HTML tag stripping, filters out entries
+    without MediaURL, stable order by search-rank `Index` (map-
+    iteration determinism), 429 mapping, API-error propagation,
+    FormatUnsupported on Get, `normalizeWikimediaFile` helper.
+  - 10 in `rtv.plugin.europeana_test.go`: identity, capabilities,
+    residency (EU + DPASigned), happy path with rights/creator/year,
+    per-call credential, missing credential, 401 mapping,
+    filters items without MediaURL, FormatUnsupported,
+    `sanitizeEuropeanaID`, `inferMimeFromURL` (8 cases),
+    `firstSliceValue`.
+  - 5 in `rtv.plugin.brave_image_test.go`: ContentTypes surfaces
+    Image, Kinds include KindImage, dispatch to `/images/search` on
+    `ContentType=Image`, web path stays on `/web/search` for non-image
+    types, filters results without MediaURL, License stays empty,
+    `braveImageFormatToMime` helper.
+  - 2 in `rtv.image_xprovider_dedup_test.go`: Router-level
+    cross-provider dedup on `wikimedia_file` (Wikimedia +
+    Europeana → 1 Result) and MediaURL fallback (Brave + Wikimedia
+    → 1 Result when wikimedia_file is absent).
+
+### EU-strict notes
+
+- **Pure-EU coverage**: Europeana alone (DPASigned) — recommended for
+  strict deployments.
+- **EU-strict + public-research opt-in**: Europeana + Wikimedia —
+  significantly broader catalog.
+- **Brave images** stays blocked under `eu_strict` (US residency
+  unchanged). Web-image SERP is opt-in for `off` / `eu_preferred`.
+
+### Migration notes
+
+- **No action required** for existing deployments. New sources default
+  to `enabled: false`. Brave operators get image-search dispatch for
+  free once they pass `content_type: image` in `rtv_search`.
+- **Wikimedia operators**: override the placeholder User-Agent before
+  enabling — same etiquette as Wikipedia/Nominatim.
+
 ## [2.4.0] - 2026-05-11
 
 Minor release. Third cycle of the v3 "Multimodal Retrieval" initiative

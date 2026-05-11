@@ -70,6 +70,15 @@ const (
 	smetaCategories  = "categories" // []string POI categories
 	smetaPlaceType   = "place_type" // city | street | poi | building | ...
 	smetaImportance  = "importance" // float64 0-1
+
+	// v3 image-kind keys (cycle 4 / v2.5.0). MediaURL, ThumbnailURL,
+	// MediaMime, License live on Publication directly. Width/Height,
+	// LicenseURL, Artist, SourcePage live in SourceMetadata.
+	smetaWidth      = "width"
+	smetaHeight     = "height"
+	smetaLicenseURL = "license_url"
+	smetaArtist     = "artist"
+	smetaSourcePage = "source_page"
 )
 
 // kindForSource picks the Kind for a Publication produced by sourceID.
@@ -191,6 +200,8 @@ func (r *Router) toResult(p Publication, rank int) Result {
 		res.Video = videoDataFromPublication(p)
 	case KindPlace:
 		res.Place = placeDataFromPublication(p)
+	case KindImage:
+		res.Image = imageDataFromPublication(p)
 	}
 
 	// Provenance — single tag for now; cycle-3 will append for each
@@ -317,6 +328,28 @@ func placeDataFromPublication(p Publication) *PlaceData {
 		pd.Importance = v
 	}
 	return pd
+}
+
+// imageDataFromPublication builds the kind-specific ImageData block.
+// Reads Publication.MediaURL/ThumbnailURL/MediaMime/License (v3 cycle-1
+// fields) + SourceMetadata[width, height, license_url, artist, source_page].
+func imageDataFromPublication(p Publication) *ImageData {
+	id := &ImageData{
+		MediaURL:     p.MediaURL,
+		ThumbnailURL: p.ThumbnailURL,
+		MediaMime:    p.MediaMime,
+		License:      p.License,
+		LicenseURL:   metaString(p.SourceMetadata, smetaLicenseURL),
+		Artist:       metaString(p.SourceMetadata, smetaArtist),
+		SourcePage:   metaString(p.SourceMetadata, smetaSourcePage),
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaWidth); ok {
+		id.Width = v
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaHeight); ok {
+		id.Height = v
+	}
+	return id
 }
 
 func datasetDataFromPublication(p Publication) *DatasetData {

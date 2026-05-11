@@ -119,6 +119,11 @@ const (
 	SourcePhoton    = "photon"
 	SourceTomTom    = "tomtom"
 	SourceNominatim = "nominatim"
+
+	// v3 cycle 4 / v2.5.0 — image providers.
+	// (Brave gains an image-search code path but is NOT a new source ID.)
+	SourceWikimedia = "wikimedia"
+	SourceEuropeana = "europeana"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -153,6 +158,9 @@ var validSourceIDs = map[string]bool{
 	SourcePhoton:    true,
 	SourceTomTom:    true,
 	SourceNominatim: true,
+	// v3 cycle 4 — image.
+	SourceWikimedia: true,
+	SourceEuropeana: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -172,8 +180,10 @@ func AllSourceIDs() []string {
 // SourceCount is the number of known source plugins. Cycle-2 Wave-1
 // increments this as each provider lands. v3 cycle 2 / v2.3.0 added
 // SourceYouTube + SourceScrapingdogYouTube → 20. v3 cycle 3 / v2.4.0
-// added Photon + TomTom + Nominatim → 23.
-const SourceCount = 23
+// added Photon + TomTom + Nominatim → 23. v3 cycle 4 / v2.5.0 added
+// Wikimedia + Europeana → 25 (Brave gained image search without
+// becoming a new SourceID).
+const SourceCount = 25
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

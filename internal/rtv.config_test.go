@@ -395,6 +395,12 @@ sources:
   nominatim:
     enabled: false
     timeout: "10s"
+  wikimedia:
+    enabled: false
+    timeout: "10s"
+  europeana:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

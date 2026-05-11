@@ -170,6 +170,16 @@ sources:
     timeout: "10s"
     rate_limit: 1.0
     rate_limit_burst: 1
+  wikimedia:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+  europeana:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

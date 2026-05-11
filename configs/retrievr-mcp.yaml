@@ -217,3 +217,20 @@ sources:
       user_agent: "retrievr-mcp/2.4 (+https://github.com/itsatony/retrievr-mcp; REPLACE-WITH-YOUR-CONTACT@example.com)"  # REQUIRED by OSMF policy
       # accept_language: "en"
       # country_codes: "de,fr"
+
+  wikimedia:
+    enabled: false               # v3 cycle 4 (v2.5.0). Free, no auth. Wikimedia Commons image search.
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      user_agent: "retrievr-mcp/2.5 (+https://github.com/itsatony/retrievr-mcp; REPLACE-WITH-YOUR-CONTACT@example.com)"
+
+  europeana:
+    enabled: false               # v3 cycle 4 (v2.5.0). EU cultural-heritage images. Free wskey on developer portal.
+    api_key: ""                  # Europeana wskey; or RETRIEVR_EUROPEANA_API_KEY env
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      profile: "standard"        # standard | minimal | rich | facets

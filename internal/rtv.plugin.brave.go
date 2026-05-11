@@ -35,6 +35,7 @@ const (
 
 	braveDefaultBaseURL  = "https://api.search.brave.com"
 	braveSearchPath      = "/res/v1/web/search"
+	braveImageSearchPath = "/res/v1/images/search" // v3 cycle 4 / v2.5.0
 	braveAuthHeader      = "X-Subscription-Token"
 	braveAcceptHeader    = "Accept"
 	braveAcceptJSON      = "application/json"
@@ -128,9 +129,11 @@ func (p *BravePlugin) Name() string { return bravePluginName }
 // Description returns a one-liner for LLM tool listing.
 func (p *BravePlugin) Description() string { return bravePluginDescription }
 
-// ContentTypes — Brave covers general web; mapped to ContentTypeAny.
+// ContentTypes — Brave covers general web + image SERP (v3 cycle 4 added
+// the images endpoint). The web/news path is the default; image dispatch
+// happens when params.ContentType == ContentTypeImage.
 func (p *BravePlugin) ContentTypes() []ContentType {
-	return []ContentType{ContentTypeAny}
+	return []ContentType{ContentTypeAny, ContentTypeImage}
 }
 
 // NativeFormat — JSON.
@@ -159,7 +162,7 @@ func (p *BravePlugin) Capabilities() SourceCapabilities {
 		NativeFormat:             FormatJSON,
 		AvailableFormats:         []ContentFormat{FormatJSON, FormatMarkdown},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
-		Kinds:                    []ResultKind{KindWeb, KindNews},
+		Kinds:                    []ResultKind{KindWeb, KindNews, KindImage},
 	}
 }
 
@@ -213,7 +216,10 @@ func (p *BravePlugin) Health(_ context.Context) SourceHealth {
 	}
 }
 
-// Search executes a Brave web search. Credentials read from ctx.
+// Search executes a Brave web/news OR image search depending on
+// params.ContentType. ContentTypeImage dispatches to the images endpoint;
+// everything else falls through to the web+news endpoint.
+// Credentials read from ctx.
 func (p *BravePlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
 	apiKey := CredentialFor(ctx, bravePluginID, p.apiKey)
 	if apiKey == "" {
@@ -226,6 +232,10 @@ func (p *BravePlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 	}
 	if count > braveMaxCount {
 		count = braveMaxCount
+	}
+
+	if params.ContentType == ContentTypeImage {
+		return p.searchImages(ctx, params.Query, count, apiKey)
 	}
 
 	resp, err := p.doSearch(ctx, params.Query, count, params.Offset, apiKey)
@@ -241,6 +251,161 @@ func (p *BravePlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 		Results: pubs,
 		HasMore: len(pubs) >= count, // Brave doesn't surface a total; assume more on full page
 	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Brave image search (v3 cycle 4 / v2.5.0)
+// ---------------------------------------------------------------------------
+
+type braveImageSearchResponse struct {
+	Type    string             `json:"type"`
+	Results []braveImageResult `json:"results,omitempty"`
+}
+
+type braveImageResult struct {
+	Type        string               `json:"type"`
+	Title       string               `json:"title"`
+	URL         string               `json:"url"` // page hosting the image
+	Source      string               `json:"source,omitempty"`
+	PageFetched string               `json:"page_fetched,omitempty"`
+	Thumbnail   braveImageThumb      `json:"thumbnail,omitempty"`
+	Properties  braveImageProperties `json:"properties,omitempty"`
+	MetaURL     *braveMetaURL        `json:"meta_url,omitempty"`
+	Confidence  string               `json:"confidence,omitempty"`
+}
+
+type braveImageThumb struct {
+	Src      string `json:"src,omitempty"`
+	Original string `json:"original,omitempty"`
+}
+
+type braveImageProperties struct {
+	URL    string `json:"url,omitempty"` // direct media URL
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+	Format string `json:"format,omitempty"`
+}
+
+// searchImages hits /res/v1/images/search and maps results to Publication.
+func (p *BravePlugin) searchImages(ctx context.Context, query string, count int, apiKey string) (*SearchResult, error) {
+	resp, err := p.doImageSearch(ctx, query, count, apiKey)
+	if err != nil {
+		p.recordError(err)
+		return nil, err
+	}
+	p.recordSuccess()
+
+	pubs := make([]Publication, 0, len(resp.Results))
+	for _, r := range resp.Results {
+		pub := braveImageResultToPublication(r)
+		if pub.MediaURL == "" {
+			continue
+		}
+		pubs = append(pubs, pub)
+	}
+	return &SearchResult{
+		Total:   len(pubs),
+		Results: pubs,
+		HasMore: len(pubs) >= count,
+	}, nil
+}
+
+func (p *BravePlugin) doImageSearch(ctx context.Context, query string, count int, apiKey string) (*braveImageSearchResponse, error) {
+	q := url.Values{}
+	q.Set("q", query)
+	q.Set("count", fmt.Sprintf("%d", count))
+	if p.defaultCountry != "" {
+		q.Set("country", p.defaultCountry)
+	}
+	if p.searchLang != "" {
+		q.Set("search_lang", p.searchLang)
+	}
+	if p.safesearch != "" {
+		q.Set("safesearch", p.safesearch)
+	}
+
+	reqURL := p.baseURL + braveImageSearchPath + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("brave_image: build request: %w", err)
+	}
+	req.Header.Set(braveAuthHeader, apiKey)
+	req.Header.Set(braveAcceptHeader, braveAcceptJSON)
+	req.Header.Set(braveAcceptEncHeader, braveAcceptEncIdent)
+
+	httpResp, err := p.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("brave_image: http: %w", err)
+	}
+	defer func() { _ = httpResp.Body.Close() }()
+
+	if httpResp.StatusCode == http.StatusUnauthorized || httpResp.StatusCode == http.StatusForbidden {
+		return nil, fmt.Errorf("%w: brave images returned %d", ErrCredentialInvalid, httpResp.StatusCode)
+	}
+	if httpResp.StatusCode == http.StatusTooManyRequests {
+		return nil, fmt.Errorf("%w: brave images", ErrRateLimitExceeded)
+	}
+	if httpResp.StatusCode >= 400 {
+		buf, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("brave_image: status=%d body=%s", httpResp.StatusCode, truncateForError(string(buf)))
+	}
+
+	var resp braveImageSearchResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("brave_image: decode response: %w", err)
+	}
+	return &resp, nil
+}
+
+// braveImageResultToPublication maps one Brave image result to a Publication.
+// Brave doesn't surface license info on the images SERP — License is left
+// empty so downstream consumers know the legal status is unverified.
+func braveImageResultToPublication(r braveImageResult) Publication {
+	mediaURL := r.Properties.URL
+	if mediaURL == "" {
+		mediaURL = r.Thumbnail.Original
+	}
+	thumb := r.Thumbnail.Src
+	if thumb == "" {
+		thumb = r.Thumbnail.Original
+	}
+
+	pub := Publication{
+		ID:           fmt.Sprintf("%s:image:%s", SourceBrave, hashURL(mediaURL)),
+		Source:       SourceBrave,
+		ContentType:  ContentTypeImage,
+		Title:        r.Title,
+		URL:          r.URL, // hosting page, not the image
+		ThumbnailURL: thumb,
+		MediaURL:     mediaURL,
+		MediaMime:    braveImageFormatToMime(r.Properties.Format),
+		SourceMetadata: map[string]any{
+			smetaSourcePage: r.URL,
+			smetaWidth:      r.Properties.Width,
+			smetaHeight:     r.Properties.Height,
+		},
+	}
+	if r.Source != "" {
+		pub.SourceMetadata[smetaSiteName] = r.Source
+	}
+	return pub
+}
+
+// braveImageFormatToMime maps Brave's `format` string to a MIME type.
+func braveImageFormatToMime(format string) string {
+	switch strings.ToLower(format) {
+	case "jpg", "jpeg":
+		return "image/jpeg"
+	case "png":
+		return "image/png"
+	case "gif":
+		return "image/gif"
+	case "webp":
+		return "image/webp"
+	case "svg":
+		return "image/svg+xml"
+	}
+	return ""
 }
 
 // Get is not supported — Brave Search has no per-result-ID retrieval API.

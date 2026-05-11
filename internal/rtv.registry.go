@@ -59,6 +59,10 @@ func PluginFactories() map[string]PluginFactory {
 		SourcePhoton:    func() SourcePlugin { return &PhotonPlugin{} },
 		SourceTomTom:    func() SourcePlugin { return &TomTomPlugin{} },
 		SourceNominatim: func() SourcePlugin { return &NominatimPlugin{} },
+
+		// v3 cycle 4 / v2.5.0 — image.
+		SourceWikimedia: func() SourcePlugin { return &WikimediaPlugin{} },
+		SourceEuropeana: func() SourcePlugin { return &EuropeanaPlugin{} },
 	}
 }
 

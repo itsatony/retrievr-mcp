@@ -386,6 +386,15 @@ sources:
   scrapingdog_youtube:
     enabled: false
     timeout: "15s"
+  photon:
+    enabled: false
+    timeout: "10s"
+  tomtom:
+    enabled: false
+    timeout: "10s"
+  nominatim:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

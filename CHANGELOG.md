@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.0] - 2026-05-11
+
+Minor release. Third cycle of the v3 "Multimodal Retrieval" initiative
+(`project_plan/retrievr_v3.md`). Second multimodal content class lands:
+**place search** with three EU-resident providers. First v3 cycle with
+**full eu_strict coverage at zero baseline cost** — all three plugins
+are admissible under the EU-mode gate.
+
+### Added
+
+- **`KindPlace` ResultKind** + **`PlaceData` per-kind block** on `Result`
+  (osm_id, osm_type, lat, lon, address, country, country_code, city,
+  state, postcode, street, house_number, categories, place_type,
+  importance). Converter routes `ContentTypePlace` → `Result.Place`.
+- **`PhotonPlugin`** (`SourcePhoton = "photon"`):
+  - GeoJSON parsing of Komoot's `/api` endpoint (FeatureCollection →
+    Publication with Lat/Lon/Address pointer fields).
+  - Configurable `BaseURL` for self-hosting (planet DB ~95 GB, 64 GB RAM).
+  - Composite osm_id `<osm_type>:<osm_id>` matches Nominatim's form
+    so cross-provider dedup hits without extra glue.
+  - Coarse `place_type` derivation from `osm_key`/`osm_value`.
+  - Fallback Title composition (street + housenumber + city + country)
+    when `properties.name` is empty.
+  - Residency: `EU` + `DPANotApplicable` (Komoot, Berlin DE). **Admissible
+    under `eu_strict`.** No auth required.
+- **`TomTomPlugin`** (`SourceTomTom = "tomtom"`):
+  - `GET /search/2/search/{q}.json` with URL-encoded query in the path
+    and key as a query parameter.
+  - 2,500 requests/day free tier; ~$0.75/1k paid beyond.
+  - POI handling: `result.poi.name` wins over `address.freeformAddress`
+    when present; categories merged into SourceMetadata.
+  - Score-to-importance normalization via `1 - 1/(1+score)` so callers
+    have a comparable [0,1] signal across all three place plugins.
+  - `HasMore` derived from `summary.totalResults > numResults+offset`.
+  - Residency: `EU` + `DPASigned` (TomTom, Amsterdam NL). **Admissible
+    under `eu_strict`.**
+- **`NominatimPlugin`** (`SourceNominatim = "nominatim"`):
+  - OSM reference geocoder with **strict policy enforcement**:
+    - 1 RPS HARD cap on the public endpoint, enforced in Initialize
+      regardless of `cfg.RateLimit`. Self-hosters override via BaseURL.
+    - User-Agent header always sent (OSMF policy); default placeholder
+      with retrievr identification, operators MUST override.
+  - 403 (UA non-compliance ban) mapped to `ErrCredentialInvalid` with
+    explicit message pointing at policy compliance.
+  - City fallback chain `city → town → village` covers OSMs varying
+    admin keys.
+  - Importance signal passed through to PlaceData.Importance directly
+    (Nominatim's native 0-1 score).
+  - License field populated from response (`Licence`).
+  - Residency: `UKAdequacy` + `DPANotApplicable` (OSMF, UK).
+    **Admissible under `eu_strict`** (Region.IsEU() returns true).
+- **SourceMetadata place keys**: `smetaOSMType`, `smetaCountry`,
+  `smetaCountryCode`, `smetaCity`, `smetaState`, `smetaPostcode`,
+  `smetaStreet`, `smetaHouseNumber`, `smetaCategories`, `smetaPlaceType`,
+  `smetaImportance`. Converter reads them for `Result.Place`.
+- **`metaFloat`** helper in converter — float64-aware sibling of `metaInt`,
+  used to surface `importance` on PlaceData.
+- **Config blocks** for all three providers in `configs/retrievr-mcp.yaml`
+  (disabled by default; Nominatim block includes a `user_agent`
+  placeholder with an explicit "REPLACE-WITH-YOUR-CONTACT" reminder per
+  OSMF policy).
+
+### Changed
+
+- **`SourceCount`** bumped 20 → 23 (added `photon`, `tomtom`,
+  `nominatim`).
+- **Plugin registry** registers all three new factories.
+- **Test fixtures** for `TestLoadConfigAllSources`,
+  `TestE2EConfigToTypesToErrors`, and
+  `TestInitializePlugins/all_sources_enabled` updated to include the
+  three new sources. `testRegistryExpectedFactoryCount` bumped to 23.
+
+### Tests
+
+- **22 new tests** total:
+  - 7 in `rtv.plugin.photon_test.go`: identity, capabilities, residency
+    (EU admissibility under eu_strict), happy-path wire shape, composite
+    name fallback, 429 → ErrRateLimitExceeded, FormatUnsupported on Get,
+    limit clamping, live smoke gated on `RETRIEVR_LIVE_PHOTON`.
+  - 7 in `rtv.plugin.tomtom_test.go`: identity, capabilities, residency
+    (EU + DPASigned), happy path with score→importance derivation, per-
+    call credential override, 401/429 error mapping, FormatUnsupported,
+    HasMore from totalResults/numResults math.
+  - 6 in `rtv.plugin.nominatim_test.go`: identity, capabilities,
+    residency (UK-adequacy + IsEU), **public-endpoint forces 1 RPS
+    regardless of cfg** (policy enforcement), self-hosted allows higher
+    rate, happy path (UA header propagation, address parsing, importance,
+    license), default UA placeholder identifies retrievr,
+    429/403 → typed errors, FormatUnsupported, city/town/village
+    fallback.
+  - 2 in `rtv.place_xprovider_dedup_test.go`: end-to-end Router-level
+    dedup on `osm_id` composite (Photon + Nominatim merge); secondary
+    dedup on rounded (lat, lon) when osm_id is absent (TomTom + Photon).
+
+### EU-strict coverage milestone
+
+`eu_strict` deployments now have **zero-baseline place coverage**:
+- Photon and Nominatim require no credentials and run free.
+- TomTom is paid-tier optional for stronger POI coverage.
+- All three are admissible under the EU-mode gate without
+  `include_public_research` opt-in (TomTom + Photon are pure EU;
+  Nominatim is UK-adequacy which `Region.IsEU()` accepts).
+
+### Migration notes
+
+- **No action required** for existing deployments. New sources default to
+  `enabled: false`.
+- **Nominatim operators**: MUST override `extra.user_agent` with their own
+  app + contact email before enabling. The placeholder UA is intentionally
+  flagged so deployments don't ship it to the OSMF public endpoint.
+
 ## [2.3.0] - 2026-05-11
 
 Minor release. Second cycle of the v3 "Multimodal Retrieval" initiative

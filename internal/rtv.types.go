@@ -114,6 +114,11 @@ const (
 	// v3 cycle 2 / v2.3.0 — video providers.
 	SourceYouTube            = "youtube"
 	SourceScrapingdogYouTube = "scrapingdog_youtube"
+
+	// v3 cycle 3 / v2.4.0 — place providers.
+	SourcePhoton    = "photon"
+	SourceTomTom    = "tomtom"
+	SourceNominatim = "nominatim"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -144,6 +149,10 @@ var validSourceIDs = map[string]bool{
 	// v3 cycle 2 — video.
 	SourceYouTube:            true,
 	SourceScrapingdogYouTube: true,
+	// v3 cycle 3 — place.
+	SourcePhoton:    true,
+	SourceTomTom:    true,
+	SourceNominatim: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -162,8 +171,9 @@ func AllSourceIDs() []string {
 
 // SourceCount is the number of known source plugins. Cycle-2 Wave-1
 // increments this as each provider lands. v3 cycle 2 / v2.3.0 added
-// SourceYouTube + SourceScrapingdogYouTube → 20.
-const SourceCount = 20
+// SourceYouTube + SourceScrapingdogYouTube → 20. v3 cycle 3 / v2.4.0
+// added Photon + TomTom + Nominatim → 23.
+const SourceCount = 23
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

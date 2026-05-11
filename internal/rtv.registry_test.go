@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 20 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0)
+	testRegistryExpectedFactoryCount = 23 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -133,6 +133,9 @@ func TestInitializePlugins(t *testing.T) {
 				SourcePerplexity:         {Enabled: true}, // Cycle 3 Wave-2
 				SourceYouTube:            {Enabled: true}, // v3 cycle 2 / v2.3.0
 				SourceScrapingdogYouTube: {Enabled: true}, // v3 cycle 2 / v2.3.0
+				SourcePhoton:             {Enabled: true}, // v3 cycle 3 / v2.4.0
+				SourceTomTom:             {Enabled: true}, // v3 cycle 3 / v2.4.0
+				SourceNominatim:          {Enabled: true}, // v3 cycle 3 / v2.4.0
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

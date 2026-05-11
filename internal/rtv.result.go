@@ -93,6 +93,7 @@ type Result struct {
 
 	// v3 multimodal blocks (cycle 2+ / v2.3.0+).
 	Video *VideoData `json:"video,omitempty"`
+	Place *PlaceData `json:"place,omitempty"`
 
 	// Raw provider response (opt-in via WithIncludeRaw).
 	Raw json.RawMessage `json:"raw,omitempty"`
@@ -198,6 +199,28 @@ type VideoData struct {
 	LikeCount       *int   `json:"like_count,omitempty"`
 	PublishedAt     string `json:"published_at,omitempty"`
 	LiveBroadcast   string `json:"live_broadcast,omitempty"` // "none" | "live" | "upcoming"
+}
+
+// PlaceData carries geographic-place fields (Photon, Nominatim, TomTom).
+// Cycle 3 / v2.4.0. Top-level Result.Title holds the place name; Lat/Lon
+// duplicate the Publication v3 fields for callers that consume Result
+// without round-tripping through Publication.
+type PlaceData struct {
+	OSMID       string   `json:"osm_id,omitempty"`   // composite "<type>:<id>" e.g. "node:240109189"
+	OSMType     string   `json:"osm_type,omitempty"` // node | way | relation
+	Lat         float64  `json:"lat,omitempty"`
+	Lon         float64  `json:"lon,omitempty"`
+	Address     string   `json:"address,omitempty"` // single-line formatted
+	Country     string   `json:"country,omitempty"`
+	CountryCode string   `json:"country_code,omitempty"` // ISO 3166-1 alpha-2
+	City        string   `json:"city,omitempty"`
+	State       string   `json:"state,omitempty"`
+	Postcode    string   `json:"postcode,omitempty"`
+	Street      string   `json:"street,omitempty"`
+	HouseNumber string   `json:"house_number,omitempty"`
+	Categories  []string `json:"categories,omitempty"` // POI categories (TomTom)
+	PlaceType   string   `json:"place_type,omitempty"` // city | street | poi | building | ...
+	Importance  float64  `json:"importance,omitempty"` // 0-1 ranking signal (Nominatim/Photon)
 }
 
 // EncyclopediaData carries reference-style article fields (Wikipedia, etc.).

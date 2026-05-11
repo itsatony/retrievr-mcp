@@ -54,6 +54,22 @@ const (
 	smetaViewCount     = "view_count"
 	smetaLikeCount     = "like_count"
 	smetaLiveBroadcast = "live_broadcast"
+
+	// v3 place-kind keys (cycle 3 / v2.4.0). Lat/Lon/Address live on
+	// Publication directly (cycle-1 fields). osm_id lives in SourceMetadata
+	// (the canonical dedup key). The rest are administrative breakdowns of
+	// the formatted address + POI categorization (TomTom).
+	smetaOSMType     = "osm_type" // node | way | relation
+	smetaCountry     = "country"
+	smetaCountryCode = "country_code" // ISO 3166-1 alpha-2
+	smetaCity        = "city"
+	smetaState       = "state"
+	smetaPostcode    = "postcode"
+	smetaStreet      = "street"
+	smetaHouseNumber = "house_number"
+	smetaCategories  = "categories" // []string POI categories
+	smetaPlaceType   = "place_type" // city | street | poi | building | ...
+	smetaImportance  = "importance" // float64 0-1
 )
 
 // kindForSource picks the Kind for a Publication produced by sourceID.
@@ -173,6 +189,8 @@ func (r *Router) toResult(p Publication, rank int) Result {
 		}
 	case KindVideo:
 		res.Video = videoDataFromPublication(p)
+	case KindPlace:
+		res.Place = placeDataFromPublication(p)
 	}
 
 	// Provenance — single tag for now; cycle-3 will append for each
@@ -270,6 +288,37 @@ func videoDataFromPublication(p Publication) *VideoData {
 	return vd
 }
 
+// placeDataFromPublication builds the kind-specific PlaceData block.
+// Reads Publication.Lat/Lon/Address (v3 cycle-1 fields) + SourceMetadata
+// [osm_id, osm_type, country, country_code, city, state, postcode, street,
+// house_number, categories, place_type, importance].
+func placeDataFromPublication(p Publication) *PlaceData {
+	pd := &PlaceData{
+		OSMID:       metaString(p.SourceMetadata, MetaKeyOSMID),
+		OSMType:     metaString(p.SourceMetadata, smetaOSMType),
+		Address:     p.Address,
+		Country:     metaString(p.SourceMetadata, smetaCountry),
+		CountryCode: metaString(p.SourceMetadata, smetaCountryCode),
+		City:        metaString(p.SourceMetadata, smetaCity),
+		State:       metaString(p.SourceMetadata, smetaState),
+		Postcode:    metaString(p.SourceMetadata, smetaPostcode),
+		Street:      metaString(p.SourceMetadata, smetaStreet),
+		HouseNumber: metaString(p.SourceMetadata, smetaHouseNumber),
+		Categories:  metaStringSlice(p.SourceMetadata, smetaCategories),
+		PlaceType:   metaString(p.SourceMetadata, smetaPlaceType),
+	}
+	if p.Lat != nil {
+		pd.Lat = *p.Lat
+	}
+	if p.Lon != nil {
+		pd.Lon = *p.Lon
+	}
+	if v, ok := metaFloat(p.SourceMetadata, smetaImportance); ok {
+		pd.Importance = v
+	}
+	return pd
+}
+
 func datasetDataFromPublication(p Publication) *DatasetData {
 	dd := &DatasetData{
 		Tasks:    metaStringSlice(p.SourceMetadata, "tasks"),
@@ -350,6 +399,25 @@ func metaInt(m map[string]any, key string) (int, bool) {
 func metaIntOrZero(m map[string]any, key string) int {
 	v, _ := metaInt(m, key)
 	return v
+}
+
+// metaFloat reads a numeric metadata value as float64. Accepts float64,
+// int, or int64 — covers JSON-decoded and natively-typed values alike.
+func metaFloat(m map[string]any, key string) (float64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	switch v := m[key].(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	}
+	return 0, false
 }
 
 func metaInt64(m map[string]any, key string) (int64, bool) {

@@ -187,3 +187,33 @@ sources:
     extra:
       country: "us"              # ISO 3166-1 alpha-2
       language: "en"             # ISO 639-1
+
+  photon:
+    enabled: false               # v3 cycle 3 (v2.4.0). Free, no auth. Set base_url to a self-hosted instance for higher volume.
+    timeout: "10s"
+    rate_limit: 2.0              # Public endpoint is throttled — bump on self-host
+    rate_limit_burst: 2
+    extra:
+      # lang: "en"               # ISO 639-1; uncomment to default the output language
+      # bias_lat: "52.5163"      # Berlin
+      # bias_lon: "13.3777"
+
+  tomtom:
+    enabled: false               # v3 cycle 3 (v2.4.0). 2,500 free requests/day. Set api_key or RETRIEVR_TOMTOM_API_KEY env.
+    api_key: ""
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      # country_set: "DE,FR,NL"  # Comma-separated ISO 3166-1; uncomment to restrict to specific countries
+      # language: "en-US"        # IETF BCP 47
+
+  nominatim:
+    enabled: false               # v3 cycle 3 (v2.4.0). Free, but STRICT 1 req/s policy on the public endpoint. Self-host for volume.
+    timeout: "10s"
+    rate_limit: 1.0              # HARD on the public endpoint — see operations.osmfoundation.org/policies/nominatim
+    rate_limit_burst: 1
+    extra:
+      user_agent: "retrievr-mcp/2.4 (+https://github.com/itsatony/retrievr-mcp; REPLACE-WITH-YOUR-CONTACT@example.com)"  # REQUIRED by OSMF policy
+      # accept_language: "en"
+      # country_codes: "de,fr"

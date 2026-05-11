@@ -54,6 +54,11 @@ func PluginFactories() map[string]PluginFactory {
 		// v3 cycle 2 / v2.3.0 — video.
 		SourceYouTube:            func() SourcePlugin { return &YouTubePlugin{} },
 		SourceScrapingdogYouTube: func() SourcePlugin { return &ScrapingdogYouTubePlugin{} },
+
+		// v3 cycle 3 / v2.4.0 — place.
+		SourcePhoton:    func() SourcePlugin { return &PhotonPlugin{} },
+		SourceTomTom:    func() SourcePlugin { return &TomTomPlugin{} },
+		SourceNominatim: func() SourcePlugin { return &NominatimPlugin{} },
 	}
 }
 

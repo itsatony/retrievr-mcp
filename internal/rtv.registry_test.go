@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 25 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0)
+	testRegistryExpectedFactoryCount = 28 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -138,6 +138,9 @@ func TestInitializePlugins(t *testing.T) {
 				SourceNominatim:          {Enabled: true}, // v3 cycle 3 / v2.4.0
 				SourceWikimedia:          {Enabled: true}, // v3 cycle 4 / v2.5.0
 				SourceEuropeana:          {Enabled: true}, // v3 cycle 4 / v2.5.0
+				SourceMastodon:           {Enabled: true}, // v3 cycle 5 / v2.6.0
+				SourceBluesky:            {Enabled: true}, // v3 cycle 5 / v2.6.0
+				SourceReddit:             {Enabled: true}, // v3 cycle 5 / v2.6.0
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

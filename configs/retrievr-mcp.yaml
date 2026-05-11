@@ -234,3 +234,27 @@ sources:
     rate_limit_burst: 5
     extra:
       profile: "standard"        # standard | minimal | rich | facets
+
+  mastodon:
+    enabled: false               # v3 cycle 5 (v2.6.0). Public-statuses search; no auth needed on v4+ instances.
+    base_url: "https://mastodon.social"  # Default Germany-based instance. Override per-deployment.
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+    extra:
+      region: "EU"               # MUST match the configured instance's actual residency: EU | US | UK-adequacy | global | unknown
+
+  bluesky:
+    enabled: false               # v3 cycle 5 (v2.6.0). Public AT Protocol search via the AppView. No auth.
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+
+  reddit:
+    enabled: false               # v3 cycle 5 (v2.6.0). OAuth2 client_credentials. api_key format: <client_id>:<client_secret>.
+    api_key: ""                  # "<client_id>:<client_secret>"; or RETRIEVR_REDDIT_API_KEY env
+    timeout: "10s"
+    rate_limit: 1.5              # 100 QPM free tier ≈ 1.67 req/s; leave headroom
+    rate_limit_burst: 2
+    extra:
+      user_agent: "retrievr-mcp/2.6 (+https://github.com/itsatony/retrievr-mcp; REPLACE-WITH-YOUR-CONTACT@example.com)"  # Required by Reddit policy

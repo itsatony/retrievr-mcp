@@ -5,6 +5,141 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.6.0] - 2026-05-11
+
+Minor release. **Fifth and final cycle of the v3 "Multimodal Retrieval"
+initiative** (`project_plan/retrievr_v3.md`). Fourth multimodal content
+class lands: **social-post search** with three new providers spanning
+the Fediverse (Mastodon), the AT Protocol (Bluesky), and the Reddit
+ecosystem. v3 is complete: video / place / image / post all shipping.
+
+### Added
+
+- **`PostData` per-kind block** (cycle-1's `KindPost` ResultKind already
+  existed): author_handle, author_url, atproto_uri, platform_url,
+  like_count, repost_count, reply_count, published_at, media_count,
+  subreddit, instance, verified. Converter routes `ContentTypePost`
+  → `Result.Post`. EngagementScore on `Publication` carries a normalized
+  sum (likes+reposts+replies); per-component counts live in PostData
+  for breakdown rendering.
+- **`MastodonPlugin`** (`SourceMastodon = "mastodon"`):
+  - `/api/v2/search?type=statuses` against any v4+ instance — NO auth
+    required for public-statuses search.
+  - `BaseURL` selects the instance (default `mastodon.social`, DE).
+  - **Dynamic residency**: `Extra.region` declaration drives the
+    Residency() tag. Default `RegionEU`; operators pointing at a non-EU
+    instance MUST set `extra.region=US` to keep the EU-mode gate truthful.
+  - HTML content stripped via shared `stripHTMLTags`.
+  - Handle composed as `@user@instance` (canonical fediverse form) —
+    local users get the configured instance hostname, remote users keep
+    the upstream `acct` field.
+  - First media attachment surfaces as `ThumbnailURL`.
+  - Engagement = `favourites_count + reblogs_count + replies_count`.
+- **`BlueskyPlugin`** (`SourceBluesky = "bluesky"`):
+  - `app.bsky.feed.searchPosts` (the public AppView). No auth.
+  - `atproto_uri` (`at://did:plc:.../app.bsky.feed.post/<rkey>`) is the
+    canonical dedup key (`MetaKeyAtprotoURI`).
+  - Human-readable `bsky.app` URL derived from handle + rkey for
+    `Publication.URL` and `PostData.PlatformURL`.
+  - `record.langs[0]` → `Publication.Language`.
+  - Author avatar surfaces as `ThumbnailURL`.
+  - Residency: `public-research-infrastructure`. Admissible under
+    `eu_strict` only with the `include_public_research` opt-in.
+- **`RedditPlugin`** (`SourceReddit = "reddit"`):
+  - OAuth2 client-credentials flow with **in-memory token cache** and
+    60s safety-margin auto-refresh.
+  - Credential format `<client_id>:<client_secret>` as a single string;
+    `parseRedditCredential` splits on the first colon (secret may
+    contain colons).
+  - 401 on `/search` invalidates the token cache so the next call
+    re-exchanges.
+  - User-Agent required by Reddit policy — placeholder default with
+    explicit "REPLACE-WITH-YOUR-CONTACT" reminder in YAML.
+  - Permalink → `https://www.reddit.com<permalink>` as canonical URL;
+    crosspost URL surfaces separately as `external_url` in
+    SourceMetadata.
+  - Thumbnail validity filter (rejects "self", "default", "nsfw",
+    "spoiler", "image" placeholder values).
+  - Residency: `US` + `DPACoveredBySCC`. **Blocked under `eu_strict`.**
+- **SourceMetadata post keys**: `smetaAuthorHandle`, `smetaAuthorURL`,
+  `smetaPlatformURL`, `smetaRepostCount`, `smetaReplyCount`,
+  `smetaMediaCount`, `smetaSubreddit`, `smetaInstance`, `smetaVerified`.
+  Existing `smetaLikeCount` (from cycle 2 video) is reused for posts.
+- **Config blocks** for all three providers in `configs/retrievr-mcp.yaml`
+  (disabled by default; explicit Reddit UA placeholder, explicit
+  Mastodon `region` declaration).
+
+### Changed
+
+- **`SourceCount`** bumped 25 → 28.
+- **Plugin registry** registers Mastodon + Bluesky + Reddit factories.
+- Test fixtures + `testRegistryExpectedFactoryCount` updated to 28.
+
+### Tests
+
+- **29 new tests** total:
+  - 8 in `rtv.plugin.mastodon_test.go`: identity, capabilities,
+    default-EU residency, **dynamic residency reflects configured
+    region** (the eu_strict-truthfulness invariant), happy-path wire
+    shape (HTML tag stripping, engagement sum, media-attachment
+    thumbnail, local-user handle composition), remote-user `acct`
+    preserved, 429 → `ErrRateLimitExceeded`, 401 → `ErrCredentialRequired`,
+    FormatUnsupported on Get.
+  - 7 in `rtv.plugin.bluesky_test.go`: identity, capabilities,
+    residency (public-research-infrastructure tag), happy path
+    (atproto_uri dedup key, derived bsky.app URL, language, engagement,
+    avatar thumbnail), 429 mapping, FormatUnsupported, helpers
+    (`blueskyRKey`, `blueskyPlatformURL` guards).
+  - 11 in `rtv.plugin.reddit_test.go`: identity, capabilities, residency
+    (US + DPACoveredBySCC, blocked under eu_strict), happy path (Basic
+    auth on token, bearer token on search, permalink URL, engagement,
+    external_url surfacing), **token caching across 3 calls
+    (1 exchange)**, **401 on search invalidates cache + re-exchange**,
+    no credential / malformed credential errors, token-endpoint 401,
+    429 mapping, FormatUnsupported, helpers (`parseRedditCredential`
+    with 4 forms + colon-in-secret, `redditValidThumbnail`).
+  - 2 in `rtv.post_xprovider_dedup_test.go`: Router-level
+    cross-provider dedup on `atproto_uri` (Bluesky + Mastodon → 1
+    Result) and URL fallback (Reddit + Mastodon when atproto_uri
+    absent).
+
+### v3 initiative complete
+
+All four planned content classes shipped:
+
+| Cycle | Version | Content class | Plugins | EU coverage |
+|---|---|---|---|---|
+| C1 | v2.2.0 | (type model) | — | — |
+| C2 | v2.3.0 | video | youtube, scrapingdog_youtube | none (US only — no EU alternative) |
+| C3 | v2.4.0 | place | photon, tomtom, nominatim | full eu_strict, zero cost via Photon |
+| C4 | v2.5.0 | image | wikimedia, europeana (+ brave ext) | Europeana (pure-EU) + Wikimedia (opt-in) |
+| C5 | v2.6.0 | post | mastodon, bluesky, reddit | Mastodon (configurable) + Bluesky (opt-in) |
+
+10 new SourceIDs across 5 cycles; SourceCount 18 → 28. Brave gained an
+image-search dispatch without becoming a new SourceID.
+
+### EU-strict notes (final)
+
+- **Pure-EU (DPASigned)**: TomTom (place), Europeana (image),
+  Mastodon-when-pointed-at-EU-instance (post).
+- **EU + public-research opt-in adds**: Wikimedia (image), Bluesky (post),
+  Photon-self-hosted (place), Nominatim (place, UK-adequacy).
+- **Always blocked under eu_strict**: YouTube + Scrapingdog (video),
+  Brave (image SERP), Reddit (post).
+- **Video** remains the one content class with no EU-resident alternative
+  — accepted gap per the plan.
+
+### Migration notes
+
+- **No action required** for existing deployments. New sources default
+  to `enabled: false`.
+- **Reddit operators**: format `api_key` as `<client_id>:<client_secret>`
+  (single string, plugin splits on first colon). Override `extra.user_agent`
+  per Reddit policy.
+- **Mastodon operators**: set `extra.region` to match the instance's
+  actual jurisdiction. Default EU keeps `mastodon.social` truthful but
+  pointing elsewhere requires the manual declaration.
+
 ## [2.5.0] - 2026-05-11
 
 Minor release. Fourth cycle of the v3 "Multimodal Retrieval" initiative

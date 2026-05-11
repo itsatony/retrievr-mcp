@@ -124,6 +124,11 @@ const (
 	// (Brave gains an image-search code path but is NOT a new source ID.)
 	SourceWikimedia = "wikimedia"
 	SourceEuropeana = "europeana"
+
+	// v3 cycle 5 / v2.6.0 — social-post providers.
+	SourceMastodon = "mastodon"
+	SourceBluesky  = "bluesky"
+	SourceReddit   = "reddit"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -161,6 +166,10 @@ var validSourceIDs = map[string]bool{
 	// v3 cycle 4 — image.
 	SourceWikimedia: true,
 	SourceEuropeana: true,
+	// v3 cycle 5 — social posts.
+	SourceMastodon: true,
+	SourceBluesky:  true,
+	SourceReddit:   true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -182,8 +191,9 @@ func AllSourceIDs() []string {
 // SourceYouTube + SourceScrapingdogYouTube → 20. v3 cycle 3 / v2.4.0
 // added Photon + TomTom + Nominatim → 23. v3 cycle 4 / v2.5.0 added
 // Wikimedia + Europeana → 25 (Brave gained image search without
-// becoming a new SourceID).
-const SourceCount = 25
+// becoming a new SourceID). v3 cycle 5 / v2.6.0 added Mastodon +
+// Bluesky + Reddit → 28.
+const SourceCount = 28
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

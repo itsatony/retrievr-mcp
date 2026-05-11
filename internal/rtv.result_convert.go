@@ -79,6 +79,20 @@ const (
 	smetaLicenseURL = "license_url"
 	smetaArtist     = "artist"
 	smetaSourcePage = "source_page"
+
+	// v3 post-kind keys (cycle 5 / v2.6.0). EngagementScore on Publication
+	// is the normalized sum; per-component counts live here so consumers
+	// can render a breakdown.
+	smetaAuthorHandle = "author_handle"
+	smetaAuthorURL    = "author_url"
+	smetaPlatformURL  = "platform_url"
+	// smetaLikeCount is shared with video (cycle 2) — same key value "like_count".
+	smetaRepostCount = "repost_count"
+	smetaReplyCount  = "reply_count"
+	smetaMediaCount  = "media_count"
+	smetaSubreddit   = "subreddit"
+	smetaInstance    = "instance"
+	smetaVerified    = "verified"
 )
 
 // kindForSource picks the Kind for a Publication produced by sourceID.
@@ -202,6 +216,8 @@ func (r *Router) toResult(p Publication, rank int) Result {
 		res.Place = placeDataFromPublication(p)
 	case KindImage:
 		res.Image = imageDataFromPublication(p)
+	case KindPost:
+		res.Post = postDataFromPublication(p)
 	}
 
 	// Provenance — single tag for now; cycle-3 will append for each
@@ -350,6 +366,46 @@ func imageDataFromPublication(p Publication) *ImageData {
 		id.Height = v
 	}
 	return id
+}
+
+// postDataFromPublication builds the kind-specific PostData block. Reads
+// SourceMetadata for per-component counts + handle/platform URL/atproto URI.
+// PublishedAt prefers smetaPublishedAt (full RFC3339); falls back to
+// Publication.Published (YYYY-MM-DD).
+func postDataFromPublication(p Publication) *PostData {
+	pd := &PostData{
+		AuthorHandle: metaString(p.SourceMetadata, smetaAuthorHandle),
+		AuthorURL:    metaString(p.SourceMetadata, smetaAuthorURL),
+		AtprotoURI:   metaString(p.SourceMetadata, MetaKeyAtprotoURI),
+		PlatformURL:  metaString(p.SourceMetadata, smetaPlatformURL),
+		Subreddit:    metaString(p.SourceMetadata, smetaSubreddit),
+		Instance:     metaString(p.SourceMetadata, smetaInstance),
+	}
+	if pd.PlatformURL == "" {
+		pd.PlatformURL = p.URL
+	}
+	publishedAt := metaString(p.SourceMetadata, smetaPublishedAt)
+	if publishedAt == "" {
+		publishedAt = p.Published
+	}
+	pd.PublishedAt = publishedAt
+
+	if v, ok := metaInt(p.SourceMetadata, smetaLikeCount); ok {
+		pd.LikeCount = &v
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaRepostCount); ok {
+		pd.RepostCount = &v
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaReplyCount); ok {
+		pd.ReplyCount = &v
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaMediaCount); ok {
+		pd.MediaCount = v
+	}
+	if v, ok := p.SourceMetadata[smetaVerified].(bool); ok {
+		pd.Verified = v
+	}
+	return pd
 }
 
 func datasetDataFromPublication(p Publication) *DatasetData {

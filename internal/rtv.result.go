@@ -95,6 +95,7 @@ type Result struct {
 	Video *VideoData `json:"video,omitempty"`
 	Place *PlaceData `json:"place,omitempty"`
 	Image *ImageData `json:"image,omitempty"`
+	Post  *PostData  `json:"post,omitempty"`
 
 	// Raw provider response (opt-in via WithIncludeRaw).
 	Raw json.RawMessage `json:"raw,omitempty"`
@@ -238,6 +239,25 @@ type ImageData struct {
 	LicenseURL   string `json:"license_url,omitempty"` // canonical license page
 	Artist       string `json:"artist,omitempty"`      // attribution / author
 	SourcePage   string `json:"source_page,omitempty"` // page describing the image (provider-side)
+}
+
+// PostData carries social-post-specific fields (Mastodon, Bluesky, Reddit).
+// Cycle 5 / v2.6.0. EngagementScore on the parent Publication carries a
+// normalized sum (likes+reposts+replies) per provider; per-component
+// breakdown lives here.
+type PostData struct {
+	AuthorHandle string `json:"author_handle,omitempty"` // @alice@mastodon.social, alice.bsky.social, u/alice
+	AuthorURL    string `json:"author_url,omitempty"`
+	AtprotoURI   string `json:"atproto_uri,omitempty"`  // Bluesky-specific
+	PlatformURL  string `json:"platform_url,omitempty"` // canonical post URL on the platform
+	LikeCount    *int   `json:"like_count,omitempty"`
+	RepostCount  *int   `json:"repost_count,omitempty"`
+	ReplyCount   *int   `json:"reply_count,omitempty"`
+	PublishedAt  string `json:"published_at,omitempty"` // RFC3339 (full precision)
+	MediaCount   int    `json:"media_count,omitempty"`
+	Subreddit    string `json:"subreddit,omitempty"` // Reddit-specific
+	Instance     string `json:"instance,omitempty"`  // Mastodon-specific (hostname)
+	Verified     bool   `json:"verified,omitempty"`
 }
 
 // EncyclopediaData carries reference-style article fields (Wikipedia, etc.).

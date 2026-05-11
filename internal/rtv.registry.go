@@ -63,6 +63,11 @@ func PluginFactories() map[string]PluginFactory {
 		// v3 cycle 4 / v2.5.0 — image.
 		SourceWikimedia: func() SourcePlugin { return &WikimediaPlugin{} },
 		SourceEuropeana: func() SourcePlugin { return &EuropeanaPlugin{} },
+
+		// v3 cycle 5 / v2.6.0 — social posts.
+		SourceMastodon: func() SourcePlugin { return &MastodonPlugin{} },
+		SourceBluesky:  func() SourcePlugin { return &BlueskyPlugin{} },
+		SourceReddit:   func() SourcePlugin { return &RedditPlugin{} },
 	}
 }
 

@@ -401,6 +401,15 @@ sources:
   europeana:
     enabled: false
     timeout: "10s"
+  mastodon:
+    enabled: false
+    timeout: "10s"
+  bluesky:
+    enabled: false
+    timeout: "10s"
+  reddit:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.18.0] - 2026-05-15
+
+Minor release. **Knowledge — v6 cycle 5**
+(`project_plan/retrievr_v6.md` §9). Adds two premium structured-
+knowledge sources: Wolfram Alpha (compute + facts) and Google
+Knowledge Graph (entity search).
+
+### Added
+
+- **`SourceWolframAlpha` plugin**
+  (`internal/rtv.plugin.wolframalpha.go`):
+  `https://api.wolframalpha.com/v2/query?output=json&format=plaintext`.
+  Free dev tier 2k/mo (`appid=` query param). Each result "pod"
+  becomes a separate Publication; the **primary / "Result" pod is
+  hoisted to the front** of the result list via the
+  `reorderPrimaryFirst` helper so callers reading the first hit get
+  the answer Wolfram considers most relevant. Empty pods (no
+  subpods, no plaintext) are skipped. Emits `KindFact` at the v2
+  layer. Per-call credential: `wolframalpha`. US/SCC residency.
+- **`SourceKGAPI` plugin** (`internal/rtv.plugin.kgapi.go`):
+  `https://kgsearch.googleapis.com/v1/entities:search`. Free with
+  Google Cloud API key (100k/day). JSON-LD `ItemList` response
+  shape. `filters.categories[*]` → Schema.org `types=` filter
+  (Person, Place, Book, Organization, Movie, etc.; comma-joined).
+  `filters.language` → `languages=` BCP-47 hint. Strips the
+  `"kg:"` prefix from result IDs. Surfaces both short
+  `description` and the longer `detailedDescription.articleBody`
+  joined into Abstract; image content URL into ThumbnailURL; CC
+  license string into License. Emits `KindFact`. Per-call
+  credential: `kgapi`. US/SCC residency. The same Google Cloud
+  key can be shared with Google Places (cycle 1) when both APIs
+  are enabled on the project — documented inline.
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  both US/SCC.
+- **Config blocks** for both new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default; each documents
+  the API-key + per-call override).
+- **Unit tests** with httptest fixtures: identity, capabilities
+  (including `RequiresCredential` + `KindFact`), residency,
+  missing-credential → `ErrCredentialRequired`, happy-path
+  shape, primary-pod hoisting (Wolfram), empty-pod skipping
+  (Wolfram), types+language filter routing (KG), `kg:` prefix
+  stripping, 401/429 mapping, Get-not-wired path.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 57 → 59; `validSourceIDs`
+  registers `wolframalpha`, `kgapi`; registry factory map +
+  test-expected count updated. Config / E2E / registry fixtures
+  extended with both new source blocks.
+
+### Notes
+
+- Wolfram Alpha's primary-pod hoisting is independent of the v2
+  Router merge order — within a single Wolfram response, the
+  `Primary: true` or `id="Result"` pod jumps to index 0 of the
+  results slice. The plugin doesn't mutate the input slice; it
+  builds a fresh ordering via `reorderPrimaryFirst`.
+- The KG API plugin documents that its key can be shared with the
+  cycle-1 Google Places key (same Cloud project; enable both APIs).
+  The per-call credential surface keeps them tenant-isolated when
+  callers prefer separate keys.
+
 ## [2.17.0] - 2026-05-15
 
 Minor release. **PaidWeb — v6 cycle 4**

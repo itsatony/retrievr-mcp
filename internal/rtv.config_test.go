@@ -497,6 +497,12 @@ sources:
   serpapi:
     enabled: false
     timeout: "10s"
+  wolframalpha:
+    enabled: false
+    timeout: "10s"
+  kgapi:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

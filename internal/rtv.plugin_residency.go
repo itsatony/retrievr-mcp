@@ -426,3 +426,23 @@ func (*SerpAPIPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Wolfram Alpha's data-residency posture (US —
+// Wolfram Research, Champaign IL).
+func (*WolframAlphaPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Google Knowledge Graph's data-residency posture
+// (US — Google LLC).
+func (*KGAPIPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

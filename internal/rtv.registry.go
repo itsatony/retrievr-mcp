@@ -117,6 +117,10 @@ func PluginFactories() map[string]PluginFactory {
 		SourceKagi:    func() SourcePlugin { return &KagiPlugin{} },
 		SourceMojeek:  func() SourcePlugin { return &MojeekPlugin{} },
 		SourceSerpAPI: func() SourcePlugin { return &SerpAPIPlugin{} },
+
+		// v6 cycle 5 / v2.18.0 — premium knowledge.
+		SourceWolframAlpha: func() SourcePlugin { return &WolframAlphaPlugin{} },
+		SourceKGAPI:        func() SourcePlugin { return &KGAPIPlugin{} },
 	}
 }
 

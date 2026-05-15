@@ -202,6 +202,10 @@ const (
 	SourceKagi    = "kagi"
 	SourceMojeek  = "mojeek"
 	SourceSerpAPI = "serpapi"
+
+	// v6 cycle 5 / v2.18.0 — premium knowledge.
+	SourceWolframAlpha = "wolframalpha"
+	SourceKGAPI        = "kgapi"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -282,6 +286,9 @@ var validSourceIDs = map[string]bool{
 	SourceKagi:    true,
 	SourceMojeek:  true,
 	SourceSerpAPI: true,
+	// v6 cycle 5 — premium knowledge.
+	SourceWolframAlpha: true,
+	SourceKGAPI:        true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -314,7 +321,8 @@ func AllSourceIDs() []string {
 // Overpass + HERE → 50. v6 cycle 2 / v2.15.0 added Listen Notes +
 // iTunes → 52. v6 cycle 3 / v2.16.0 added Dimensions + Lens → 54.
 // v6 cycle 4 / v2.17.0 added Kagi + Mojeek + SerpAPI → 57.
-const SourceCount = 57
+// v6 cycle 5 / v2.18.0 added Wolfram Alpha + Google KG → 59.
+const SourceCount = 59
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

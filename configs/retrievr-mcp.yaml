@@ -452,3 +452,17 @@ sources:
     timeout: "20s"
     rate_limit: 2.0
     rate_limit_burst: 2
+
+  wolframalpha:
+    enabled: false               # v6 cycle 5 (v2.18.0). Free 2k/mo dev tier; paid above. REQUIRES api_key.
+    api_key: ""                  # Wolfram Alpha app id; or RETRIEVR_WOLFRAMALPHA_API_KEY env. Per-call override: credentials.wolframalpha.
+    timeout: "30s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
+
+  kgapi:
+    enabled: false               # v6 cycle 5 (v2.18.0). Free with Google Cloud key (100k/day quota). REQUIRES api_key.
+    api_key: ""                  # Google Cloud API key with Knowledge Graph Search API enabled; or RETRIEVR_KGAPI_API_KEY env. Per-call override: credentials.kgapi.
+    timeout: "15s"
+    rate_limit: 5.0
+    rate_limit_burst: 5

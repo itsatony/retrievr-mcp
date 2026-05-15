@@ -99,6 +99,11 @@ func PluginFactories() map[string]PluginFactory {
 		SourceGDELT:     func() SourcePlugin { return &GDELTPlugin{} },
 		SourceIAScholar: func() SourcePlugin { return &IAScholarPlugin{} },
 		SourceWayback:   func() SourcePlugin { return &WaybackPlugin{} },
+
+		// v6 cycle 1 / v2.14.0 — premium geo / place.
+		SourceGooglePlaces: func() SourcePlugin { return &GooglePlacesPlugin{} },
+		SourceOSMOverpass:  func() SourcePlugin { return &OSMOverpassPlugin{} },
+		SourceHERE:         func() SourcePlugin { return &HEREPlugin{} },
 	}
 }
 

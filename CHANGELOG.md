@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.14.0] - 2026-05-15
+
+Minor release. **GeoExpansion — v6 cycle 1**
+(`project_plan/retrievr_v6.md` §5). Opens the v6 GeoExpansion +
+premium-tier masterplan with three new place-typed providers: Google
+Places (paid), OSM Overpass (free, EU-mirrored), and HERE Geocoding
+(freemium, EU-resident). Introduces the
+`SourceCapabilities.RequiresCredential` flag so `rtv_list_sources`
+callers can filter the catalog by reachable-in-tenant.
+
+### Added
+
+- **`SourceCapabilities.RequiresCredential`** boolean field
+  (`internal/rtv.types.go`) — true on paid/keyed plugins, false (zero
+  value) on free plugins. Existing v1-v5 plugins keep the default.
+- **`SourceGooglePlaces` plugin**
+  (`internal/rtv.plugin.googleplaces.go`):
+  `https://places.googleapis.com/v1/places:searchText` (POST). Field
+  mask configurable via `extra.field_mask`; default covers id, name,
+  address, location, rating, types, website. Requires API key
+  (per-call credential: `googleplaces`); refuses to start without one
+  with `ErrCredentialRequired`. Returns place_id, formatted address,
+  lat/lon, rating + user-rating-count, types, website. US/SCC
+  residency.
+- **`SourceOSMOverpass` plugin**
+  (`internal/rtv.plugin.osmoverpass.go`):
+  `https://overpass-api.de/api/interpreter` (POST raw QL). Free, no
+  auth. Synthesizes a default name-regex query across nodes / ways /
+  relations with `out center N`; power users can pass verbatim
+  Overpass QL via `filters.categories[0]` when it starts with
+  `[out:`. Routes through the existing place-family `osm_id` dedup
+  (composite `<type>/<id>` value) and infers `smetaPlaceType` from
+  the first recognized tag (amenity / shop / tourism / natural /
+  place). EU-resident (Heidelberg primary mirror; swappable via
+  `base_url`).
+- **`SourceHERE` plugin** (`internal/rtv.plugin.here.go`):
+  `https://geocode.search.hereapi.com/v1/geocode` (GET). Free 1000
+  transactions/day; paid above. Per-call credential: `here`; refuses
+  to start without one. Supports `filters.language` (BCP-47) and
+  `filters.categories[0]` mapped to the HERE `in=` restriction
+  expression (e.g. `countryCode:DEU`, `circle:lat,lon;r=meters`).
+  Returns place id, title, formatted address, lat/lng, country code,
+  HERE category names. EU-resident (Berlin).
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `googleplaces` → US/SCC, `osmoverpass` → EU/n/a, `here` → EU/n/a.
+- **Config blocks** for the three new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default; the two
+  credentialed sources document the env-var / per-call override).
+- **Unit tests** with httptest fixtures for all three plugins:
+  identity, capabilities (including the new `RequiresCredential`
+  bit), residency, missing-credential → `ErrCredentialRequired`
+  (Google Places + HERE), happy-path search shape, language +
+  category-filter routing, verbatim Overpass QL pass-through,
+  way-with-center coordinate extraction, unnamed-element skip,
+  quote-escape in regex, 401 → `ErrCredentialInvalid`, 429 →
+  `ErrRateLimitExceeded`.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 47 → 50; `validSourceIDs`
+  registers `googleplaces`, `osmoverpass`, `here`; registry factory
+  map + test-expected count updated. Config / E2E / registry fixtures
+  extended with the three new source blocks.
+
+### Notes
+
+- v6 masterplan drafted at `project_plan/retrievr_v6.md`: 6 cycles,
+  ~17 new plugins across paid/freemium tier (geo, audio, scholarly,
+  web, knowledge, news). Total catalog at end of v6: ~64.
+- The `RequiresCredential` flag is set explicitly on every new v6
+  plugin and read from `Capabilities()` so the
+  `rtv_list_sources` shape stays backward-compatible.
+- Google Places uses the **v1** API explicitly (post-2024 Maps
+  Platform consolidation); the legacy `/findplacefromtext` endpoint
+  is left as a documented fallback in the plugin docstring but not
+  implemented.
+
 ## [2.13.0] - 2026-05-15
 
 Minor release. **KnowledgeCommons cycle 6 — TemporalArchives**

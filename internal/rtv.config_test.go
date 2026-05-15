@@ -467,6 +467,15 @@ sources:
   wayback:
     enabled: false
     timeout: "10s"
+  googleplaces:
+    enabled: false
+    timeout: "10s"
+  osmoverpass:
+    enabled: false
+    timeout: "10s"
+  here:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

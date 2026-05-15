@@ -177,6 +177,11 @@ const (
 	SourceGDELT     = "gdelt"
 	SourceIAScholar = "iascholar"
 	SourceWayback   = "wayback"
+
+	// v6 cycle 1 / v2.14.0 — premium geo / place.
+	SourceGooglePlaces = "googleplaces"
+	SourceOSMOverpass  = "osmoverpass"
+	SourceHERE         = "here"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -243,6 +248,10 @@ var validSourceIDs = map[string]bool{
 	SourceGDELT:     true,
 	SourceIAScholar: true,
 	SourceWayback:   true,
+	// v6 cycle 1 — premium geo.
+	SourceGooglePlaces: true,
+	SourceOSMOverpass:  true,
+	SourceHERE:         true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -271,8 +280,9 @@ func AllSourceIDs() []string {
 // v5 cycle 4 / v2.11.0 added npm + PyPI + crates + pkg.go.dev → 40.
 // v5 cycle 5 / v2.12.0 added Google Patents + EPO OPS + CourtListener +
 // EUR-Lex → 44. v5 cycle 6 / v2.13.0 added GDELT + IA Scholar +
-// Wayback → 47.
-const SourceCount = 47
+// Wayback → 47. v6 cycle 1 / v2.14.0 added Google Places + OSM
+// Overpass + HERE → 50.
+const SourceCount = 50
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can
@@ -599,6 +609,13 @@ type SourceCapabilities struct {
 	// the first entry becomes Result.Kind. Cycle-1 scholarly providers
 	// return [KindPaper]; wave-1 providers declare web/code/encyclopedia.
 	Kinds []ResultKind `json:"kinds,omitempty"`
+
+	// RequiresCredential is true when the plugin refuses to operate
+	// without a configured API key or per-call credential. Surfaces in
+	// rtv_list_sources so callers can filter the catalog by what's
+	// reachable in their tenant. Added in v6 cycle 1 / v2.14.0 alongside
+	// the first paid-provider tier; free plugins keep the zero value.
+	RequiresCredential bool `json:"requires_credential,omitempty"`
 }
 
 // SourceHealth represents the current health and rate-limit status of a source.

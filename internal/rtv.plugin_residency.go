@@ -321,3 +321,36 @@ func (*WaybackPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Google Places' data-residency posture (US —
+// Google LLC, Mountain View). SCC applies via the Google Maps
+// Platform terms; pass user PII (e.g. session tokens) only under the
+// caller's own privacy review.
+func (*GooglePlacesPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports OSM Overpass' data-residency posture (EU — the
+// overpass-api.de primary mirror is hosted in Heidelberg, DE; users
+// can swap to a different mirror via PluginConfig.BaseURL).
+func (*OSMOverpassPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports HERE's data-residency posture (EU — HERE Global
+// B.V., Eindhoven NL / Berlin DE).
+func (*HEREPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

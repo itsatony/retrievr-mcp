@@ -59,16 +59,28 @@ const (
 
 // Outbound query-param name constants. Extracted in v2.7.0 from prior
 // string-literal usage to comply with the "no magic strings" code rule.
+//
+// Note: Brave Search Web API does NOT expose dedicated `include_domains` /
+// `exclude_domains` query params (those were a v2.7.0 mis-spec validated
+// against live API in v2.7.1). Instead, domain scoping is performed via
+// inline `site:` operators in the query string itself — the same SERP
+// syntax Google/DuckDuckGo accept. The original constants are removed
+// because they were dead code.
 const (
-	braveParamQ              = "q"
-	braveParamCount          = "count"
-	braveParamOffset         = "offset"
-	braveParamCountry        = "country"
-	braveParamSearchLang     = "search_lang"
-	braveParamSafesearch     = "safesearch"
-	braveParamFreshness      = "freshness"
-	braveParamIncludeDomains = "include_domains"
-	braveParamExcludeDomains = "exclude_domains"
+	braveParamQ          = "q"
+	braveParamCount      = "count"
+	braveParamOffset     = "offset"
+	braveParamCountry    = "country"
+	braveParamSearchLang = "search_lang"
+	braveParamSafesearch = "safesearch"
+	braveParamFreshness  = "freshness"
+)
+
+// Inline SERP operators Brave honors inside the q parameter.
+const (
+	braveQueryOperatorSite        = "site:"
+	braveQueryOperatorExcludeSite = "-site:"
+	braveQueryOperatorOR          = "OR"
 )
 
 // Freshness bucket constants — Brave's documented relative-time tokens.
@@ -572,7 +584,7 @@ func parseFilterDateCalendar(s string) (string, bool) {
 
 func (p *BravePlugin) buildSearchQuery(params SearchParams, count int, freshness string) url.Values {
 	q := url.Values{}
-	q.Set(braveParamQ, params.Query)
+	q.Set(braveParamQ, braveComposeQuery(params.Query, params.Filters.IncludeDomains, params.Filters.ExcludeDomains))
 	q.Set(braveParamCount, fmt.Sprintf("%d", count))
 	if params.Offset > 0 {
 		q.Set(braveParamOffset, fmt.Sprintf("%d", params.Offset))
@@ -589,13 +601,38 @@ func (p *BravePlugin) buildSearchQuery(params SearchParams, count int, freshness
 	if freshness != "" {
 		q.Set(braveParamFreshness, freshness)
 	}
-	if len(params.Filters.IncludeDomains) > 0 {
-		q.Set(braveParamIncludeDomains, strings.Join(params.Filters.IncludeDomains, ","))
-	}
-	if len(params.Filters.ExcludeDomains) > 0 {
-		q.Set(braveParamExcludeDomains, strings.Join(params.Filters.ExcludeDomains, ","))
-	}
 	return q
+}
+
+// braveComposeQuery appends inline `site:` and `-site:` SERP operators
+// to the user's query so Brave restricts results to / excludes the named
+// domains. Multiple include domains are OR-ed (parenthesized) per
+// Brave's documented boolean syntax. This is the only mechanism Brave
+// Search Web API exposes for domain scoping — there is no
+// `include_domains` request parameter, despite older retrievr code
+// assuming one.
+func braveComposeQuery(query string, includeDomains, excludeDomains []string) string {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(query))
+	if len(includeDomains) == 1 {
+		b.WriteByte(' ')
+		b.WriteString(braveQueryOperatorSite)
+		b.WriteString(includeDomains[0])
+	} else if len(includeDomains) > 1 {
+		parts := make([]string, 0, len(includeDomains))
+		for _, d := range includeDomains {
+			parts = append(parts, braveQueryOperatorSite+d)
+		}
+		b.WriteString(" (")
+		b.WriteString(strings.Join(parts, " "+braveQueryOperatorOR+" "))
+		b.WriteByte(')')
+	}
+	for _, d := range excludeDomains {
+		b.WriteByte(' ')
+		b.WriteString(braveQueryOperatorExcludeSite)
+		b.WriteString(d)
+	}
+	return b.String()
 }
 
 func (p *BravePlugin) doSearch(ctx context.Context, params SearchParams, count int, apiKey string) (*braveSearchResponse, error) {

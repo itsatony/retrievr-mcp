@@ -138,8 +138,12 @@ func TestBrave_Search_DomainAndLanguageFilters(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		assert.Equal(t, "kubernetes.io,docs.kubernetes.io", q.Get(braveParamIncludeDomains))
-		assert.Equal(t, "reddit.com", q.Get(braveParamExcludeDomains))
+		// Brave's API does not expose include_domains / exclude_domains
+		// query params — domain scoping rides inline in q via site:/-site:.
+		gotQ := q.Get(braveParamQ)
+		assert.Contains(t, gotQ, "(site:kubernetes.io OR site:docs.kubernetes.io)")
+		assert.Contains(t, gotQ, "-site:reddit.com")
+		assert.Contains(t, gotQ, "k8s")
 		assert.Equal(t, "de", q.Get(braveParamSearchLang), "BCP-47 first subtag of de-DE")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, buildBraveTestResponse(nil, nil))
@@ -157,6 +161,25 @@ func TestBrave_Search_DomainAndLanguageFilters(t *testing.T) {
 		},
 	})
 	require.NoError(t, err)
+}
+
+func TestBrave_ComposeQuery(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name                        string
+		query                       string
+		includeDomains, exclDomains []string
+		want                        string
+	}{
+		{"plain", "k8s", nil, nil, "k8s"},
+		{"single-include", "k8s", []string{"kubernetes.io"}, nil, "k8s site:kubernetes.io"},
+		{"multi-include", "k8s", []string{"a.io", "b.io"}, nil, "k8s (site:a.io OR site:b.io)"},
+		{"single-exclude", "k8s", nil, []string{"reddit.com"}, "k8s -site:reddit.com"},
+		{"include-plus-exclude", "k8s", []string{"a.io"}, []string{"b.io"}, "k8s site:a.io -site:b.io"},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, braveComposeQuery(c.query, c.includeDomains, c.exclDomains), "case %s", c.name)
+	}
 }
 
 func TestBrave_Search_DateAppliesFreshnessBucket(t *testing.T) {
@@ -184,8 +207,9 @@ func TestBrave_Search_AbsentFiltersOmitParams(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		assert.NotContains(t, q, braveParamIncludeDomains)
-		assert.NotContains(t, q, braveParamExcludeDomains)
+		// No site: operators appended to the q when no domain filters set.
+		gotQ := q.Get(braveParamQ)
+		assert.NotContains(t, gotQ, "site:", "no site: operator should appear when domain filters are absent")
 		assert.NotContains(t, q, braveParamFreshness)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, buildBraveTestResponse(nil, nil))

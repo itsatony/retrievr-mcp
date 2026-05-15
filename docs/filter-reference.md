@@ -47,9 +47,11 @@ Restrict or drop results by registered domain name. Entries must be the
 bare host (`kubernetes.io`), not URLs (`https://kubernetes.io/`); invalid
 entries return a typed `ErrInvalidDomainList`.
 
-Honored by `brave` (comma-joined onto `include_domains` /
-`exclude_domains`) and `exa` (`includeDomains` / `excludeDomains` JSON
-body fields). Other providers ignore.
+Honored by `brave` (inline `site:` / `-site:` SERP operators rewritten
+into the query string — Brave Web Search API has no `include_domains`
+request parameter) and `exa` (`includeDomains` / `excludeDomains` JSON
+body fields). Multiple include domains are OR-ed for Brave. Other
+providers ignore.
 
 **Example**
 

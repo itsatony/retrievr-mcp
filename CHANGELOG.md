@@ -83,6 +83,28 @@ six providers, and the long-standing Brave date-filter defect.
   header names (`Authorization`, `Content-Type`), the OAuth grant body
   string, and the bearer prefix.
 
+### Hardened (post-live-verification)
+
+Live integration test against Brave Search Web API revealed that the
+`include_domains` / `exclude_domains` query params do not exist in the
+Brave API surface (they were a v2.7.0 spec error). Brave's only
+mechanism for domain scoping is inline `site:` / `-site:` SERP operators
+in the `q` parameter, the same syntax Google/DuckDuckGo accept.
+
+- **Brave domain filter rewritten** to compose inline operators:
+  - 1 include domain → `q="<query> site:<d>"`.
+  - >1 include domain → `q="<query> (site:<d1> OR site:<d2> ...)"`.
+  - Each exclude domain → ` -site:<d>` appended.
+- **Dead constants removed**: `braveParamIncludeDomains`,
+  `braveParamExcludeDomains` (Brave never read those params).
+- **New helper**: `braveComposeQuery(query, includeDomains, excludeDomains)`
+  with its own table-driven unit test (5 cases).
+- **Live integration tests now all PASS**: brave domain filter, brave
+  date filter (freshness wiring), exa domain filter, mastodon language
+  post-filter, bluesky language wiring. The `TestIntegrationBraveDomainFilter`
+  asserts every returned URL contains the included domain — verified
+  against `api.search.brave.com` returning only `kubernetes.io` hits.
+
 ### Hardened (post-review)
 
 After `/review` flagged 15 follow-ups, every applicable item was addressed

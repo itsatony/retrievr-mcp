@@ -2,365 +2,339 @@
 
 ## 1. Overview
 
-retrievr-mcp exposes three MCP tools that give agents unified access to academic publications, AI research, models, and datasets across ten upstream sources (ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv/medRxiv).
+retrievr-mcp exposes **three MCP tools** that give agents unified access to
+academic publications, AI research, models, datasets, web/news/social/code/
+place/image/post/package/patent/audio content, and structured facts.
 
-The server speaks the MCP protocol (spec 2025-11-25) over **Streamable HTTP** on path `/mcp`, port **8099**. All tool inputs and outputs are JSON-encoded. Tool results are returned as MCP text content (a JSON string). Error responses follow the structured `MCPError` format described in section 5.
+The catalog spans **61 source plugins** across five masterplans (v1 academic,
+v2 web/enrichment, v3 multimodal, v5 KnowledgeCommons, v6 GeoExpansion +
+Premium). The canonical count is `SourceCount` in
+`internal/rtv.types.go`.
 
-Available tools:
+- **Transport**: Streamable HTTP on path `/mcp`, port **8099**.
+- **MCP spec**: 2025-11-25.
+- **Wire**: All tool inputs/outputs are JSON-encoded. Results are returned
+  as MCP text content (a JSON string). Errors follow the structured
+  `MCPError` shape (section 6).
 
 | Tool | Purpose |
 |---|---|
-| `rtv_search` | Fan-out search across one or more sources, returns merged and deduplicated results |
-| `rtv_get` | Retrieve a single publication by its prefixed ID |
-| `rtv_list_sources` | List all configured sources with their capabilities and rate-limit status |
+| `rtv_search` | Fan-out search across one or more sources, merged + deduplicated results |
+| `rtv_get` | Retrieve a single result by its prefixed ID |
+| `rtv_list_sources` | List every registered source with its full capability surface |
 
-### Source summary
-
-| Source ID | Name | Content types | Auth required | Rate limit | Coverage |
-|---|---|---|---|---|---|
-| `arxiv` | ArXiv | papers | no | 3 req/s | Open-access preprints for physics, math, CS, and more |
-| `pubmed` | PubMed | papers | optional API key | 10 req/s (3 without key) | 36M+ biomedical literature citations |
-| `s2` | Semantic Scholar | papers | optional API key | 1 req/s (10 with key) | AI-powered discovery with citation graph |
-| `openalex` | OpenAlex | papers | optional API key | 10 req/s | 250M+ scholarly works with open metadata |
-| `huggingface` | HuggingFace | models, datasets | optional token | 10 req/s | ML models and datasets hub |
-| `europmc` | Europe PMC | papers | no | 10 req/s | 40M+ biomedical and life sciences records |
-| `crossref` | CrossRef | papers | no | 10 req/s polite pool | DOI-centric metadata for 150M+ works |
-| `dblp` | DBLP | papers | no | 5 req/s | CS bibliography with 7M+ publications (no abstracts) |
-| `ads` | NASA ADS | papers | API key required | 5000/day | Astronomy/astrophysics 16M+ records |
-| `biorxiv` | bioRxiv/medRxiv | papers | no | 5 req/s | Biology/health preprints (date-range search only, no keyword search) |
+Response shape: `rtv_search` returns a `MergedSearchResultV2` (fat-struct
+`Result` with a `kind` discriminator + per-kind data blocks). `compat:"v1"`
+was sunset in v2.0.0 and returns `RTV_COMPAT_V1_SUNSET`.
 
 ---
 
-## 2. rtv_search
+## 2. Source Catalog
 
-Search academic publications across multiple sources. Results are merged, cross-source deduplicated by DOI or ArXiv ID, re-sorted, and truncated to the requested limit. Sources that fail partially are reported in `sources_failed` without blocking results from working sources.
+Per-source key/free status reflects `Capabilities.RequiresCredential`. A
+"free" source either works fully anonymously or accepts an optional key for
+higher quota. A "key" source refuses to start without a credential and
+emits `ErrCredentialRequired`. Use `rtv_list_sources` for the live truth.
+
+### v1 — Academic core (10)
+
+| ID | Name | Content types | Key/Free | Notes |
+|---|---|---|---|---|
+| `arxiv` | ArXiv | paper | free | Open-access preprints (physics, math, CS). |
+| `pubmed` | PubMed | paper | free (key boosts quota) | Biomedical citations, MeSH terms. |
+| `s2` | Semantic Scholar | paper | free (key boosts quota) | Citation graph, influence metrics. |
+| `openalex` | OpenAlex | paper | free (key boosts quota) | 250M+ scholarly works, inverted-index abstract normalized to plaintext. |
+| `huggingface` | HuggingFace | model, dataset | free (key boosts quota) | ML models + datasets hub. |
+| `europmc` | Europe PMC | paper | free | Life-sciences full-text + OA. |
+| `crossref` | CrossRef | paper | free | DOI-centric metadata (150M+ works). |
+| `dblp` | DBLP | paper | free | CS bibliography (no abstracts). |
+| `ads` | NASA ADS | paper | key required | Astronomy / astrophysics 16M+ records. |
+| `biorxiv` | bioRxiv / medRxiv | paper | free | Date-range only — `date_from` REQUIRED. |
+
+### v2 — Web / Enrichment (8)
+
+| ID | Name | Content types | Key/Free | Notes |
+|---|---|---|---|---|
+| `exa` | Exa | any | key | Neural web search; honors `include_domains` / `exclude_domains`. |
+| `brave` | Brave Search | any, image | key | Web + image; freshness buckets; `site:` rewrites for domain filters. |
+| `linkup` | Linkup | any | key | Premium web retrieval. |
+| `firecrawl` | Firecrawl | any | key | Page scrape → markdown native. |
+| `github` | GitHub | any | free (key boosts quota) | Code/repo search. |
+| `wikipedia` | Wikipedia | any | free | Encyclopedia summaries. |
+| `unpaywall` | Unpaywall | paper | free | OA enrichment (DOI → PDF/license). Wired post-merge by router. |
+| `perplexity` | Perplexity | any | key | LLM-grounded web answers. |
+
+### v3 — Multimodal (10)
+
+| ID | Name | Content types | Key/Free | Notes |
+|---|---|---|---|---|
+| `youtube` | YouTube Data API | video | key | Native `channelId` + `relevanceLanguage`. |
+| `scrapingdog_youtube` | Scrapingdog YouTube | video | key | SERP-style YouTube; `channel:` qualifier. |
+| `photon` | Photon | place | free | OSM geocoder. |
+| `tomtom` | TomTom | place | key | POI / geocoder. |
+| `nominatim` | Nominatim | place | free | OSM geocoder; rate-limited. |
+| `wikimedia` | Wikimedia Commons | image | free | Free-licensed media. |
+| `europeana` | Europeana | image | key | EU cultural heritage; language filter. |
+| `mastodon` | Mastodon | post | free | Public Fediverse posts; language post-filter (only sanctioned post-filter). |
+| `bluesky` | Bluesky | post | free | AT-Proto firehose search; native `lang`. |
+| `reddit` | Reddit | post | key | Per-subreddit search (≤5 subs/call). |
+
+### v5 — KnowledgeCommons (19)
+
+| ID | Name | Content types | Key/Free | Notes |
+|---|---|---|---|---|
+| `stackexchange` | Stack Exchange | post (Q&A) | free | Unix-seconds date filter; `categories` → `tagged`. |
+| `hackernews` | Hacker News (Algolia) | post (Q&A) | free | `numericFilters` date range. |
+| `zenodo` | Zenodo | paper, dataset | free | CERN OA repository; native `open_access`. |
+| `core` | CORE | paper | free | OA aggregator. |
+| `openaire` | OpenAIRE | paper, dataset | free | EU OA aggregator. |
+| `wikidata` | Wikidata | any | free | Structured KG; SPARQL-backed; language. |
+| `datacite` | DataCite | dataset, paper | free | Dataset DOIs. |
+| `orcid` | ORCID | paper | free | Researcher-centric works lookup. |
+| `npm` | npm | package | free | JS/TS registry. |
+| `pypi` | PyPI | package | free | Python registry. |
+| `crates` | crates.io | package | free | Rust registry. |
+| `pkggodev` | pkg.go.dev | package | free | Go modules. |
+| `googlepatents` | Google Patents | patent | free | Unofficial xhr endpoint. |
+| `epoops` | EPO OPS | patent | key | EPO Open Patent Services. |
+| `courtlistener` | CourtListener | paper (law) | free | US case law; `citation_code` dedup. |
+| `eurlex` | EUR-Lex | paper (law) | free | EU regulations/directives; CELEX; language. |
+| `gdelt` | GDELT | any | free | Global news monitoring; domain filters; language. |
+| `iascholar` | IA Scholar | paper | free | Internet Archive scholarly index. |
+| `wayback` | Wayback Machine | any | free | Web archive snapshots. |
+
+### v6 — GeoExpansion + Premium (14)
+
+| ID | Name | Content types | Key/Free | Notes |
+|---|---|---|---|---|
+| `googleplaces` | Google Places | place | key | POI search; native `language`, region. |
+| `osmoverpass` | OSM Overpass | place | free | Overpass QL gated (server-side validation). |
+| `here` | HERE | place | key | POI/geocoder; native `language`. |
+| `listennotes` | Listen Notes | audio | key | Podcast episodes/shows. |
+| `itunes` | Apple iTunes | audio | free | Podcast catalog (no key). |
+| `dimensions` | Dimensions.ai | paper | key | Premium citation graph; year-floor dates. |
+| `lens` | Lens.org | paper | key | Premium citation graph; year-floor dates. |
+| `kagi` | Kagi | any | key | Paid web search; domain + language. |
+| `mojeek` | Mojeek | any | key | Independent crawler; domain + language. |
+| `serpapi` | SerpAPI (Google) | any | key | Google SERP proxy; country via `categories[0]`. |
+| `wolframalpha` | Wolfram Alpha | any | key | Structured computation. |
+| `kgapi` | Google Knowledge Graph | any | key | Entity KG lookup; language. |
+| `newsapi` | NewsAPI | any | key | Premium news; domain + language. |
+| `serpapinews` | SerpAPI News | any | key | Google News SERP; country + language. |
+
+---
+
+## 3. rtv_search
+
+Search across any subset of the catalog. Results are fanned-out
+concurrently, merged, cross-source deduplicated (per ContentType family),
+re-sorted, and truncated. Partial failures are graceful — working sources
+return results while failed sources land in `sources_failed`.
 
 ### Parameters
 
 | Name | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `query` | string | yes | — | Search query string |
-| `sources` | array of string | no | server-configured sources | List of source IDs to search. Valid values: `arxiv`, `pubmed`, `s2`, `openalex`, `huggingface`, `europmc`, `crossref`, `dblp`, `ads`, `biorxiv` |
-| `content_type` | string | no | `paper` | Type of content to search for. Enum: `paper`, `model`, `dataset`, `any` |
-| `sort` | string | no | `relevance` | Sort order for results. Enum: `relevance`, `date_desc`, `date_asc`, `citations` |
-| `limit` | number | no | `10` | Maximum number of results to return (1–100) |
-| `offset` | number | no | `0` | Number of results to skip for pagination |
-| `filters` | object | no | — | Optional filters to narrow search results (see sub-fields below) |
-| `credentials` | object | no | — | Optional per-call API credentials that override server defaults (see sub-fields below) |
+| `query` | string | yes | — | Search query string. |
+| `sources` | array[string] | no | server-configured `DefaultSources` | Explicit source IDs. Overrides `intent`. |
+| `content_type` | string | no | `paper` | One of `paper`, `model`, `dataset`, `video`, `place`, `image`, `post`, `package`, `patent`, `audio`, `any`. |
+| `sort` | string | no | `relevance` | One of `relevance`, `date_desc`, `date_asc`, `citations`. |
+| `limit` | number | no | `10` | 1–100. |
+| `offset` | number | no | `0` | Pagination skip count. |
+| `filters` | object | no | — | See section 3.2 and `docs/filter-reference.md`. |
+| `credentials` | object | no | — | Per-call overrides (section 3.3). |
+| `intent` | string | no | — | One of `deep_research`, `quick_lookup`, `primary_source`, `code_provenance`, `news`, `reference`. Drives source selection + fallback chains. |
+| `compat` | string | no | `v2` | `"v1"` returns `RTV_COMPAT_V1_SUNSET`. |
 
-### filters sub-fields
+### 3.1 intent — declarative source selection
+
+Six intents are wired in `DefaultFallbackConfig()` (`internal/rtv.router.go`).
+Unregistered or unconfigured sources are silently dropped (chain degrades to
+whatever is enabled in the running tenant). Explicit `sources` overrides
+`intent`.
+
+| Intent | Primary | Fallback |
+|---|---|---|
+| `deep_research` | `s2`, `openalex` | `arxiv`, `crossref`, `europmc`, `pubmed`, `dblp`, `ads`, `core`, `openaire` |
+| `primary_source` | `europmc`, `openalex` | `crossref`, `s2`, `arxiv`, `pubmed`, `core`, `openaire`, `zenodo` |
+| `quick_lookup` | `kagi`, `mojeek`, `serpapi` | `brave`, `exa`, `linkup`, `wikipedia` |
+| `code_provenance` | `npm`, `pypi`, `crates`, `pkggodev` | `github`, `arxiv`, `dblp`, `s2` |
+| `news` | `newsapi`, `serpapinews` | `gdelt`, `brave`, `exa`, `wikipedia` |
+| `reference` | `wolframalpha`, `kgapi` | `wikidata`, `wikipedia` |
+
+Fallback walking triggers when the primary set yields zero hits or every
+primary source fails. The walk stops at the first fallback source returning
+≥1 result. `MergedSearchResult.FallbackWalked` reports whether this happened.
+
+### 3.2 filters sub-fields
+
+| Field | Type | Semantics |
+|---|---|---|
+| `title` | string | Title-only match. Honored by `arxiv`, `pubmed`, `europmc`; others fold into the main query. |
+| `authors` | []string | Author-only filter. Honored by `arxiv`, `pubmed`, `europmc`. |
+| `date_from` / `date_to` | string | `YYYY-MM-DD` or `YYYY`. Brave maps to freshness buckets (`pd`/`pw`/`pm`/`py`); StackExchange / HackerNews convert to unix seconds; Dimensions / Lens floor to year; **bioRxiv REQUIRES `date_from`**. |
+| `categories` | []string | Semantics vary by source — see filter-reference.md. |
+| `open_access` | bool | Native only on `zenodo`. Use `intent=primary_source` for OA-biased scholarly retrieval. |
+| `min_citations` | int | **Reserved for a future release.** Not wired by any provider today. |
+| `include_domains` / `exclude_domains` | []string | Bare domains (no scheme). Honored by `brave`, `exa`, `gdelt`, `kagi`, `mojeek`, `serpapi`, `newsapi`. |
+| `channels` | []string | YouTube channel IDs (≤5). Honored by `youtube`, `scrapingdog_youtube`. |
+| `subreddits` | []string | Subreddit names (≤5). Honored by `reddit`. |
+| `language` | string | BCP-47 (`en`, `de`, `fr-CA`). Honored by `brave`, `youtube`, `scrapingdog_youtube`, `bluesky`, `europeana`, `mastodon` (post-fetch), `serpapi`, `serpapinews`, `kagi`, `mojeek`, `newsapi`, `gdelt`, `eurlex`, `kgapi`, `wikidata`, `here`, `googleplaces`, `listennotes`. |
+
+Plugins that do not natively support a filter MUST ignore it (the only
+sanctioned post-filter is Mastodon `language`). For the runtime matrix
+query `rtv_list_sources` and read the `supports_*` booleans.
+
+### 3.3 credentials sub-fields
+
+Object with optional string fields. Each plugin reads only its own key;
+unknown keys are ignored. Per-credential rate-limit buckets keep tenants
+isolated. Resolution order: per-call > server config > anonymous.
+
+| Field | Applies to |
+|---|---|
+| `pubmed_api_key` | `pubmed` |
+| `s2_api_key` | `s2` |
+| `openalex_api_key` | `openalex` |
+| `hf_token` | `huggingface` |
+| `ads_api_key` | `ads` |
+
+Paid plugins (Brave, Exa, Kagi, NewsAPI, ...) read their key from server
+config (`PluginConfig.APIKey`); per-call override of paid-tier keys is not
+exposed via the `credentials` object.
+
+### 3.4 Response — MergedSearchResultV2
 
 | Field | Type | Description |
 |---|---|---|
-| `title` | string | Filter by title substring |
-| `authors` | array of string | Filter by author names |
-| `date_from` | string | Earliest publication date, format `YYYY-MM-DD` or `YYYY` |
-| `date_to` | string | Latest publication date, format `YYYY-MM-DD` or `YYYY` |
-| `categories` | array of string | Filter by subject categories (source-specific identifiers) |
-| `open_access` | boolean | When `true`, restrict to open-access publications only |
-| `min_citations` | integer | Minimum citation count threshold |
+| `total_results` | int | Count after dedup + truncation. |
+| `results` | []Result | Merged + deduplicated list. |
+| `sources_queried` | []string | Source IDs actually contacted. |
+| `sources_failed` | []string | Source IDs that errored. |
+| `sources_skipped` | []SkipNote | Providers excluded by EU-mode gate, with structured reason. |
+| `audit_ref` | string | `evt_aud_<16hex>` — correlate to retrievr's audit log. |
+| `fallback_walked` | bool | True when the fallback chain walked past the primary set. |
+| `eu_fallback_used` | bool | True when `EUModePreferred` fell back to a non-EU provider. |
+| `has_more` | bool | True if more results exist beyond the page. |
 
-All filter fields are optional. Omit any field that should not be applied. Not every source supports every filter; unsupported filters are silently ignored by that source.
+### 3.5 Publication / Result fields
 
-> **Note on bioRxiv:** bioRxiv search requires a `date_from` filter. It does not support keyword search. Use other sources for keyword discovery, then bioRxiv for direct preprint retrieval by DOI.
+Each result carries a `kind` discriminator + a per-kind data block. The
+underlying `Publication` envelope:
 
-### credentials sub-fields
-
-| Field | Type | Applies to source |
+| Field | Type | Notes |
 |---|---|---|
-| `pubmed_api_key` | string | `pubmed` |
-| `s2_api_key` | string | `s2` |
-| `openalex_api_key` | string | `openalex` |
-| `hf_token` | string | `huggingface` |
-| `ads_api_key` | string | `ads` |
-
-Per-call credentials take precedence over server-configured defaults. Resolution order: per-call value > server config value > anonymous (unauthenticated).
-
-### Example MCP request
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "rtv_search",
-    "arguments": {
-      "query": "large language model alignment",
-      "sources": ["arxiv", "s2"],
-      "content_type": "paper",
-      "sort": "date_desc",
-      "limit": 5,
-      "offset": 0,
-      "filters": {
-        "date_from": "2024-01-01",
-        "open_access": true,
-        "min_citations": 10
-      }
-    }
-  }
-}
-```
-
-### Example response
-
-The tool result content is a JSON-encoded `MergedSearchResult` object.
-
-```json
-{
-  "total_results": 142,
-  "results": [
-    {
-      "id": "arxiv:2405.10234",
-      "source": "arxiv",
-      "also_found_in": ["s2"],
-      "content_type": "paper",
-      "title": "Alignment of Large Language Models: A Survey",
-      "authors": [
-        { "name": "Jane Smith", "affiliation": "MIT" },
-        { "name": "Bob Lee" }
-      ],
-      "published": "2024-05-16",
-      "updated": "2024-05-20",
-      "abstract": "We survey recent techniques for aligning large language models...",
-      "url": "https://arxiv.org/abs/2405.10234",
-      "pdf_url": "https://arxiv.org/pdf/2405.10234",
-      "doi": "10.48550/arXiv.2405.10234",
-      "arxiv_id": "2405.10234",
-      "categories": ["cs.AI", "cs.CL"],
-      "citation_count": 47,
-      "license": "CC BY 4.0"
-    }
-  ],
-  "sources_queried": ["arxiv", "s2"],
-  "sources_failed": [],
-  "has_more": true
-}
-```
-
-### MergedSearchResult fields
-
-| Field | Type | Description |
-|---|---|---|
-| `total_results` | integer | Estimated total matching results across all queried sources |
-| `results` | array of Publication | Merged, deduplicated, sorted result list (see Publication shape below) |
-| `sources_queried` | array of string | Source IDs that were contacted |
-| `sources_failed` | array of string | Source IDs that returned an error (partial failure) |
-| `has_more` | boolean | Whether additional results exist beyond the current page |
-
-### Publication object fields
-
-| Field | Type | Always present | Description |
-|---|---|---|---|
-| `id` | string | yes | Prefixed identifier, e.g. `arxiv:2405.10234` |
-| `source` | string | yes | Primary source ID |
-| `also_found_in` | array of string | no | Other sources that returned the same item (by DOI or ArXiv ID) |
-| `content_type` | string | yes | One of `paper`, `model`, `dataset`, `any` |
-| `title` | string | yes | Publication title |
-| `authors` | array of Author | yes | Author list |
-| `published` | string | yes | Publication date, `YYYY-MM-DD` |
-| `updated` | string | no | Last update date, `YYYY-MM-DD` |
-| `abstract` | string | no | Abstract text |
-| `url` | string | yes | Canonical URL |
-| `pdf_url` | string | no | Direct PDF URL |
-| `doi` | string | no | DOI |
-| `arxiv_id` | string | no | ArXiv identifier used for cross-source deduplication |
-| `categories` | array of string | no | Subject categories |
-| `citation_count` | integer | no | Citation count (absent when unknown) |
-| `full_text` | FullTextContent | no | Full text content (only when explicitly requested via `rtv_get`) |
-| `references` | array of Reference | no | Reference list |
-| `citations` | array of Reference | no | Citing works |
-| `related` | array of Reference | no | Related works |
-| `license` | string | no | License identifier |
-| `source_metadata` | object | no | Raw source-specific metadata |
-
-**Author object:**
-
-| Field | Type | Description |
-|---|---|---|
-| `name` | string | Author full name |
-| `affiliation` | string | Institutional affiliation (when available) |
-| `orcid` | string | ORCID identifier (when available) |
-
-**Reference object:**
-
-| Field | Type | Description |
-|---|---|---|
-| `id` | string | Prefixed ID of the referenced work (when available) |
-| `title` | string | Title of the referenced work |
-| `year` | integer | Publication year (when available) |
+| `id` | string | Prefixed, e.g. `arxiv:2401.12345`. |
+| `source` | string | Primary source. |
+| `also_found_in` | []string | Other sources after dedup. |
+| `content_type` | string | See enum in section 3. |
+| `title` | string | |
+| `authors` | []Author | `{name, affiliation?, orcid?}`. |
+| `published` | string | `YYYY-MM-DD`. |
+| `updated` | string | optional. |
+| `abstract` | string | optional. |
+| `url` | string | Canonical URL. |
+| `pdf_url` | string | optional. |
+| `doi` | string | optional. |
+| `arxiv_id` | string | optional. |
+| `categories` | []string | Source-specific vocabulary. |
+| `citation_count` | int | Pointer — `nil` when unknown. |
+| `full_text` | FullTextContent | Present when explicitly requested via `rtv_get`. |
+| `references` / `citations` / `related` | []Reference | Present when included. |
+| `license` | string | optional. |
+| `thumbnail_url` | string | video / image / post preview. |
+| `lat` / `lon` | float | place — WGS84. |
+| `address` | string | place. |
+| `duration_seconds` | int | video / audio. |
+| `media_url` | string | image / video / audio direct media URL. |
+| `media_mime` | string | MIME type of `media_url`. |
+| `engagement_score` | int | post engagement (likes/score). |
+| `language` | string | BCP-47 (record-level). |
+| `source_metadata` | object | Source-specific key/value bag (e.g. `youtube_id`, `osm_id`, `package_id`, `patent_number`, `audio_id`, `qa_question_id`, `citation_code`). |
 
 ---
 
-## 3. rtv_get
+## 4. rtv_get
 
-Retrieve a single publication by its prefixed ID. Returns full metadata and, optionally, additional content such as abstract, full text, references, citations, or related works.
+Fetch full details for a single result by its prefixed ID. The prefix
+selects the plugin; the remainder is the source-native ID.
+
+### ID examples
+
+| Tier | Example IDs |
+|---|---|
+| v1 academic | `arxiv:2401.12345`, `pubmed:38123456`, `s2:abc123`, `openalex:W4366341216`, `crossref:10.1038/s41586-023-06600-9`, `dblp:journals/corr/abs-2401-12345`, `ads:2024ApJ...123..456A`, `biorxiv:10.1101/2024.01.15.575123` |
+| v2 web | `github:owner/repo`, `wikipedia:Attention_(machine_learning)`, `firecrawl:https://example.com/page`, `unpaywall:10.1038/...` |
+| v3 multimodal | `youtube:dQw4w9WgXcQ`, `nominatim:way/123`, `wikimedia:File:Example.jpg`, `mastodon:https://mastodon.social/@user/123`, `bluesky:at://did:plc:.../app.bsky.feed.post/...`, `reddit:t3_abc123` |
+| v5 KnowledgeCommons | `npm:react`, `pypi:requests`, `crates:tokio`, `pkggodev:github.com/go-chi/chi`, `googlepatents:US20230123456A1`, `epoops:EP3456789A1`, `courtlistener:410-us-113`, `eurlex:32016R0679`, `zenodo:1234567`, `wikidata:Q42` |
+| v6 premium | `googleplaces:ChIJ...`, `osmoverpass:node/1234567890`, `here:here:pds:place:...`, `listennotes:abc123`, `itunes:1234567890`, `dimensions:pub.1234567890`, `lens:123-456-789` |
 
 ### Parameters
 
 | Name | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `id` | string | yes | — | Prefixed publication ID, e.g. `arxiv:2401.12345`, `s2:abc123`, `pubmed:38123456`, `crossref:10.1038/s41586-024-07487-w`, `dblp:journals/corr/abs-2401-12345`, `ads:2024ApJ...123..456A`, `biorxiv:10.1101/2024.01.15.575123` |
-| `include` | array of string | no | `["abstract"]` | Additional data to include. Enum values: `abstract`, `full_text`, `references`, `citations`, `related`, `metadata` |
-| `format` | string | no | `native` | Desired content format. Enum: `native`, `json`, `xml`, `markdown`, `bibtex` |
-| `credentials` | object | no | — | Optional per-call API credentials (same sub-fields as `rtv_search`) |
+| `id` | string | yes | — | Prefixed ID. |
+| `include` | []string | no | `["abstract"]` | One or more of `abstract`, `full_text`, `references`, `citations`, `related`, `metadata`. Honored only where `SourceInfo.supports_full_text` / `supports_citations` is true. |
+| `format` | string | no | `native` | One of `native`, `json`, `xml`, `markdown`, `bibtex`. |
+| `credentials` | object | no | — | Same shape as `rtv_search` credentials. |
 
-The `format` parameter controls the format of any returned `full_text` content. `native` returns the source's own format without conversion. `bibtex` assembles a BibTeX entry from the publication metadata (available for all sources).
+### Format notes
 
-Not all sources support every `include` value or `format`. Unsupported combinations return an error with message `"requested format not supported by this source"` or `"full text not available for this publication"`.
-
-### Example MCP request
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "rtv_get",
-    "arguments": {
-      "id": "arxiv:2401.12345",
-      "include": ["abstract", "references"],
-      "format": "native"
-    }
-  }
-}
-```
-
-### Example response
-
-The tool result content is a JSON-encoded `Publication` object.
-
-```json
-{
-  "id": "arxiv:2401.12345",
-  "source": "arxiv",
-  "content_type": "paper",
-  "title": "Attention Is All You Need: Revisited",
-  "authors": [
-    { "name": "Alice Chen", "affiliation": "Stanford University" }
-  ],
-  "published": "2024-01-15",
-  "abstract": "This paper revisits the transformer architecture...",
-  "url": "https://arxiv.org/abs/2401.12345",
-  "pdf_url": "https://arxiv.org/pdf/2401.12345",
-  "doi": "10.48550/arXiv.2401.12345",
-  "arxiv_id": "2401.12345",
-  "categories": ["cs.LG", "cs.CL"],
-  "citation_count": 312,
-  "references": [
-    { "id": "arxiv:1706.03762", "title": "Attention Is All You Need", "year": 2017 }
-  ]
-}
-```
-
-**FullTextContent object** (present when `full_text` is included and available):
-
-| Field | Type | Description |
-|---|---|---|
-| `content` | string | The content body in the requested format |
-| `content_format` | string | The actual format of the returned content (`native`, `json`, `xml`, `markdown`, or `bibtex`) |
-| `content_length` | integer | Length of `content` in bytes |
-| `truncated` | boolean | Whether the content was truncated due to size limits |
+- `native` — source's native shape (XML for arxiv/europmc, JSON for most
+  others, HTML for some web).
+- `markdown` — native only for `firecrawl` + `brave`. Other sources may
+  reject it.
+- `bibtex` — **metadata assembly**, not lossy conversion. Works only on
+  scholarly sources that emit enough bibliographic fields. The router
+  fetches `native` then runs `GenerateBibTeX()` centrally.
 
 ---
 
-## 4. rtv_list_sources
+## 5. rtv_list_sources
 
-List all available publication sources with their capabilities, rate-limit status, and supported features.
-
-### Parameters
-
-This tool takes no parameters.
-
-### Example MCP request
-
-```json
-{
-  "method": "tools/call",
-  "params": {
-    "name": "rtv_list_sources",
-    "arguments": {}
-  }
-}
-```
-
-### Example response
-
-The tool result content is a JSON-encoded array of `SourceInfo` objects.
-
-```json
-[
-  {
-    "id": "arxiv",
-    "name": "ArXiv",
-    "description": "Open-access preprint server for physics, mathematics, computer science, and related fields.",
-    "enabled": true,
-    "content_types": ["paper"],
-    "native_format": "xml",
-    "available_formats": ["xml", "json", "markdown", "bibtex"],
-    "supports_full_text": false,
-    "supports_citations": false,
-    "supports_date_filter": true,
-    "supports_author_filter": true,
-    "supports_category_filter": true,
-    "rate_limit": {
-      "requests_per_second": 3.0,
-      "remaining": 2.8
-    },
-    "categories_hint": "cs.AI, cs.CL, cs.LG, math.*, physics.*",
-    "accepts_credentials": false
-  },
-  {
-    "id": "s2",
-    "name": "Semantic Scholar",
-    "description": "AI-powered research discovery with citation graph and influence metrics.",
-    "enabled": true,
-    "content_types": ["paper"],
-    "native_format": "json",
-    "available_formats": ["json", "markdown", "bibtex"],
-    "supports_full_text": false,
-    "supports_citations": true,
-    "supports_date_filter": true,
-    "supports_author_filter": true,
-    "supports_category_filter": false,
-    "rate_limit": {
-      "requests_per_second": 1.0,
-      "remaining": 0.9
-    },
-    "accepts_credentials": true
-  }
-]
-```
+Returns one `SourceInfo` per registered plugin (sorted by ID).
 
 ### SourceInfo fields
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | string | Source identifier used in `sources` and `id` prefix fields |
-| `name` | string | Human-readable source name |
-| `description` | string | Short description of the source |
-| `enabled` | boolean | Whether the source is active in the current server configuration |
-| `content_types` | array of string | Content types this source provides (`paper`, `model`, `dataset`) |
-| `native_format` | string | Format the source returns data in natively |
-| `available_formats` | array of string | All formats this source can serve (including via conversion) |
-| `supports_full_text` | boolean | Whether the source can return full text content |
-| `supports_citations` | boolean | Whether the source provides citation data |
-| `supports_date_filter` | boolean | Whether date range filters are honored |
-| `supports_author_filter` | boolean | Whether author filters are honored |
-| `supports_category_filter` | boolean | Whether category filters are honored |
-| `rate_limit` | RateLimitInfo | Current rate-limit configuration and token availability |
-| `categories_hint` | string | Example or documentation of valid category values (when applicable) |
-| `accepts_credentials` | boolean | Whether this source accepts per-call API credentials |
-
-**RateLimitInfo fields:**
-
-| Field | Type | Description |
-|---|---|---|
-| `requests_per_second` | number | Configured token-bucket refill rate |
-| `remaining` | number | Available tokens at the time of the request |
+| `id` | string | Source identifier. |
+| `name` | string | Human-readable name. |
+| `description` | string | Short description. |
+| `enabled` | bool | True when registered. |
+| `content_types` | []string | Content types served. |
+| `native_format` | string | Native response format. |
+| `available_formats` | []string | Convertible formats. |
+| `supports_full_text` | bool | `rtv_get include=full_text` honored. |
+| `supports_citations` | bool | Citation graph available. |
+| `supports_date_filter` | bool | `date_from` / `date_to` honored. |
+| `supports_author_filter` | bool | `authors` filter honored. |
+| `supports_category_filter` | bool | `categories` filter honored. |
+| `supports_open_access_filter` | bool | `open_access` filter honored. |
+| `supports_domain_filter` | bool | `include_domains` / `exclude_domains` honored. |
+| `supports_channel_filter` | bool | `channels` filter honored. |
+| `supports_language_filter` | bool | `language` filter honored. |
+| `supports_sort_relevance` | bool | `sort=relevance` honored. |
+| `supports_sort_date` | bool | `sort=date_desc/date_asc` honored. |
+| `supports_sort_citations` | bool | `sort=citations` honored. |
+| `supports_pagination` | bool | `offset` honored. |
+| `max_results_per_query` | int | Upstream cap (0 if unbounded). |
+| `rate_limit` | RateLimitInfo | `{requests_per_second, remaining}`. |
+| `categories_hint` | string | Accepted category vocabulary hint. |
+| `accepts_credentials` | bool | True when per-call key may be provided OR strictly required. |
+| `kinds` | []ResultKind | Result kinds emitted (`paper`, `web`, `code`, `place`, ...). |
+| `query_intents` | []Intent | Intents this provider is reasonable for. |
+| `region` | Region | EU / US / public-research-infrastructure / ... |
+| `dpa_status` | DPAStatus | `signed` / `covered-by-scc` / `n/a` / `unknown`. |
+| `subprocessor_url` | string | DPA subprocessor link. |
+| `free_tier` | bool | Works without a paid key. |
+| `requires_key` | bool | Refuses to start without a credential. |
 
 ---
 
-## 5. Error Format
+## 6. Error Format
 
-All tool errors are returned as MCP error result content with a JSON-encoded body:
+All tool errors return as MCP error result content with a JSON body:
 
 ```json
 {
@@ -370,41 +344,28 @@ All tool errors are returned as MCP error result content with a JSON-encoded bod
 }
 ```
 
-The `source` and `detail` fields are omitted when empty.
+`source` and `detail` are omitted when empty.
 
 ### Common error messages
 
-| Message | When it occurs |
+| Message | When |
 |---|---|
-| `"invalid tool input"` | A required parameter is missing or has an invalid value |
-| `"source not found"` | The source ID prefix in an `rtv_get` `id` is not a known source |
-| `"source is disabled"` | The requested source exists but is disabled in the server config |
-| `"invalid publication id format"` | The `id` parameter does not match the expected `source:rawid` prefix format |
-| `"search failed"` | A source-level search request failed |
-| `"retrieval failed"` | A source-level get request failed |
-| `"rate limit exceeded"` | The source's rate limit was reached and the request was not served |
-| `"upstream source timeout"` | The upstream source did not respond within the configured timeout |
-| `"invalid date format, expected YYYY-MM-DD or YYYY"` | A date filter field contains an unparseable value |
-| `"all sources failed"` | Every requested source returned an error (no partial results) |
-| `"full text not available for this publication"` | The source does not provide full text for this item |
-| `"requested format not supported by this source"` | The `format` value is not supported by the source handling the request |
-| `"provided credential was rejected by upstream source"` | An API key or token in `credentials` was refused by the upstream API |
-| `"this source requires credentials for the requested operation"` | The source requires an API key that was not provided |
-| `"failed to marshal response"` | Internal serialization error |
-
-### Example error response
-
-```json
-{
-  "error": "rate limit exceeded",
-  "source": "s2",
-  "detail": "rate limit exceeded: retry after 1s"
-}
-```
-
-```json
-{
-  "error": "invalid publication id format",
-  "detail": "invalid publication id format: missing source prefix in \"2401.12345\""
-}
-```
+| `invalid tool input` | Required parameter missing/invalid. |
+| `source not found` | Unknown source prefix in `rtv_get` ID. |
+| `source is disabled` | Source exists but is disabled in config. |
+| `invalid publication id format` | ID does not match `source:rawid`. |
+| `search failed` | Source-level search error. |
+| `retrieval failed` | Source-level get error. |
+| `rate limit exceeded` | Token bucket exhausted. |
+| `upstream source timeout` | Per-source timeout exceeded. |
+| `invalid date format, expected YYYY-MM-DD or YYYY` | Bad date filter. |
+| `all sources failed` | Every requested source errored, no fallback hit. |
+| `full text not available for this publication` | Source has no full text for this item. |
+| `requested format not supported by this source` | Unsupported `format` for this source. |
+| `provided credential was rejected by upstream source` | Upstream rejected the supplied key. |
+| `this source requires credentials for the requested operation` | `RequiresCredential=true` plugin with no key. |
+| `RTV_COMPAT_V1_SUNSET` | Caller passed `compat:"v1"`. |
+| `invalid domain list` | `include_domains`/`exclude_domains` malformed. |
+| `too many channels` | `channels` > 5. |
+| `too many subreddits` | `subreddits` > 5. |
+| `failed to marshal response` | Internal serialization error. |

@@ -5,6 +5,114 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.20.0] - 2026-05-15
+
+Minor release. **Interface alignment + documentation pass.** No new
+plugins. No breaking wire changes. Focused on closing the consistency
+gap between the 61-plugin runtime surface and what an LLM agent can
+discover through tool descriptions, `rtv_list_sources`, and the docs.
+
+### Added
+
+- **Six wired intent chains** in `DefaultFallbackConfig`
+  (`internal/rtv.router.go`). Previously only `deep_research` and
+  `primary_source` (both aliased to the same `academic` chain) were
+  populated; the other four intents fell through to
+  `DefaultSources`. v2.20.0 ships dedicated chains:
+  - `deep_research` — `s2`, `openalex` → `arxiv`, `crossref`, `europmc`,
+    `pubmed`, `dblp`, `ads`, `core`, `openaire`.
+  - `primary_source` — `europmc`, `openalex` → `crossref`, `s2`,
+    `arxiv`, `pubmed`, `core`, `openaire`, `zenodo` (OA-biased; runs
+    alongside post-merge Unpaywall enrichment).
+  - `quick_lookup` — `kagi`, `mojeek`, `serpapi` → `brave`, `exa`,
+    `linkup`, `wikipedia`.
+  - `code_provenance` — `npm`, `pypi`, `crates`, `pkggodev` →
+    `github`, `arxiv`, `dblp`, `s2`.
+  - `news` — `newsapi`, `serpapinews` → `gdelt`, `brave`, `exa`,
+    `wikipedia`.
+  - `reference` — `wolframalpha`, `kgapi` → `wikidata`, `wikipedia`.
+  Chains are filtered through `Router.filterRegistered`, so plugins
+  whose credentials are absent are silently dropped — the effective
+  set matches the tenant's actually-enabled plugins.
+- **`SourceInfo` expanded** (`internal/rtv.types.go`) with five
+  capability fields previously only present on `SourceCapabilities`
+  but never surfaced through the MCP tool:
+  - `supports_sort_relevance`, `supports_sort_date`,
+    `supports_sort_citations` — agents can now discover which sort
+    orders each provider honors before sending `sort`.
+  - `supports_pagination`, `max_results_per_query` — page-size
+    discovery.
+  - `supports_open_access_filter` — already on `SourceCapabilities`
+    but not in `SourceInfo`; agents querying which sources honor
+    `filters.open_access` get a deterministic answer.
+- **`TestDefaultFallbackConfig_AllIntentsWired`** in
+  `internal/rtv.fallback_test.go` — regression pin asserting every
+  intent has a non-empty primary chain.
+
+### Changed
+
+- **`ToolDescSearch` rewritten** (`internal/rtv.tools.go`) to reflect
+  61 sources (was: "30 sources"), enumerate all 11 content types per
+  type cohort, document all six wired intent chains with their
+  primary+fallback sets, and explain the response surface
+  (`fallback_walked`, `eu_fallback_used`, `sources_skipped`,
+  `audit_ref`).
+- **`SearchToolDefinition` content_type enum** now includes
+  `package`, `patent`, `audio` (previously LLM schema only saw 8 of
+  the 11 valid values). `FieldDescContentType` updated to match.
+- **`FieldDescFilters` rewritten** as a concrete per-key reference:
+  per-provider honoring matrix for `title`, `authors`, `date_from`,
+  `date_to`, `categories` (with its 6+ semantic variants documented:
+  subject taxonomy / tags / keywords / resource_type / country
+  code / POI category), `open_access` (zenodo-only), `min_citations`
+  (currently not wired by any provider — reserved), full
+  `include_domains` / `exclude_domains` list (brave, exa, gdelt,
+  kagi, mojeek, serpapi, newsapi — corrected from prior brave+exa
+  claim), `channels`, `subreddits`, and `language` (full list of 18
+  honoring providers).
+- **`FieldDescCredentials` rewritten** to enumerate the five
+  per-source credential keys (`pubmed_api_key`, `s2_api_key`,
+  `openalex_api_key`, `hf_token`, `ads_api_key`) since `mcp-go`'s
+  `WithObject` schema doesn't expose nested property declarations
+  cleanly. The description is now the canonical schema reference.
+- **`ToolDescGet` rewritten** with `id` examples from every tier
+  (arxiv, doi, github, wikipedia, openalex, npm, googlepatents,
+  youtube, osmoverpass) plus explicit notes that `format=bibtex` is
+  metadata assembly for scholarly sources and `format=markdown` is
+  native only for firecrawl + brave.
+- **`ToolDescListSources` rewritten** to advertise the new surface
+  (sort/pagination/limit caps, free_tier, requires_key, region,
+  dpa_status, kinds, query_intents).
+- **`docs/intents.md` rewritten** to match the now-shipped chains.
+  Previously documented the chains as "cycle-2/3 when enabled" with
+  most entries marked `(none — uses defaultSources)`; v2.20.0
+  removes those caveats since every intent now has a wired chain.
+- **`docs/tool-reference.md` rewritten** for 61 sources + new
+  content types + new SourceInfo fields. Previously listed 10
+  sources + 4-value content_type enum.
+- **`docs/filter-reference.md` rewritten** to enumerate per-filter
+  honoring across all 61 plugins. Previously claimed "28 source
+  plugins" and listed only 10 providers in the capability matrix.
+- **`README.md`** updated: 18→61 source count, full tier breakdown
+  by masterplan (v1 / v2 / v3 / v5 / v6), intent column added to
+  the rtv_search parameter table, full credentials list including
+  `ads_api_key`.
+
+### Notes
+
+- ADS continues to be classified as a freemium (optional-credential)
+  source rather than `RequiresCredential:true`. The upstream API
+  returns 401 without a key, but flipping the flag would break
+  operators on the legacy "anonymous + optional key" allowlist.
+  Mitigation: tool-reference documents that ADS needs a key for any
+  reasonable use; `accepts_credentials` already reflects this.
+- `filters.open_access` is currently honored natively only by
+  Zenodo; other providers ignore it silently. For OA-biased
+  scholarly retrieval use `intent=primary_source`. Future release
+  will wire native OA filtering in EuropePMC / OpenAlex / S2.
+- `filters.min_citations` is reserved but not yet honored by any
+  provider. Future release will wire it in S2 / OpenAlex / EuropePMC.
+
 ## [2.19.0] - 2026-05-15
 
 Minor release. **PremiumNews — v6 cycle 6, closes v6**

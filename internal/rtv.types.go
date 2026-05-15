@@ -735,17 +735,26 @@ type SourceInfo struct {
 	ContentTypes           []ContentType   `json:"content_types"`
 	NativeFormat           ContentFormat   `json:"native_format"`
 	AvailableFormats       []ContentFormat `json:"available_formats"`
-	SupportsFullText       bool            `json:"supports_full_text"`
-	SupportsCitations      bool            `json:"supports_citations"`
-	SupportsDateFilter     bool            `json:"supports_date_filter"`
-	SupportsAuthorFilter   bool            `json:"supports_author_filter"`
-	SupportsCategoryFilter bool            `json:"supports_category_filter"`
-	SupportsDomainFilter   bool            `json:"supports_domain_filter"`
-	SupportsChannelFilter  bool            `json:"supports_channel_filter"`
-	SupportsLanguageFilter bool            `json:"supports_language_filter"`
-	RateLimit              RateLimitInfo   `json:"rate_limit"`
-	CategoriesHint         string          `json:"categories_hint,omitempty"`
-	AcceptsCredentials     bool            `json:"accepts_credentials"`
+	SupportsFullText         bool          `json:"supports_full_text"`
+	SupportsCitations        bool          `json:"supports_citations"`
+	SupportsDateFilter       bool          `json:"supports_date_filter"`
+	SupportsAuthorFilter     bool          `json:"supports_author_filter"`
+	SupportsCategoryFilter   bool          `json:"supports_category_filter"`
+	SupportsOpenAccessFilter bool          `json:"supports_open_access_filter"`
+	SupportsDomainFilter     bool          `json:"supports_domain_filter"`
+	SupportsChannelFilter    bool          `json:"supports_channel_filter"`
+	SupportsLanguageFilter   bool          `json:"supports_language_filter"`
+	// Sort capability mirrors of SourceCapabilities.SupportsSort* —
+	// agents reading rtv_list_sources need to know which sort orders
+	// each provider honors before passing `sort` on rtv_search.
+	SupportsSortRelevance bool          `json:"supports_sort_relevance"`
+	SupportsSortDate      bool          `json:"supports_sort_date"`
+	SupportsSortCitations bool          `json:"supports_sort_citations"`
+	SupportsPagination    bool          `json:"supports_pagination"`
+	MaxResultsPerQuery    int           `json:"max_results_per_query,omitempty"`
+	RateLimit             RateLimitInfo `json:"rate_limit"`
+	CategoriesHint        string        `json:"categories_hint,omitempty"`
+	AcceptsCredentials    bool          `json:"accepts_credentials"`
 
 	// Cycle-2 additions:
 	Kinds           []ResultKind `json:"kinds,omitempty"`         // result kinds this source emits

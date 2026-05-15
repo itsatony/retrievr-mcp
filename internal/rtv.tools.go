@@ -25,23 +25,46 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	ToolDescSearch = `Search across published information: papers, AI models, datasets, web pages, news, code repos, encyclopedia articles, multimedia, social posts, and Q&A threads. 30 sources behind one tool.
+	ToolDescSearch = `Search across published information: papers, preprints, AI models, datasets, web pages, news, code repos, packages, patents, court decisions, regulations, encyclopedia articles, multimedia, social posts, places, podcasts, and structured facts. 61 source plugins behind one tool. Call rtv_list_sources for the full catalog with per-source capabilities (residency, intents, filter support, free-tier flag).
 
-Use rtv_search when you need: academic papers, code provenance, web context, encyclopedia lookup, mixed evidence-gathering. Do NOT use for: real-time data (prices, weather), private documents, authenticated services.
+Use rtv_search for: academic papers, code provenance, web context, news, encyclopedia lookup, place/POI search, multimedia discovery, structured facts, mixed evidence-gathering. Do NOT use for: real-time data (live prices, weather), private documents, authenticated services.
 
-content_type: "paper" (peer-reviewed/preprints), "model" (HuggingFace), "dataset", or "any" (mixed). Wave-1 web/code/encyclopedia results surface via "any".
+content_type — pick the kind of result:
+  paper      peer-reviewed + preprints (arxiv, pubmed, s2, openalex, europmc, crossref, dblp, biorxiv, ads, core, openaire, zenodo, dimensions, lens, iascholar)
+  model      ML models (huggingface)
+  dataset    research datasets (huggingface, zenodo, datacite, openaire)
+  video      video media (youtube, scrapingdog_youtube)
+  place      POIs / geocoding (googleplaces, osmoverpass, here, photon, tomtom, nominatim)
+  image      images (brave images, wikimedia, europeana)
+  post       social posts + Q&A (mastodon, bluesky, reddit, stackexchange, hackernews)
+  package    code packages (npm, pypi, crates, pkggodev)
+  patent     patents (googlepatents, epoops)
+  audio      podcasts / audio (listennotes, itunes)
+  any        mixed / let the router pick
 
-intent (recommended over manual sources): "deep_research" fans across academic + web; "quick_lookup" hits one fast source per type; "primary_source" returns DOI-backed OA papers only; "code_provenance" targets GitHub + CS literature; "news"/"reference" target their respective providers.
+intent — declarative source selection (preferred over passing sources):
+  deep_research    academic primary set + scholarly fallback (s2, openalex → arxiv, crossref, europmc, pubmed)
+  primary_source   DOI-backed OA papers only (same chain, OA-biased)
+  quick_lookup     one fast web source per type (kagi/mojeek/serpapi → brave/exa)
+  code_provenance  packages + CS literature (npm/pypi/crates/pkggodev → github → arxiv/dblp/s2)
+  news             news + open web (newsapi/serpapinews/gdelt → brave → wikipedia)
+  reference        structured facts + encyclopedia (wolframalpha/kgapi/wikidata → wikipedia)
+  (empty)          use server-configured DefaultSources
 
-eu_mode: not a tool param — set server-side. eu_strict admits only EU-resident sources (Linkup, DBLP, Europe PMC) plus optional public-research-infrastructure tier.
+filters — narrow the result set. See FieldDescFilters for the per-provider matrix.
 
-compat: "v1" (default) returns Publication-shaped results (title/authors/doi/citation_count flat). "v2" returns Result with kind discriminator + per-kind blocks (kind="paper" populates result.paper.{doi, citation_count, ...}; kind="web" populates result.web.{site_name, ...}; kind="code" populates result.code.{repo, stars, ...}). Always check kind before reading kind-specific fields.
+eu_mode — server-side only, not a tool argument. eu_strict admits only EU-resident sources plus the optional public-research-infrastructure tier.
 
-sources_failed lists providers that errored. sources_skipped lists providers gated out by eu_mode with a reason. audit_ref correlates the response to retrievr's audit log.`
+format / compat — response shape lives in rtv_get's format; rtv_search returns Result objects with a kind discriminator + per-kind data blocks. Always check result.kind before reading kind-specific fields (result.paper.{doi, citation_count, ...}, result.web.{site_name, ...}, result.code.{repo, stars, ...}, etc.). compat:"v1" is sunset and returns RTV_COMPAT_V1_SUNSET.
 
-	ToolDescGet = `Fetch full details for a single result by its prefixed ID (e.g. "arxiv:2401.12345", "github:owner/repo", "wikipedia:Attention_(machine_learning)", "openalex:W4366341216"). Returns metadata, abstract/extract, and optionally BibTeX, full text, references, or citations depending on what the source supports.`
+Response fields: results, sources_queried, sources_failed (errored providers), sources_skipped (gated out by eu_mode with reason), fallback_walked (true if the chain walked past the primary set), eu_fallback_used (true when EUModePreferred fell back to a non-EU provider), audit_ref (correlate to retrievr's audit log).`
 
-	ToolDescListSources = `List every registered source with capabilities, residency posture (region + DPA status), supported result kinds (paper/web/code/...), query intents, rate limits, and free-tier flag. Use this to pick sources by intent + jurisdiction without trial-and-error.`
+	ToolDescGet = `Fetch full details for a single result by its prefixed ID. ID format is "<source>:<native_id>" — examples: "arxiv:2401.12345", "doi:10.1038/s41586-023-06600-9", "github:owner/repo", "wikipedia:Attention_(machine_learning)", "openalex:W4366341216", "npm:react", "googlepatents:US20230123456A1", "youtube:dQw4w9WgXcQ", "osmoverpass:node/1234567890". Returns metadata, abstract/extract, and optionally BibTeX, full text, references, or citations depending on what the source supports.
+
+format: "native" (default — source's native shape), "json", "xml" (only where supported), "markdown" (firecrawl + brave native), "bibtex" (assembled from metadata for scholarly sources with sufficient bibliographic fields).
+include: list of extra blocks to fetch — "abstract" (default), "full_text", "references", "citations", "related", "metadata". Per-source support is in SourceInfo.supports_full_text / supports_citations.`
+
+	ToolDescListSources = `List every registered source (61 plugins) with full capability surface: content_types served, native + available formats, residency posture (region + DPA status), supported result kinds (paper/web/code/place/...), query intents, rate limits, sort/filter capabilities, max_results_per_query, requires_credential, and free_tier flag. Use this to pick sources by intent + jurisdiction + filter support without trial-and-error.`
 )
 
 // ---------------------------------------------------------------------------
@@ -77,21 +100,25 @@ const (
 const (
 	FieldDescQuery       = "Search query string"
 	FieldDescSources     = "List of source IDs to search (e.g., [\"arxiv\", \"s2\"]). Defaults to server-configured sources."
-	FieldDescContentType = "Type of content to search for: paper, model, dataset, video, place, image, post, or any"
+	FieldDescContentType = "Type of content to search for: paper, model, dataset, video, place, image, post, package, patent, audio, or any. See ToolDescSearch for the per-type source list."
 	FieldDescSort        = "Sort order for results: relevance, date_desc, date_asc, or citations"
 	FieldDescLimit       = "Maximum number of results to return (1-100)"
 	FieldDescOffset      = "Number of results to skip for pagination"
-	FieldDescFilters     = "Optional filters to narrow search results. Keys: title (string), authors ([]string), " +
-		"date_from / date_to (YYYY-MM-DD or YYYY), categories ([]string), open_access (bool), " +
-		"min_citations (int), include_domains / exclude_domains ([]string, honoured by brave + exa), " +
-		"channels ([]string, honoured by youtube + scrapingdog_youtube), subreddits ([]string, honoured " +
-		"by reddit), language (BCP-47 tag, honoured by brave + youtube + scrapingdog_youtube + bluesky + " +
-		"europeana; mastodon applies as post-fetch filter). Providers that do not natively support a " +
-		"filter silently ignore it — query SourceCapabilities via rtv_list_sources for the truth matrix."
-	FieldDescCredentials = "Optional per-call API credentials that override server defaults"
-	FieldDescID          = "Prefixed publication ID (e.g., \"arxiv:2401.12345\", \"s2:abc123\")"
-	FieldDescInclude     = "Additional data to include: abstract, full_text, references, citations, related, metadata"
-	FieldDescFormat      = "Desired content format: native, json, xml, markdown, or bibtex"
+	FieldDescFilters = "Optional filters to narrow search results. Providers that don't natively support a filter ignore it silently — query SourceCapabilities via rtv_list_sources for the runtime truth matrix. Keys:\n" +
+		"  title (string) — title-only match: arxiv, pubmed, europmc.\n" +
+		"  authors ([]string) — author-only filter: arxiv, pubmed, europmc. Other scholarly sources fold author terms into the main query.\n" +
+		"  date_from / date_to (YYYY-MM-DD or YYYY) — honored by every source that exposes a date field. Brave maps to freshness buckets (pd/pw/pm/py); StackExchange/HackerNews convert to unix seconds; Dimensions/Lens floor to year; bioRxiv REQUIRES date_from.\n" +
+		"  categories ([]string) — semantics vary by source: arxiv/ads/europmc/dimensions/lens = subject taxonomy; stackexchange = tags; npm = keywords; zenodo/datacite/openaire = resource_type; googleplaces/here/itunes/listennotes/osmoverpass = POI/podcast category (first entry only); serpapi/serpapinews = country (gl/cr code, first entry). Read SourceInfo.categories_hint for each source's accepted vocabulary.\n" +
+		"  open_access (bool) — currently honored natively by zenodo only. Other providers ignore it; use intent=primary_source for OA-biased scholarly retrieval.\n" +
+		"  min_citations (int) — currently NOT wired by any provider. Will be honored by s2/openalex/europmc in a future release.\n" +
+		"  include_domains / exclude_domains ([]string, bare domains, no scheme) — honored by brave, exa, gdelt, kagi, mojeek, serpapi, newsapi.\n" +
+		"  channels ([]string) — YouTube channel IDs/handles: youtube, scrapingdog_youtube.\n" +
+		"  subreddits ([]string) — reddit only.\n" +
+		"  language (BCP-47 tag, e.g. \"en\", \"de\", \"fr-CA\") — honored by brave, youtube, scrapingdog_youtube, bluesky, europeana, mastodon (post-fetch), serpapi/serpapinews/kagi/mojeek/newsapi/gdelt/eurlex/kgapi/wikidata/here/googleplaces/listennotes."
+	FieldDescCredentials = "Optional per-call API credentials that override server defaults. Object with optional string fields: pubmed_api_key, s2_api_key, openalex_api_key, hf_token, ads_api_key. Each plugin reads only its own key; unknown keys are ignored. Per-credential rate-limit buckets keep tenants isolated."
+	FieldDescID          = "Prefixed publication ID (e.g., \"arxiv:2401.12345\", \"s2:abc123\", \"doi:10.1038/...\", \"github:owner/repo\", \"npm:react\")."
+	FieldDescInclude     = "Additional data to include: abstract (default), full_text, references, citations, related, metadata. Honored only by sources whose SourceInfo flags supports_full_text / supports_citations."
+	FieldDescFormat      = "Desired content format: native (default), json, xml, markdown, bibtex. \"bibtex\" is assembled from metadata; works only on scholarly sources with sufficient bibliographic fields. \"markdown\" is native for firecrawl + brave; other sources may reject it."
 )
 
 // ---------------------------------------------------------------------------
@@ -177,6 +204,10 @@ func SearchToolDefinition() mcp.Tool {
 				string(ContentTypePlace),
 				string(ContentTypeImage),
 				string(ContentTypePost),
+				// v5 + v6 additions (packages, patents, audio).
+				string(ContentTypePackage),
+				string(ContentTypePatent),
+				string(ContentTypeAudio),
 			),
 		),
 		mcp.WithString(FieldSort,

@@ -397,3 +397,32 @@ func (*LensPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Kagi's data-residency posture (US — Kagi LLC).
+func (*KagiPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Mojeek's data-residency posture (UK adequacy —
+// Mojeek Ltd, Crawley UK).
+func (*MojeekPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUKAdequacy,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports SerpAPI's data-residency posture (US — SerpAPI
+// Inc., Austin TX).
+func (*SerpAPIPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

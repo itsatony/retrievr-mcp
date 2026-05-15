@@ -431,3 +431,24 @@ sources:
     timeout: "30s"
     rate_limit: 2.0
     rate_limit_burst: 2
+
+  kagi:
+    enabled: false               # v6 cycle 4 (v2.17.0). Paid; $25/mo + $0.025/search. REQUIRES api_key.
+    api_key: ""                  # Kagi API token; or RETRIEVR_KAGI_API_KEY env. Per-call override: credentials.kagi.
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+
+  mojeek:
+    enabled: false               # v6 cycle 4 (v2.17.0). Free dev tier (~1k/mo); paid above. UK adequacy.
+    api_key: ""                  # Mojeek API key; or RETRIEVR_MOJEEK_API_KEY env. Per-call override: credentials.mojeek.
+    timeout: "15s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
+
+  serpapi:
+    enabled: false               # v6 cycle 4 (v2.17.0). Paid; same key covers Google + Google News (cycle 6).
+    api_key: ""                  # SerpAPI key; or RETRIEVR_SERPAPI_API_KEY env. Per-call override: credentials.serpapi.
+    timeout: "20s"
+    rate_limit: 2.0
+    rate_limit_burst: 2

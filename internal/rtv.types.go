@@ -197,6 +197,11 @@ const (
 	// v6 cycle 3 / v2.16.0 — premium scholarly.
 	SourceDimensions = "dimensions"
 	SourceLens       = "lens"
+
+	// v6 cycle 4 / v2.17.0 — premium web.
+	SourceKagi    = "kagi"
+	SourceMojeek  = "mojeek"
+	SourceSerpAPI = "serpapi"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -273,6 +278,10 @@ var validSourceIDs = map[string]bool{
 	// v6 cycle 3 — premium scholarly.
 	SourceDimensions: true,
 	SourceLens:       true,
+	// v6 cycle 4 — premium web.
+	SourceKagi:    true,
+	SourceMojeek:  true,
+	SourceSerpAPI: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -304,7 +313,8 @@ func AllSourceIDs() []string {
 // Wayback → 47. v6 cycle 1 / v2.14.0 added Google Places + OSM
 // Overpass + HERE → 50. v6 cycle 2 / v2.15.0 added Listen Notes +
 // iTunes → 52. v6 cycle 3 / v2.16.0 added Dimensions + Lens → 54.
-const SourceCount = 54
+// v6 cycle 4 / v2.17.0 added Kagi + Mojeek + SerpAPI → 57.
+const SourceCount = 57
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

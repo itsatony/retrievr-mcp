@@ -488,6 +488,15 @@ sources:
   lens:
     enabled: false
     timeout: "10s"
+  kagi:
+    enabled: false
+    timeout: "10s"
+  mojeek:
+    enabled: false
+    timeout: "10s"
+  serpapi:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

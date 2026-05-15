@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.17.0] - 2026-05-15
+
+Minor release. **PaidWeb — v6 cycle 4**
+(`project_plan/retrievr_v6.md` §8). Adds three premium-tier web
+search engines: Kagi (paid), Mojeek (UK-adequacy freemium), and
+SerpAPI Google.
+
+### Added
+
+- **`SourceKagi` plugin** (`internal/rtv.plugin.kagi.go`):
+  `https://kagi.com/api/v0/search`. Paid; `Authorization: Bot <token>`
+  header (Kagi's literal prefix — verified inline). Filters
+  related-search entries (`t=1`) so only organic search results
+  (`t=0`) become Publications. Maps `filters.include_domains` and
+  `filters.exclude_domains` to Google-style `site:` / `-site:`
+  tokens inline. Per-call credential: `kagi`. US residency.
+- **`SourceMojeek` plugin** (`internal/rtv.plugin.mojeek.go`):
+  `https://api.mojeek.com/search?fmt=json`. Independent UK-based
+  index; free dev tier (~1k/mo) and paid above. Supports
+  `filters.language` (BCP-47 → `lang=`), include/exclude domain
+  filters via `site:`/`-site:` tokens, pagination via the `s=`
+  start-index param. Per-call credential: `mojeek`. UK-adequacy
+  residency.
+- **`SourceSerpAPI` plugin** (`internal/rtv.plugin.serpapi.go`):
+  `https://serpapi.com/search.json?engine=google`. Paid;
+  `Authorization` is in the query string (`api_key=`) per SerpAPI
+  convention. Supports `hl` (language) and `gl` (country via
+  `filters.categories[0]`), include/exclude domains. The shared
+  `doSearch(engine)` helper is parameterized so cycle 6 can reuse
+  the same plugin for the `engine=google_news` variant under the
+  same API key. Per-call credential: `serpapi`. US residency.
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `kagi`/`serpapi` → US/SCC, `mojeek` → UK-adequacy/n/a.
+- **Config blocks** for all three new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default; each documents
+  the API-key + per-call override).
+- **Unit tests** with httptest fixtures: identity, capabilities
+  (including `RequiresCredential`), residency, missing-credential
+  → `ErrCredentialRequired`, happy-path search shape, Kagi
+  related-search-entry filtering (`t=1` skipped), include/exclude
+  domain → `site:`/`-site:` token routing, Mojeek language hint,
+  SerpAPI `hl`+`gl`+domain triple-filter routing, 401 →
+  `ErrCredentialInvalid`, 429 → `ErrRateLimitExceeded`,
+  Get-not-wired path.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 54 → 57; `validSourceIDs`
+  registers `kagi`, `mojeek`, `serpapi`; registry factory map +
+  test-expected count updated. Config / E2E / registry fixtures
+  extended with the three new source blocks.
+
+### Notes
+
+- The SerpAPI plugin's `doSearch` accepts an `engine` parameter
+  so cycle 6 (`PremiumNews`) can ship a Google-News plugin that
+  reuses this plugin's transport + auth + response shape under
+  the same shared SerpAPI key.
+- All three plugins emit paper-typed Publications with `KindWeb`
+  at the v2 layer — matching the existing brave/exa/linkup pattern.
+  No new dedup family was needed; standard URL-hash IDs keep
+  cross-engine hits distinct.
+
 ## [2.16.0] - 2026-05-15
 
 Minor release. **PaidScholarly — v6 cycle 3**

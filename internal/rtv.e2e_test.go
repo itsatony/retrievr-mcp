@@ -325,6 +325,21 @@ sources:
     timeout: "30s"
     rate_limit: 2.0
     rate_limit_burst: 2
+  kagi:
+    enabled: false
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+  mojeek:
+    enabled: false
+    timeout: "15s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
+  serpapi:
+    enabled: false
+    timeout: "20s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

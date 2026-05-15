@@ -112,6 +112,11 @@ func PluginFactories() map[string]PluginFactory {
 		// v6 cycle 3 / v2.16.0 — premium scholarly.
 		SourceDimensions: func() SourcePlugin { return &DimensionsPlugin{} },
 		SourceLens:       func() SourcePlugin { return &LensPlugin{} },
+
+		// v6 cycle 4 / v2.17.0 — premium web.
+		SourceKagi:    func() SourcePlugin { return &KagiPlugin{} },
+		SourceMojeek:  func() SourcePlugin { return &MojeekPlugin{} },
+		SourceSerpAPI: func() SourcePlugin { return &SerpAPIPlugin{} },
 	}
 }
 

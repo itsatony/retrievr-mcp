@@ -6,18 +6,24 @@ Set via `SearchParams.Intent` or the MCP `intent` field.
 
 ## The six intents
 
-| Intent | Cycle-1 default chain | Cycle-2/3 chain (when Wave-1 enabled) |
-|---|---|---|
-| `deep_research` | s2, openalex → arxiv, crossref, europmc, pubmed | s2, openalex, exa, linkup → arxiv, crossref, europmc, pubmed, wikipedia |
-| `quick_lookup` | (none — uses `defaultSources`) | brave, exa → linkup, wikipedia |
-| `primary_source` | s2, openalex → arxiv, crossref, europmc, pubmed | same as deep_research; Unpaywall enrichment activates when configured |
-| `code_provenance` | (none) | github → s2 |
-| `news` | (none) | brave → exa |
-| `reference` | (none) | wikipedia |
+All six intents ship with a wired default chain (since v2.20.0). Chains
+are filtered through the live plugin registry — paid plugins that lack a
+configured key are silently dropped from the chain, so the effective set
+matches what the tenant actually has. The canonical chain definitions
+live in `DefaultFallbackConfig` (internal/rtv.router.go).
 
-The cycle-2/3 chains assume the corresponding providers are enabled in
-config. With everything disabled, the Router falls through to
-`defaultSources` (legacy behavior).
+| Intent             | Primary set                                  | Fallback set                                                              | Purpose                                                |
+| ------------------ | -------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `deep_research`    | `s2`, `openalex`                             | `arxiv`, `crossref`, `europmc`, `pubmed`, `dblp`, `ads`, `core`, `openaire` | Scholarly evidence-gathering, broad coverage          |
+| `primary_source`   | `europmc`, `openalex`                        | `crossref`, `s2`, `arxiv`, `pubmed`, `core`, `openaire`, `zenodo`         | OA-biased scholarly retrieval. Unpaywall enrichment runs post-merge when configured |
+| `quick_lookup`     | `kagi`, `mojeek`, `serpapi`                  | `brave`, `exa`, `linkup`, `wikipedia`                                     | Fast web answer; premium first, free fallback         |
+| `code_provenance`  | `npm`, `pypi`, `crates`, `pkggodev`          | `github`, `arxiv`, `dblp`, `s2`                                           | Package registries → repo → CS literature              |
+| `news`             | `newsapi`, `serpapinews`                     | `gdelt`, `brave`, `exa`, `wikipedia`                                      | Premium news APIs → open monitoring → web              |
+| `reference`        | `wolframalpha`, `kgapi`                      | `wikidata`, `wikipedia`                                                   | Structured facts → knowledge graphs → encyclopedia     |
+
+> When `Intent` is empty, Router falls through to `RouterConfig.DefaultSources`
+> (no fallback walk). Callers passing an explicit `sources: [...]` array
+> short-circuit Intent resolution entirely — the array wins.
 
 ## Three-level source resolution
 
@@ -30,8 +36,9 @@ Router.Search precedence:
 
 When primary fan-out yields zero merged results (or all-fail), Router
 walks the fallback list **sequentially**, short-circuiting on the first
-hit. Walked sources contribute to `MergedSearchResult.SourcesQueried` and
-the audit event's `fallback_walked: true` flag.
+hit. Walked sources contribute to `MergedSearchResult.SourcesQueried`,
+`MergedSearchResult.FallbackWalked` is set to `true`, and the audit event
+records the same flag.
 
 ## Configuring custom chains
 
@@ -47,7 +54,7 @@ router:
         fallback: ["linkup", "wikipedia"]
       code:
         primary:  ["github"]
-        fallback: ["s2"]                    # CS papers fallback for code searches
+        fallback: ["s2"]
     intent_to_chain:
       deep_research:    "academic"
       primary_source:   "academic"
@@ -57,26 +64,36 @@ router:
       reference:        "web"
 ```
 
-Empty chains map to `defaultSources` automatically. `DefaultFallbackConfig`
-ships sensible cycle-2 defaults that you can override or replace
-wholesale via `RouterConfig.Fallback`.
+`resolveFallbackConfig` does NOT merge user config with defaults — supply
+a complete `RouterFallbackConfig` or rely on `DefaultFallbackConfig`
+wholesale. This avoids surprising defaults surviving when an operator
+intentionally removes an intent.
 
 ## Intent + EU-mode
 
 The EU-mode gate runs **after** intent resolution. Under `eu_strict`,
 the gate filters the chain's primary + fallback sets — non-EU providers
-in the chain are simply skipped. If your `code_provenance` chain only
-contains GitHub (US), `eu_strict` will produce zero results from that
-chain rather than walking to a non-EU fallback. Either:
+in the chain are simply skipped. Practical implications:
 
-1. Add an EU-resident code provider to the chain (Wave-3 candidate)
-2. Use `IncludePublicResearch=true` to admit S2 (PRI tier) under eu_strict
-3. Switch to `eu_preferred` so the gate doesn't filter at all
+- `code_provenance` under `eu_strict` will lose GitHub (US) and most of
+  the package registries (US). The chain effectively becomes empty
+  unless you opt in via `IncludePublicResearch=true` (admits npm/PyPI
+  as PRI tier).
+- `news` under `eu_strict` loses NewsAPI / SerpAPI News (both US). GDELT
+  is a US project but the underlying corpus is global; treat as US.
+- `quick_lookup` under `eu_strict` keeps Mojeek (EU-resident) but drops
+  Kagi / SerpAPI / Brave / Exa.
+- `reference` under `eu_strict` is essentially Wikidata + Wikipedia.
+
+For regulated deployments where you want **fail-safe** rather than
+**silent-drop**, use explicit `sources` instead of `Intent`:
+`eu_strict` + an explicit non-EU source surfaces
+`ErrEUModeProviderConflict` rather than silently switching providers.
 
 ## When NOT to use Intent
 
 - The caller knows exactly which sources to query → pass `sources: [...]`
-  explicitly. The Intent will be ignored and no fallback walk happens.
+  explicitly. The Intent is ignored and no fallback walk happens.
 - The caller wants a hard guarantee about which providers are touched →
   same as above. `eu_strict` + explicit non-EU sources surfaces
   `ErrEUModeProviderConflict` rather than silently switching providers.

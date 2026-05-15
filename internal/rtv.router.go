@@ -137,27 +137,74 @@ type Router struct {
 	unpaywallEnrichment *UnpaywallPlugin
 }
 
-// DefaultFallbackConfig returns the cycle-1 default chains. Only the
-// "academic" chain is meaningfully populated (we have ten scholarly
-// providers and no web sources yet); other intents resolve to defaultSources
-// during cycle 1 and gain real chains in cycle 2 when wave-1 providers land.
+// DefaultFallbackConfig returns the default chains for each intent.
+//
+// All six intents declared in docs/intents.md are wired here. Unregistered
+// sources (paid plugins missing a key, plugins disabled by config) are
+// silently dropped by Router.filterRegistered — chains gracefully degrade
+// to whatever subset is actually enabled in the running tenant.
+//
+// Operators wanting custom routing supply a complete RouterFallbackConfig
+// via cfg.Fallback; resolveFallbackConfig refuses to merge partial overrides
+// to avoid surprising defaults surviving when an intent is intentionally
+// removed.
 func DefaultFallbackConfig() RouterFallbackConfig {
 	return RouterFallbackConfig{
 		Chains: map[string]FallbackChain{
+			// Scholarly retrieval — peer-reviewed + preprints.
 			fallbackChainAcademic: {
 				Primary:  []string{SourceS2, SourceOpenAlex},
-				Fallback: []string{SourceArXiv, SourceCrossRef, SourceEuropePMC, SourcePubMed},
+				Fallback: []string{SourceArXiv, SourceCrossRef, SourceEuropePMC, SourcePubMed, SourceDBLP, SourceADS, SourceCORE, SourceOpenAIRE},
+			},
+			// Primary-source OA papers — same scholarly chain, biased
+			// to providers that surface OA PDFs (europmc, openalex,
+			// unpaywall enrichment runs post-merge regardless).
+			fallbackChainPrimarySource: {
+				Primary:  []string{SourceEuropePMC, SourceOpenAlex},
+				Fallback: []string{SourceCrossRef, SourceS2, SourceArXiv, SourcePubMed, SourceCORE, SourceOpenAIRE, SourceZenodo},
+			},
+			// Fast web lookup — paid web search first, free fallback.
+			fallbackChainQuickLookup: {
+				Primary:  []string{SourceKagi, SourceMojeek, SourceSerpAPI},
+				Fallback: []string{SourceBrave, SourceExa, SourceLinkup, SourceWikipedia},
+			},
+			// Code provenance — package registries first, then GitHub,
+			// then CS literature.
+			fallbackChainCodeProvenance: {
+				Primary:  []string{SourceNPM, SourcePyPI, SourceCrates, SourcePkgGoDev},
+				Fallback: []string{SourceGitHub, SourceArXiv, SourceDBLP, SourceS2},
+			},
+			// News — premium news APIs first, then open monitoring,
+			// then web search as a last resort.
+			fallbackChainNews: {
+				Primary:  []string{SourceNewsAPI, SourceSerpAPINews},
+				Fallback: []string{SourceGDELT, SourceBrave, SourceExa, SourceWikipedia},
+			},
+			// Structured facts + encyclopedia — structured engines
+			// first, then knowledge graphs, then Wikipedia.
+			fallbackChainReference: {
+				Primary:  []string{SourceWolframAlpha, SourceKGAPI},
+				Fallback: []string{SourceWikidata, SourceWikipedia},
 			},
 		},
 		IntentToChain: map[string]string{
-			string(IntentDeepResearch):  fallbackChainAcademic,
-			string(IntentPrimarySource): fallbackChainAcademic,
+			string(IntentDeepResearch):   fallbackChainAcademic,
+			string(IntentPrimarySource):  fallbackChainPrimarySource,
+			string(IntentQuickLookup):    fallbackChainQuickLookup,
+			string(IntentCodeProvenance): fallbackChainCodeProvenance,
+			string(IntentNews):           fallbackChainNews,
+			string(IntentReference):      fallbackChainReference,
 		},
 	}
 }
 
 const (
-	fallbackChainAcademic = "academic"
+	fallbackChainAcademic       = "academic"
+	fallbackChainPrimarySource  = "primary_source"
+	fallbackChainQuickLookup    = "quick_lookup"
+	fallbackChainCodeProvenance = "code_provenance"
+	fallbackChainNews           = "news"
+	fallbackChainReference      = "reference"
 )
 
 // RouterOption is a functional option used by NewRouter for cycle-2+
@@ -943,21 +990,27 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 		requiresKey := caps.RequiresCredential
 
 		infos = append(infos, SourceInfo{
-			ID:                     plugin.ID(),
-			Name:                   plugin.Name(),
-			Description:            plugin.Description(),
-			Enabled:                true, // registered implies enabled
-			ContentTypes:           plugin.ContentTypes(),
-			NativeFormat:           plugin.NativeFormat(),
-			AvailableFormats:       plugin.AvailableFormats(),
-			SupportsFullText:       caps.SupportsFullText,
-			SupportsCitations:      caps.SupportsCitations,
-			SupportsDateFilter:     caps.SupportsDateFilter,
-			SupportsAuthorFilter:   caps.SupportsAuthorFilter,
-			SupportsCategoryFilter: caps.SupportsCategoryFilter,
-			SupportsDomainFilter:   caps.SupportsDomainFilter,
-			SupportsChannelFilter:  caps.SupportsChannelFilter,
-			SupportsLanguageFilter: caps.SupportsLanguageFilter,
+			ID:                       plugin.ID(),
+			Name:                     plugin.Name(),
+			Description:              plugin.Description(),
+			Enabled:                  true, // registered implies enabled
+			ContentTypes:             plugin.ContentTypes(),
+			NativeFormat:             plugin.NativeFormat(),
+			AvailableFormats:         plugin.AvailableFormats(),
+			SupportsFullText:         caps.SupportsFullText,
+			SupportsCitations:        caps.SupportsCitations,
+			SupportsDateFilter:       caps.SupportsDateFilter,
+			SupportsAuthorFilter:     caps.SupportsAuthorFilter,
+			SupportsCategoryFilter:   caps.SupportsCategoryFilter,
+			SupportsOpenAccessFilter: caps.SupportsOpenAccessFilter,
+			SupportsDomainFilter:     caps.SupportsDomainFilter,
+			SupportsChannelFilter:    caps.SupportsChannelFilter,
+			SupportsLanguageFilter:   caps.SupportsLanguageFilter,
+			SupportsSortRelevance:    caps.SupportsSortRelevance,
+			SupportsSortDate:         caps.SupportsSortDate,
+			SupportsSortCitations:    caps.SupportsSortCitations,
+			SupportsPagination:       caps.SupportsPagination,
+			MaxResultsPerQuery:       caps.MaxResultsPerQuery,
 			RateLimit: RateLimitInfo{
 				RequestsPerSecond: health.RateLimit,
 				Remaining:         remaining,

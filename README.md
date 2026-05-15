@@ -4,13 +4,17 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![MCP](https://img.shields.io/badge/MCP-2025--11--25-purple)
 
-An MCP server **and** importable Go library that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repositories, and encyclopedia articles. **18 source APIs** behind three tools (`rtv_search`, `rtv_get`, `rtv_list_sources`):
+An MCP server **and** importable Go library that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repos, packages, patents, court decisions, regulations, encyclopedia articles, multimedia, social posts, places, podcasts, and structured facts. **61 source plugins** behind three tools (`rtv_search`, `rtv_get`, `rtv_list_sources`):
 
-- **Scholarly** (10): ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv
-- **Wave-1 web/code/encyclopedia** (7): Exa, Brave, Linkup (**EU-resident**), Firecrawl, GitHub, Wikipedia, Unpaywall (enrichment)
-- **Wave-2 synthesized web** (1): Perplexity Sonar
+- **v1 Scholarly** (10): ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv
+- **v2 Web / enrichment** (8): Exa, Brave, Linkup (**EU-resident**), Firecrawl, GitHub, Wikipedia, Unpaywall (enrichment), Perplexity
+- **v3 Multimodal** (10): YouTube + Scrapingdog YouTube; Photon / TomTom / Nominatim (geo); Wikimedia / Europeana (images); Mastodon / Bluesky / Reddit (social)
+- **v5 Knowledge Commons** (19): StackExchange + HackerNews (Q&A); Zenodo / CORE / OpenAIRE (OA repositories); Wikidata / DataCite / ORCID (structured); npm / PyPI / crates / pkg.go.dev (packages); Google Patents / EPO OPS / CourtListener / EUR-Lex (patents + law); GDELT / IA Scholar / Wayback (archives)
+- **v6 GeoExpansion + Premium** (14): Google Places / OSM Overpass / HERE (POI); Listen Notes / iTunes (podcasts); Dimensions / Lens (premium scholarly); Kagi / Mojeek / SerpAPI (paid web); Wolfram Alpha / Google KG (facts); NewsAPI / SerpAPI News (premium news)
 
-Plus **EU-GDPR mode** (`eu_strict` + 6 audit hooks) for regulated deployments, **v2 fat-struct Result shape** with kind discriminator (paper/web/code/news/model/dataset/encyclopedia), **per-intent fallback chains**, and **streaming search** for slow providers.
+Paid plugins set `RequiresCredential=true` and refuse to start without a key — `rtv_list_sources` advertises `requires_key` and `free_tier` so agents can filter the catalog by reachability.
+
+Plus **EU-GDPR mode** (`eu_strict` + audit hooks), **v2 Result shape** with kind discriminator (paper/web/code/place/news/model/dataset/post/package/patent/audio/encyclopedia), **six wired intent chains** (deep_research, primary_source, quick_lookup, code_provenance, news, reference), **per-credential rate-limit isolation**, and **streaming search** for slow providers.
 
 📚 **[Library Guide](docs/library-guide.md)** · **[Architecture](docs/architecture.md)** · **[EU Mode](docs/eu-mode.md)** · **[Intents](docs/intents.md)** · **[Residency](docs/residency.md)** · **[Plugin Guide](docs/plugin-guide.md)**
 
@@ -112,12 +116,13 @@ Search academic publications across multiple sources. Returns merged, deduplicat
 |-----------|------|----------|---------|-------------|
 | `query` | string | yes | — | Search query |
 | `sources` | string[] | no | all enabled | Source IDs to search (e.g., `["arxiv", "s2"]`) |
-| `content_type` | string | no | `"paper"` | `paper`, `model`, `dataset`, or `any` |
-| `sort` | string | no | `"relevance"` | `relevance`, `date_desc`, `date_asc`, or `citations` |
+| `content_type` | string | no | `"paper"` | `paper`, `model`, `dataset`, `video`, `place`, `image`, `post`, `package`, `patent`, `audio`, or `any` |
+| `sort` | string | no | `"relevance"` | `relevance`, `date_desc`, `date_asc`, or `citations`. Per-source sort support is in `rtv_list_sources` (`supports_sort_*`) |
 | `limit` | number | no | `10` | Max results (1–100) |
 | `offset` | number | no | `0` | Pagination offset |
-| `filters` | object | no | — | `title`, `authors`, `date_from`, `date_to`, `categories`, `open_access`, `min_citations`, `include_domains`, `exclude_domains`, `channels`, `subreddits`, `language` (see [`docs/filter-reference.md`](docs/filter-reference.md) for the per-provider capability matrix) |
-| `credentials` | object | no | — | Per-call API keys: `pubmed_api_key`, `s2_api_key`, `openalex_api_key`, `hf_token` |
+| `intent` | string | no | — | `deep_research`, `primary_source`, `quick_lookup`, `code_provenance`, `news`, `reference`. Picks the right source set + fallback chain — preferred over `sources` for most cases. See [`docs/intents.md`](docs/intents.md). |
+| `filters` | object | no | — | `title`, `authors`, `date_from`, `date_to`, `categories`, `open_access`, `min_citations`, `include_domains`, `exclude_domains`, `channels`, `subreddits`, `language`. Per-provider honoring matrix in [`docs/filter-reference.md`](docs/filter-reference.md). |
+| `credentials` | object | no | — | Per-call API keys (override server defaults): `pubmed_api_key`, `s2_api_key`, `openalex_api_key`, `hf_token`, `ads_api_key` |
 
 **Example:**
 
@@ -185,20 +190,95 @@ List all available sources with capabilities, rate limits, and supported content
 
 ## Sources
 
-| Source | ID | Content | Auth | Rate Limit | Key Features |
-|--------|----|---------|------|------------|--------------|
-| ArXiv | `arxiv` | papers | No | 0.33 req/s | 2M+ open-access preprints |
-| Semantic Scholar | `s2` | papers | Optional | 1 req/s (100 with key) | Citation graph, references |
-| OpenAlex | `openalex` | papers | Optional | 10 req/s | 250M+ works, open metadata |
-| PubMed | `pubmed` | papers | Optional | 3 req/s (10 with key) | 35M+ biomedical articles |
-| Europe PMC | `europmc` | papers | No | 10 req/s | 40M+ biomedical, full text |
-| HuggingFace | `huggingface` | papers, models, datasets | Optional | 10 req/s | 1M+ models, 100K+ datasets |
-| CrossRef | `crossref` | papers | No | 10 req/s (polite pool) | 150M+ DOI-centric metadata |
-| DBLP | `dblp` | papers | No | 5 req/s | 7M+ CS publications, venue metadata |
-| NASA ADS | `ads` | papers | **Required** | 5000/day | 16M+ astronomy/astrophysics records |
-| bioRxiv | `biorxiv` | papers | No | 5 req/s | Biology/health preprints, date-range only |
+61 plugins across five tiers. The full per-source capability surface (rate limits, supported filters, supported sort orders, residency, format support, intents served) is available at runtime via `rtv_list_sources`. The tables below are an abbreviated map; for the canonical detail see [`docs/tool-reference.md`](docs/tool-reference.md).
 
-Most sources work without API keys. NASA ADS requires an API key ([get one here](https://ui.adsabs.harvard.edu/user/settings/token)). bioRxiv search requires a `date_from` filter (no keyword search API).
+### v1 — Scholarly (10)
+
+| Source | ID | Content | Key | Notes |
+|--------|----|---------|-----|-------|
+| ArXiv | `arxiv` | paper | optional | 2M+ OA preprints (physics, math, CS) |
+| PubMed | `pubmed` | paper | optional | 36M+ biomedical citations |
+| Semantic Scholar | `s2` | paper | optional | citation graph, references |
+| OpenAlex | `openalex` | paper | optional | 250M+ works, open metadata |
+| HuggingFace | `huggingface` | model, dataset | optional | 1M+ models, 100K+ datasets |
+| Europe PMC | `europmc` | paper | none | 40M+ biomedical, full text (**EU-resident**) |
+| CrossRef | `crossref` | paper | none (polite pool with `mailto`) | 150M+ DOI metadata |
+| DBLP | `dblp` | paper | none | 7M+ CS publications (**EU-resident**) |
+| NASA ADS | `ads` | paper | **required for use** | 16M+ astronomy/astrophysics |
+| bioRxiv | `biorxiv` | paper | none | preprints, **date-range search only** |
+
+### v2 — Web / enrichment (8)
+
+| Source | ID | Content | Key | Notes |
+|--------|----|---------|-----|-------|
+| Exa | `exa` | web | **required** | neural + keyword web search |
+| Brave | `brave` | web, image | **required** | independent web index, image search |
+| Linkup | `linkup` | web | **required** | **EU-resident** web answers |
+| Firecrawl | `firecrawl` | web | **required** | markdown extraction from arbitrary URLs |
+| GitHub | `github` | code | **required** | repos + code, optional token raises 60→5000 req/h |
+| Wikipedia | `wikipedia` | encyclopedia | none | extract + summary |
+| Unpaywall | `unpaywall` | paper enrichment | **required** (email) | post-merge OA PDF / license enrichment |
+| Perplexity | `perplexity` | web (synthesized) | **required** | Sonar online API |
+
+### v3 — Multimodal (10)
+
+| Source | ID | Content | Key | Notes |
+|--------|----|---------|-----|-------|
+| YouTube | `youtube` | video | **required** | Data API v3, channel filters |
+| Scrapingdog YouTube | `scrapingdog_youtube` | video | **required** | scraping-based alt |
+| Photon | `photon` | place | none | Komoot OSM geocoder |
+| TomTom | `tomtom` | place | **required** | commercial POI |
+| Nominatim | `nominatim` | place | none | OSM reference geocoder |
+| Wikimedia | `wikimedia` | image | none | Commons + Wikipedia images |
+| Europeana | `europeana` | image | **required** | EU cultural heritage |
+| Mastodon | `mastodon` | post | none | Federated; post-fetch language filter |
+| Bluesky | `bluesky` | post | **required** | AT Protocol; needs app password |
+| Reddit | `reddit` | post | **required** | OAuth2 client credentials |
+
+### v5 — Knowledge Commons (19)
+
+| Source | ID | Content | Key | Notes |
+|--------|----|---------|-----|-------|
+| Stack Exchange | `stackexchange` | post (Q&A) | none | tags via `categories` |
+| Hacker News | `hackernews` | post | none | Algolia HN search |
+| Zenodo | `zenodo` | paper, dataset | none | CERN OA repository; honors `open_access` |
+| CORE | `core` | paper | **required** | aggregated OA papers |
+| OpenAIRE | `openaire` | paper, dataset | none | EU OA research graph |
+| Wikidata | `wikidata` | reference | none | SPARQL-backed structured facts |
+| DataCite | `datacite` | dataset | none | DOI metadata for research outputs |
+| ORCID | `orcid` | reference (people) | none | researcher disambiguation |
+| npm | `npm` | package | none | JavaScript registry |
+| PyPI | `pypi` | package | none | Python packages |
+| crates | `crates` | package | none | Rust packages |
+| pkg.go.dev | `pkggodev` | package | none | Go modules |
+| Google Patents | `googlepatents` | patent | none | scraping-based |
+| EPO OPS | `epoops` | patent | **required** | OAuth2 consumer key/secret |
+| CourtListener | `courtlistener` | paper (law) | none | US court decisions |
+| EUR-Lex | `eurlex` | paper (law) | none | EU legislation |
+| GDELT | `gdelt` | web (news) | none | global news monitoring |
+| IA Scholar | `iascholar` | paper | none | Internet Archive scholarly index |
+| Wayback | `wayback` | web | none | Internet Archive Wayback Machine |
+
+### v6 — GeoExpansion + Premium (14)
+
+| Source | ID | Content | Key | Notes |
+|--------|----|---------|-----|-------|
+| Google Places | `googleplaces` | place | **required** | Places API (New) |
+| OSM Overpass | `osmoverpass` | place | none | raw QL behind opt-in `extra.allow_raw_ql` |
+| HERE | `here` | place | **required** | Discover API |
+| Listen Notes | `listennotes` | audio | **required** | podcast search |
+| iTunes | `itunes` | audio | none | Apple podcast directory |
+| Dimensions | `dimensions` | paper | **required** | premium citation graph |
+| Lens.org | `lens` | paper, patent | **required** | premium scholarly + patents |
+| Kagi | `kagi` | web | **required** | premium ad-free search |
+| Mojeek | `mojeek` | web | **required** | **EU-resident** independent index |
+| SerpAPI | `serpapi` | web | **required** | Google SERP via SerpAPI |
+| Wolfram Alpha | `wolframalpha` | reference | **required** | computational facts |
+| Google KG | `kgapi` | reference | **required** | Knowledge Graph entity lookup |
+| NewsAPI | `newsapi` | web (news) | **required** | premium news aggregator |
+| SerpAPI News | `serpapinews` | web (news) | **required** | Google News via SerpAPI |
+
+Use `rtv_list_sources` for the runtime catalog (capabilities, residency, free-tier flag).
 
 ### Environment variable overrides
 

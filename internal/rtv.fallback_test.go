@@ -223,8 +223,34 @@ func TestDefaultFallbackConfig_HasAcademicChain(t *testing.T) {
 	got := cfg.IntentToChain[string(IntentDeepResearch)]
 	assert.Equal(t, fallbackChainAcademic, got)
 
+	// IntentPrimarySource has its own OA-biased chain since v2.20.0
+	// (cycle-1 had it aliased to academic). Both chains share most
+	// scholarly providers but the primary order differs.
 	got = cfg.IntentToChain[string(IntentPrimarySource)]
-	assert.Equal(t, fallbackChainAcademic, got)
+	assert.Equal(t, fallbackChainPrimarySource, got)
+	_, ok = cfg.Chains[fallbackChainPrimarySource]
+	assert.True(t, ok, "default config must include the primary_source chain")
+}
+
+func TestDefaultFallbackConfig_AllIntentsWired(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultFallbackConfig()
+	wantIntents := []Intent{
+		IntentDeepResearch,
+		IntentPrimarySource,
+		IntentQuickLookup,
+		IntentCodeProvenance,
+		IntentNews,
+		IntentReference,
+	}
+	for _, i := range wantIntents {
+		chainName, ok := cfg.IntentToChain[string(i)]
+		require.True(t, ok, "intent %q must be wired to a chain", i)
+		chain, ok := cfg.Chains[chainName]
+		require.True(t, ok, "chain %q for intent %q must exist", chainName, i)
+		assert.NotEmpty(t, chain.Primary, "chain %q must have a non-empty primary set", chainName)
+	}
 }
 
 func TestResolveFallbackConfig_ZeroValueGetsDefaults(t *testing.T) {

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.7.1] - 2026-05-15
+
+Patch release. Live integration testing against the Brave Search Web API
+revealed that the v2.7.0 `IncludeDomains` / `ExcludeDomains` wiring sent
+non-existent query parameters and was silently ignored upstream — Brave
+returned results from arbitrary domains regardless of the filter. v2.7.1
+rewrites the Brave plugin to use inline `site:` / `-site:` SERP
+operators in the q string (Brave's only documented domain-scoping
+mechanism). All other filter axes verified live in v2.7.0 are unchanged.
+
+See the "Hardened (post-live-verification)" section under v2.7.0 for the
+full set of changes that v2.7.1 ships.
+
 ## [2.7.0] - 2026-05-15
 
 Minor release. **Smart-filter surface** (`project_plan/retrievr_v4.md`).

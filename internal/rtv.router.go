@@ -969,6 +969,7 @@ const (
 	dedupFamilyAtproto   = "atproto_uri"
 	dedupFamilyPostURL   = "post_url"
 	dedupFamilyQA        = "qa_question_id"
+	dedupFamilyPackage   = "package_id"
 
 	// dedupCoordPrecisionFmt rounds lat/lon to 5 decimal places (~1 m),
 	// applied to place results lacking osm_id. Two places within ~1 m of
@@ -1046,6 +1047,8 @@ func dedup(results []Publication) []Publication {
 				continue
 			}
 			tryDedup(dedupFamilyPostURL, results[i].URL, i)
+		case ContentTypePackage:
+			tryDedup(dedupFamilyPackage, stringFromMeta(results[i].SourceMetadata, MetaKeyPackageID), i)
 		default:
 			// paper / model / dataset / "" / any — DOI + ArXiv ID family.
 			// DOI hit short-circuits ArXivID indexing (matches v2 behavior:

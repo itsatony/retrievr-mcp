@@ -5,6 +5,80 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.11.0] - 2026-05-15
+
+Minor release. **KnowledgeCommons cycle 4 — Packages**
+(`project_plan/retrievr_v5.md` §8). Adds code-package discovery across
+four major language ecosystems via free public registries: npm, PyPI,
+crates.io, and pkg.go.dev. Introduces `ContentTypePackage` and the
+`package_id` dedup family.
+
+### Added
+
+- **`ContentType` `ContentTypePackage`** (`internal/rtv.types.go`) for
+  code-package registry hits. Cross-ecosystem dedup keyed on
+  `SourceMetadata["package_id"]` = `"<ecosystem>:<name>"` so a `react`
+  on npm and a `react` on PyPI never collide.
+- **`SourceNPM` plugin** (`internal/rtv.plugin.npm.go`):
+  `https://registry.npmjs.org/-/v1/search`. Free, no auth. Returns
+  name, version, description, keywords, repo/home URLs, weekly-score.
+  `filters.categories[*]` map to `keywords:<kw>` Lucene qualifiers
+  appended to the text param. Native + Get supported
+  (`/<name>/latest`).
+- **`SourcePyPI` plugin** (`internal/rtv.plugin.pypi.go`):
+  `https://pypi.org/search/` (HTML parse — PyPI retired XML-RPC search
+  in 2021). Search returns lightweight hits parsed from
+  `<a class="package-snippet">` blocks. Get path uses the official
+  stable JSON endpoint `/pypi/<name>/json`. Documented fragility per
+  retrievr_v5.md §12.
+- **`SourceCrates` plugin** (`internal/rtv.plugin.crates.go`):
+  `https://crates.io/api/v1/crates`. Free, public. Honors Rust
+  Foundation crawler policy: required contact `User-Agent` header
+  (config `extra.user_agent`) and ≤1 req/s. Supports
+  `filters.categories[0]` (category slug), date-desc sort
+  (→ `recent-updates`), and pagination. Native + Get supported.
+- **`SourcePkgGoDev` plugin** (`internal/rtv.plugin.pkggodev.go`):
+  `https://pkg.go.dev/search?m=package`. Free, no auth. Search parses
+  the rendered SearchSnippet HTML blocks using stable `data-test-id`
+  attribute hooks. Get path deferred — deps.dev is the right backend
+  for future cycle (documented inline).
+- **Per-component package metadata keys** (`internal/rtv.types.go`):
+  `smetaPackageEcosystem`, `smetaPackageName`, `smetaPackageVersion`,
+  `smetaPackageDownloads`, `smetaPackageRepoURL`, `smetaPackageHomeURL`,
+  `smetaPackageKeywords`, `smetaPackageScore` — uniform shape across
+  the four registries.
+- **`dedupFamilyPackage`** in router dedup
+  (`internal/rtv.router.go`). `ContentTypePackage` results route on
+  `MetaKeyPackageID` for cross-ecosystem dedup.
+- **Residency tags** (`internal/rtv.plugin_residency.go`): all four
+  US-resident. Plan §8 documents this as a known gap — no
+  EU-resident package registry exists at scale, so `eu_strict`
+  callers must opt into `eu_preferred` or leave packages off.
+- **Config blocks** for the four new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default).
+- **Unit tests** with httptest fixtures for all four plugins:
+  identity, capabilities, residency, happy-path search, sort/category
+  filter routing, 429 → `ErrRateLimitExceeded`, Get path (npm,
+  crates, PyPI), Get-not-wired (pkg.go.dev), HTML parser respects
+  limits.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 36 → 40; `validSourceIDs`
+  registers `npm`, `pypi`, `crates`, `pkggodev`; registry factory map +
+  test-expected count updated. `IsValidContentType` accepts
+  `ContentTypePackage`. Config / E2E / registry fixtures extended with
+  the four new source blocks.
+
+### Notes
+
+- pkg.go.dev and PyPI rely on HTML parsing because neither exposes a
+  free-text-search JSON API. The fragility is acknowledged and tracked
+  in retrievr_v5.md §12; integration tests catch breakage at the
+  cycle's gate.
+- No new `ResultKind` introduced — package hits map cleanly to
+  `KindCode` at the v2 layer.
+
 ## [2.10.0] - 2026-05-15
 
 Minor release. **KnowledgeCommons cycle 3 — Structured**

@@ -82,6 +82,12 @@ func PluginFactories() map[string]PluginFactory {
 		SourceWikidata: func() SourcePlugin { return &WikidataPlugin{} },
 		SourceDataCite: func() SourcePlugin { return &DataCitePlugin{} },
 		SourceORCID:    func() SourcePlugin { return &ORCIDPlugin{} },
+
+		// v5 cycle 4 / v2.11.0 — code-package registries.
+		SourceNPM:      func() SourcePlugin { return &NPMPlugin{} },
+		SourcePyPI:     func() SourcePlugin { return &PyPIPlugin{} },
+		SourceCrates:   func() SourcePlugin { return &CratesPlugin{} },
+		SourcePkgGoDev: func() SourcePlugin { return &PkgGoDevPlugin{} },
 	}
 }
 

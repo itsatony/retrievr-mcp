@@ -434,6 +434,18 @@ sources:
   orcid:
     enabled: false
     timeout: "10s"
+  npm:
+    enabled: false
+    timeout: "10s"
+  pypi:
+    enabled: false
+    timeout: "10s"
+  crates:
+    enabled: false
+    timeout: "10s"
+  pkggodev:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

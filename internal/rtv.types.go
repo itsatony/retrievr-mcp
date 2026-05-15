@@ -26,6 +26,12 @@ const (
 	ContentTypePlace ContentType = "place"
 	ContentTypeImage ContentType = "image"
 	ContentTypePost  ContentType = "post"
+
+	// v5 cycle 4 / v2.11.0 — code-package registries (npm, PyPI, crates,
+	// pkg.go.dev). Dedup keyed by SourceMetadata["package_id"] formatted
+	// as "<ecosystem>:<name>" (e.g. "npm:react", "pypi:requests") so
+	// same-name packages across ecosystems never collide.
+	ContentTypePackage ContentType = "package"
 )
 
 // IsValidContentType returns true if the given string maps to a known
@@ -35,7 +41,8 @@ const (
 func IsValidContentType(ct string) bool {
 	switch ContentType(ct) {
 	case ContentTypePaper, ContentTypeModel, ContentTypeDataset, ContentTypeAny,
-		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost:
+		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost,
+		ContentTypePackage:
 		return true
 	}
 	return false
@@ -146,6 +153,12 @@ const (
 	SourceWikidata = "wikidata"
 	SourceDataCite = "datacite"
 	SourceORCID    = "orcid"
+
+	// v5 cycle 4 / v2.11.0 — code-package registries.
+	SourceNPM      = "npm"
+	SourcePyPI     = "pypi"
+	SourceCrates   = "crates"
+	SourcePkgGoDev = "pkggodev"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -198,6 +211,11 @@ var validSourceIDs = map[string]bool{
 	SourceWikidata: true,
 	SourceDataCite: true,
 	SourceORCID:    true,
+	// v5 cycle 4 — code-package registries.
+	SourceNPM:      true,
+	SourcePyPI:     true,
+	SourceCrates:   true,
+	SourcePkgGoDev: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -223,7 +241,8 @@ func AllSourceIDs() []string {
 // Bluesky + Reddit → 28. v5 cycle 1 / v2.8.0 added StackExchange +
 // HackerNews → 30. v5 cycle 2 / v2.9.0 added Zenodo + CORE + OpenAIRE → 33.
 // v5 cycle 3 / v2.10.0 added Wikidata + DataCite + ORCID → 36.
-const SourceCount = 36
+// v5 cycle 4 / v2.11.0 added npm + PyPI + crates + pkg.go.dev → 40.
+const SourceCount = 40
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can
@@ -241,6 +260,22 @@ const (
 	// dedup is disabled by construction — Stack Overflow #1 and Server
 	// Fault #1 are distinct questions.
 	MetaKeyQAQuestionID = "qa_question_id"
+
+	// v5 cycle 4 / v2.11.0 — code-package dedup key. The value is
+	// "<ecosystem>:<name>" (e.g. "npm:react", "pypi:requests",
+	// "crates:tokio", "pkggodev:github.com/go-chi/chi"). Same-name
+	// packages across ecosystems never collide by construction.
+	MetaKeyPackageID = "package_id"
+
+	// Per-component package metadata keys (mirrors smetaQA* style).
+	smetaPackageEcosystem = "package_ecosystem"
+	smetaPackageName      = "package_name"
+	smetaPackageVersion   = "package_version"
+	smetaPackageDownloads = "package_downloads"
+	smetaPackageRepoURL   = "package_repo_url"
+	smetaPackageHomeURL   = "package_home_url"
+	smetaPackageKeywords  = "package_keywords"
+	smetaPackageScore     = "package_score"
 )
 
 // ---------------------------------------------------------------------------

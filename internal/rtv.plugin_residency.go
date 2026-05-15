@@ -206,3 +206,46 @@ func (*ORCIDPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports npm's data-residency posture (US — npm Inc., a
+// subsidiary of GitHub / Microsoft). Blocked under eu_strict; the
+// cycle 4 plan documents this as a known gap (no EU-resident
+// package registry exists at scale).
+func (*NPMPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports PyPI's data-residency posture (US — Python
+// Software Foundation, non-profit, US-based).
+func (*PyPIPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPAUnknown,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports crates.io's data-residency posture (US — Rust
+// Foundation, US-based non-profit).
+func (*CratesPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPAUnknown,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports pkg.go.dev's data-residency posture (US —
+// Google, Mountain View). HTML search page; no user account binding
+// for search, so DPA unknown.
+func (*PkgGoDevPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

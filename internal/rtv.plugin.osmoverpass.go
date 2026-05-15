@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,10 +66,30 @@ const (
 	osmOverpassMetaKeyTags    = "osm_tags"
 
 	// osmOverpassQLPrefix marks user-supplied verbatim Overpass QL in
-	// filters.categories[0]. Anything starting with this prefix is sent
-	// unchanged.
+	// filters.categories[0]. Anything starting with this prefix is
+	// considered raw QL. The raw-QL path is opt-in via
+	// extra.allow_raw_ql=true (defaults off) per the security review:
+	// unbounded QL is a resource-exhaustion + SSRF vector.
 	osmOverpassQLPrefix = "[out:"
+
+	// osmOverpassMaxRawQLBytes caps the length of operator-supplied raw
+	// Overpass QL bodies. Generous enough for complex bbox queries,
+	// small enough to keep DoS risk bounded.
+	osmOverpassMaxRawQLBytes = 2048
+
+	// osmOverpassRawQLTimeoutSeconds is the server-controlled
+	// [timeout:N] value spliced into raw QL when the caller-supplied
+	// value is missing or exceeds the cap. Matches the synthesized
+	// default-query timeout so the two paths share a single ceiling.
+	osmOverpassRawQLTimeoutSeconds = 25
+
+	osmOverpassExtraAllowRawQL = "allow_raw_ql"
 )
+
+// osmOverpassTimeoutDirectiveRegex matches the `[timeout:N]` setting
+// within a raw Overpass QL body. The plugin clamps N down to
+// osmOverpassRawQLTimeoutSeconds when it exceeds the ceiling.
+var osmOverpassTimeoutDirectiveRegex = regexp.MustCompile(`\[timeout:\s*(\d+)\s*\]`)
 
 // ---------------------------------------------------------------------------
 // Overpass wire types
@@ -103,6 +124,11 @@ type OSMOverpassPlugin struct {
 	httpClient *http.Client
 	enabled    bool
 	rateLimit  float64
+
+	// allowRawQL gates the verbatim-QL escape hatch. Operators must
+	// explicitly opt in via extra.allow_raw_ql=true; the default-off
+	// posture keeps DoS / SSRF risk bounded.
+	allowRawQL bool
 
 	mu        sync.RWMutex
 	healthy   bool
@@ -168,6 +194,10 @@ func (p *OSMOverpassPlugin) Initialize(_ context.Context, cfg PluginConfig) erro
 		p.baseURL = osmOverpassDefaultBaseURL
 	}
 	p.baseURL = strings.TrimRight(p.baseURL, "/")
+
+	if cfg.Extra != nil {
+		p.allowRawQL = strings.EqualFold(cfg.Extra[osmOverpassExtraAllowRawQL], "true")
+	}
 
 	timeout := cfg.Timeout.Duration
 	if timeout == 0 {
@@ -236,7 +266,10 @@ func (p *OSMOverpassPlugin) Get(_ context.Context, _ string, _ []IncludeField, _
 // ---------------------------------------------------------------------------
 
 func (p *OSMOverpassPlugin) doSearch(ctx context.Context, params SearchParams, limit int) (*overpassResponse, error) {
-	ql := overpassBuildQL(params, limit)
+	ql, err := p.buildQL(params, limit)
+	if err != nil {
+		return nil, err
+	}
 
 	reqURL := p.baseURL + osmOverpassInterpreterPath
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, strings.NewReader(ql))
@@ -248,7 +281,7 @@ func (p *OSMOverpassPlugin) doSearch(ctx context.Context, params SearchParams, l
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("osmoverpass: http: %w", err)
+		return nil, fmt.Errorf("osmoverpass: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -267,18 +300,51 @@ func (p *OSMOverpassPlugin) doSearch(ctx context.Context, params SearchParams, l
 	return &resp, nil
 }
 
-// overpassBuildQL synthesizes a default case-insensitive name-regex
-// query, or returns a verbatim user-supplied query when
-// filters.categories[0] starts with the Overpass QL prelude
-// "[out:".
-func overpassBuildQL(params SearchParams, limit int) string {
+// buildQL synthesizes a default case-insensitive name-regex query, or
+// returns a verbatim user-supplied query when filters.categories[0]
+// starts with the Overpass QL prelude "[out:". Raw QL is only honored
+// when extra.allow_raw_ql=true was configured; otherwise it's rejected
+// with ErrInvalidInput. Raw QL is also length-capped and has its
+// [timeout:N] directive clamped to osmOverpassRawQLTimeoutSeconds so a
+// caller cannot extend the upstream's compute budget arbitrarily.
+func (p *OSMOverpassPlugin) buildQL(params SearchParams, limit int) (string, error) {
 	if len(params.Filters.Categories) > 0 {
 		first := strings.TrimSpace(params.Filters.Categories[0])
 		if strings.HasPrefix(first, osmOverpassQLPrefix) {
-			return first
+			if !p.allowRawQL {
+				return "", fmt.Errorf("%w: osmoverpass raw Overpass QL is disabled (set extra.allow_raw_ql=true to opt in)", ErrInvalidInput)
+			}
+			if len(first) > osmOverpassMaxRawQLBytes {
+				return "", fmt.Errorf("%w: osmoverpass raw QL exceeds %d-byte cap", ErrInvalidInput, osmOverpassMaxRawQLBytes)
+			}
+			return clampOverpassTimeout(first), nil
 		}
 	}
+	return overpassDefaultQL(params, limit), nil
+}
 
+// clampOverpassTimeout rewrites the `[timeout:N]` directive in a raw
+// Overpass QL body so N never exceeds the server-controlled ceiling.
+// Bodies that omit the directive are returned unchanged (Overpass'
+// own default applies upstream, which is already short).
+func clampOverpassTimeout(ql string) string {
+	return osmOverpassTimeoutDirectiveRegex.ReplaceAllStringFunc(ql, func(m string) string {
+		sub := osmOverpassTimeoutDirectiveRegex.FindStringSubmatch(m)
+		if len(sub) < 2 {
+			return m
+		}
+		n, err := strconv.Atoi(sub[1])
+		if err != nil || n > osmOverpassRawQLTimeoutSeconds {
+			return "[timeout:" + strconv.Itoa(osmOverpassRawQLTimeoutSeconds) + "]"
+		}
+		return m
+	})
+}
+
+// overpassDefaultQL synthesizes the safe default name-regex QL — the
+// 95% search-by-keyword path. Power users opt into raw QL via the
+// allow_raw_ql flag (handled in buildQL above, not here).
+func overpassDefaultQL(params SearchParams, limit int) string {
 	// Escape double-quotes in the query to keep the Overpass regex
 	// well-formed; backslashes round-trip as-is.
 	q := strings.ReplaceAll(strings.TrimSpace(params.Query), `"`, `\"`)

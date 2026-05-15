@@ -142,6 +142,7 @@ func (p *FirecrawlPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON, FormatMarkdown},
 		QueryIntents:             []Intent{IntentDeepResearch, IntentQuickLookup},
 		Kinds:                    []ResultKind{KindWeb},
+		RequiresCredential:       true,
 	}
 }
 
@@ -267,7 +268,7 @@ func (p *FirecrawlPlugin) doSearch(ctx context.Context, body firecrawlSearchRequ
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("firecrawl: http: %w", err)
+		return nil, fmt.Errorf("firecrawl: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -351,6 +352,6 @@ func (p *FirecrawlPlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

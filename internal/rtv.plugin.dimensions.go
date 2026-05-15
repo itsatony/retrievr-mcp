@@ -130,11 +130,14 @@ type DimensionsPlugin struct {
 	enabled    bool
 	rateLimit  float64
 
-	mu          sync.RWMutex
-	healthy     bool
-	lastError   string
-	accessToken string
-	tokenExpiry time.Time
+	mu        sync.RWMutex
+	healthy   bool
+	lastError string
+
+	// tokens caches bearer tokens per-credential so multi-tenant
+	// callers never reuse one another's token. Keyed by
+	// CredentialHash(sourceID, apiKey).
+	tokens *tokenCache
 }
 
 // ID returns "dimensions".
@@ -204,6 +207,7 @@ func (p *DimensionsPlugin) Initialize(_ context.Context, cfg PluginConfig) error
 		timeout = dimensionsDefaultTimeout
 	}
 	p.httpClient = NewEgressClient(timeout)
+	p.tokens = newTokenCache(SourceDimensions)
 	p.healthy = true
 	return nil
 }
@@ -241,7 +245,7 @@ func (p *DimensionsPlugin) Search(ctx context.Context, params SearchParams) (*Se
 		return nil, err
 	}
 
-	resp, err := p.doSearch(ctx, params, limit, token)
+	resp, err := p.doSearch(ctx, params, limit, token, apiKey)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -271,14 +275,12 @@ func (p *DimensionsPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ 
 // ---------------------------------------------------------------------------
 
 // ensureToken returns a cached bearer token if still valid, otherwise
-// requests a fresh one from /api/auth using the configured key.
+// requests a fresh one from /api/auth using the configured key. The
+// cache is keyed on CredentialHash(sourceID, apiKey) so multi-tenant
+// callers never reuse one another's bearer token.
 func (p *DimensionsPlugin) ensureToken(ctx context.Context, apiKey string) (string, error) {
-	p.mu.RLock()
-	cached := p.accessToken
-	expiry := p.tokenExpiry
-	p.mu.RUnlock()
-	if cached != "" && time.Now().Before(expiry) {
-		return cached, nil
+	if tok, ok := p.tokens.Get(apiKey); ok {
+		return tok, nil
 	}
 
 	body, err := json.Marshal(dimensionsAuthRequest{Key: apiKey})
@@ -295,7 +297,7 @@ func (p *DimensionsPlugin) ensureToken(ctx context.Context, apiKey string) (stri
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("dimensions: auth http: %w", err)
+		return "", fmt.Errorf("dimensions: auth http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -315,14 +317,11 @@ func (p *DimensionsPlugin) ensureToken(ctx context.Context, apiKey string) (stri
 		return "", fmt.Errorf("%w: dimensions empty token", ErrCredentialInvalid)
 	}
 
-	p.mu.Lock()
-	p.accessToken = ar.Token
-	p.tokenExpiry = time.Now().Add(dimensionsTokenLifetime)
-	p.mu.Unlock()
+	p.tokens.Set(apiKey, ar.Token, dimensionsTokenLifetime)
 	return ar.Token, nil
 }
 
-func (p *DimensionsPlugin) doSearch(ctx context.Context, params SearchParams, limit int, token string) (*dimensionsSearchResponse, error) {
+func (p *DimensionsPlugin) doSearch(ctx context.Context, params SearchParams, limit int, token, apiKey string) (*dimensionsSearchResponse, error) {
 	dsl := dimensionsBuildDSL(params, limit)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+dimensionsDSLPath, strings.NewReader(dsl))
@@ -336,7 +335,7 @@ func (p *DimensionsPlugin) doSearch(ctx context.Context, params SearchParams, li
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("dimensions: http: %w", err)
+		return nil, fmt.Errorf("dimensions: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -344,10 +343,8 @@ func (p *DimensionsPlugin) doSearch(ctx context.Context, params SearchParams, li
 	case httpResp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: dimensions", ErrRateLimitExceeded)
 	case httpResp.StatusCode == http.StatusUnauthorized, httpResp.StatusCode == http.StatusForbidden:
-		// Force a re-auth on next call.
-		p.mu.Lock()
-		p.accessToken = ""
-		p.mu.Unlock()
+		// Force a re-auth on next call (clears this tenant's entry only).
+		p.tokens.Invalidate(apiKey)
 		return nil, fmt.Errorf("%w: dimensions", ErrCredentialInvalid)
 	case httpResp.StatusCode >= 400:
 		buf, _ := io.ReadAll(httpResp.Body)
@@ -365,8 +362,18 @@ func (p *DimensionsPlugin) doSearch(ctx context.Context, params SearchParams, li
 // We escape embedded double-quotes in the user query to keep the DSL
 // well-formed; any other DSL injection vectors are out-of-band since
 // the API key is per-tenant.
+// dimensionsEscapeDSLString returns the DSL-safe form of a free-text
+// string. Backslashes must be escaped first so a trailing `\` in the
+// user input doesn't become an escape for the closing quote we'll
+// emit ourselves.
+func dimensionsEscapeDSLString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
+}
+
 func dimensionsBuildDSL(params SearchParams, limit int) string {
-	q := strings.ReplaceAll(strings.TrimSpace(params.Query), `"`, `\"`)
+	q := dimensionsEscapeDSLString(strings.TrimSpace(params.Query))
 
 	var b strings.Builder
 	b.WriteString(`search publications for "`)
@@ -384,9 +391,20 @@ func dimensionsBuildDSL(params SearchParams, limit int) string {
 	if len(params.Filters.Categories) > 0 {
 		labels := []string{}
 		for _, c := range params.Filters.Categories {
-			if v := strings.TrimSpace(c); v != "" {
-				labels = append(labels, `"`+strings.ReplaceAll(v, `"`, `\"`)+`"`)
+			v := strings.TrimSpace(c)
+			if v == "" {
+				continue
 			}
+			// Reject category values containing DSL metacharacters that
+			// could break out of the `in [...]` clause. Allowing them
+			// would enable a per-tenant DSL injection (e.g. closing the
+			// bracket and appending `return researchers`). The blacklist
+			// is conservative — alphanumeric + punctuation common in
+			// Dimensions classification labels is fine.
+			if strings.ContainsAny(v, "][\n\r") {
+				continue
+			}
+			labels = append(labels, `"`+dimensionsEscapeDSLString(v)+`"`)
 		}
 		if len(labels) > 0 {
 			whereParts = append(whereParts, "category_for.name in ["+strings.Join(labels, ",")+"]")

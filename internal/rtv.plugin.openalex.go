@@ -462,7 +462,7 @@ func (p *OpenAlexPlugin) doRequest(ctx context.Context, reqURL string, target an
 		if ctx.Err() != nil {
 			return fmt.Errorf("%w: %w", ErrUpstreamTimeout, ctx.Err())
 		}
-		return fmt.Errorf("%w: %w", ErrOAHTTPRequest, err)
+		return fmt.Errorf("%w: %w", ErrOAHTTPRequest, redactURLErr(err))
 	}
 	defer resp.Body.Close()
 

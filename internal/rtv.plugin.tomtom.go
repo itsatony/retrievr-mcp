@@ -201,6 +201,7 @@ func (p *TomTomPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentReference},
 		Kinds:                    []ResultKind{KindPlace},
+		RequiresCredential:       true,
 	}
 }
 
@@ -324,7 +325,7 @@ func (p *TomTomPlugin) doSearch(ctx context.Context, query string, limit int, ap
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("tomtom: http: %w", err)
+		return nil, fmt.Errorf("tomtom: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -476,6 +477,6 @@ func (p *TomTomPlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

@@ -572,7 +572,7 @@ func (p *PubMedPlugin) fetchPMCFullText(ctx context.Context, pmcID, apiKey strin
 		if ctx.Err() != nil {
 			return "", fmt.Errorf("%w: %w", ErrUpstreamTimeout, ctx.Err())
 		}
-		return "", fmt.Errorf("%w: %w", ErrPubMedHTTPRequest, err)
+		return "", fmt.Errorf("%w: %w", ErrPubMedHTTPRequest, redactURLErr(err))
 	}
 	defer resp.Body.Close()
 
@@ -606,7 +606,7 @@ func (p *PubMedPlugin) doESearchRequest(ctx context.Context, reqURL string) (*pm
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("%w: %w", ErrUpstreamTimeout, ctx.Err())
 		}
-		return nil, fmt.Errorf("%w: %w", ErrPubMedHTTPRequest, err)
+		return nil, fmt.Errorf("%w: %w", ErrPubMedHTTPRequest, redactURLErr(err))
 	}
 	defer resp.Body.Close()
 
@@ -636,7 +636,7 @@ func (p *PubMedPlugin) doEFetchRequest(ctx context.Context, reqURL string) (*pmA
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("%w: %w", ErrUpstreamTimeout, ctx.Err())
 		}
-		return nil, fmt.Errorf("%w: %w", ErrPubMedHTTPRequest, err)
+		return nil, fmt.Errorf("%w: %w", ErrPubMedHTTPRequest, redactURLErr(err))
 	}
 	defer resp.Body.Close()
 

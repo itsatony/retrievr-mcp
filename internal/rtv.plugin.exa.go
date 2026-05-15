@@ -183,6 +183,7 @@ func (p *ExaPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON, FormatMarkdown},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentDeepResearch},
 		Kinds:                    []ResultKind{KindWeb, KindNews},
+		RequiresCredential:       true,
 	}
 }
 
@@ -321,7 +322,7 @@ func (p *ExaPlugin) doSearch(ctx context.Context, body exaSearchRequest, apiKey 
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("exa: http: %w", err)
+		return nil, fmt.Errorf("exa: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -422,7 +423,7 @@ func (p *ExaPlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }
 

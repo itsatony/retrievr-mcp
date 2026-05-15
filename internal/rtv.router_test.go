@@ -1094,12 +1094,29 @@ func TestSourceAcceptsCredentials(t *testing.T) {
 		sourceID string
 		expected bool
 	}{
+		// Legacy optional-credential allowlist (pre-RequiresCredential).
 		{SourcePubMed, true},
 		{SourceS2, true},
 		{SourceOpenAlex, true},
 		{SourceHuggingFace, true},
+		// Capability-derived: paid / fail-fast plugins must NOT be
+		// advertised as FreeTier — the legacy single-arg form now
+		// routes through the registry to read RequiresCredential.
+		{SourceKagi, true},
+		{SourceSerpAPI, true},
+		{SourceNewsAPI, true},
+		{SourceDimensions, true},
+		{SourceListenNotes, true},
+		{SourceBrave, true},
+		{SourceEPOOPS, true},
+		// Anonymous / free plugins stay false.
 		{SourceArXiv, false},
 		{SourceEuropePMC, false},
+		{SourceWikipedia, false},
+		{SourceITunes, false},
+		{SourceOSMOverpass, false},
+		// Unknown source ID returns false (no factory).
+		{"definitely-not-a-real-source", false},
 	}
 
 	for _, tc := range tests {

@@ -327,7 +327,7 @@ func (p *StackExchangePlugin) doSearch(ctx context.Context, params SearchParams,
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("stackexchange: http: %w", err)
+		return nil, fmt.Errorf("stackexchange: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -483,6 +483,6 @@ func (p *StackExchangePlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

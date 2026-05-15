@@ -187,3 +187,29 @@ func TestDimensions_BuildDSL_EscapesQuotes(t *testing.T) {
 	assert.Contains(t, got, `search publications for "\"weird\""`)
 	assert.Contains(t, got, "limit 10")
 }
+
+func TestDimensions_BuildDSL_EscapesBackslashes(t *testing.T) {
+	t.Parallel()
+	// A trailing backslash must NOT leave the opening quote unbalanced.
+	// Bare query `neural\` would otherwise become `"neural\"` which the
+	// DSL parser reads as an escaped quote followed by no closer.
+	got := dimensionsBuildDSL(SearchParams{Query: `neural\`}, 10)
+	assert.Contains(t, got, `search publications for "neural\\"`)
+
+	// Embedded backslashes survive too.
+	got = dimensionsBuildDSL(SearchParams{Query: `a\b"c`}, 10)
+	assert.Contains(t, got, `search publications for "a\\b\"c"`)
+}
+
+func TestDimensions_BuildDSL_RejectsBracketInCategory(t *testing.T) {
+	t.Parallel()
+	// A category value containing `]` would break out of the
+	// `in [...]` clause; the builder must drop it silently rather
+	// than render injectable DSL.
+	got := dimensionsBuildDSL(SearchParams{
+		Query:   "x",
+		Filters: SearchFilters{Categories: []string{`legit`, `] return researchers limit 1`}},
+	}, 10)
+	assert.Contains(t, got, `category_for.name in ["legit"]`)
+	assert.NotContains(t, got, "return researchers")
+}

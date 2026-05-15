@@ -416,7 +416,7 @@ func (p *CrossRefPlugin) doRequest(ctx context.Context, reqURL string, target an
 		if ctx.Err() != nil {
 			return fmt.Errorf("%w: %w", ErrUpstreamTimeout, ctx.Err())
 		}
-		return fmt.Errorf("%w: %w", ErrCrossRefHTTPRequest, err)
+		return fmt.Errorf("%w: %w", ErrCrossRefHTTPRequest, redactURLErr(err))
 	}
 	defer resp.Body.Close()
 

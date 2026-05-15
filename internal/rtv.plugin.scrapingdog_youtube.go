@@ -171,6 +171,7 @@ func (p *ScrapingdogYouTubePlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentQuickLookup},
 		Kinds:                    []ResultKind{KindVideo},
+		RequiresCredential:       true,
 	}
 }
 
@@ -344,7 +345,7 @@ func (p *ScrapingdogYouTubePlugin) doSearch(ctx context.Context, params SearchPa
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("scrapingdog_youtube: http: %w", err)
+		return nil, fmt.Errorf("scrapingdog_youtube: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -504,6 +505,6 @@ func (p *ScrapingdogYouTubePlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

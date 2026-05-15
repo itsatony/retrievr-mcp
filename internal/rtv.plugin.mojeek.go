@@ -251,7 +251,7 @@ func (p *MojeekPlugin) doSearch(ctx context.Context, params SearchParams, limit 
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("mojeek: http: %w", err)
+		return nil, fmt.Errorf("mojeek: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -324,6 +324,6 @@ func (p *MojeekPlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

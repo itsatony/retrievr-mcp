@@ -197,7 +197,7 @@ func (p *UnpaywallPlugin) Get(ctx context.Context, doi string, _ []IncludeField,
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
 		p.recordError(err)
-		return nil, fmt.Errorf("unpaywall: http: %w", err)
+		return nil, fmt.Errorf("unpaywall: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 

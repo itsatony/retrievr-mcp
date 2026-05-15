@@ -268,7 +268,7 @@ func (p *WolframAlphaPlugin) doSearch(ctx context.Context, params SearchParams, 
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("wolframalpha: http: %w", err)
+		return nil, fmt.Errorf("wolframalpha: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -364,6 +364,6 @@ func (p *WolframAlphaPlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

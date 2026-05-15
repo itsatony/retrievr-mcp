@@ -89,24 +89,55 @@ func TestOSMOverpass_Search_DefaultQLNodes(t *testing.T) {
 	assert.Equal(t, "attraction", pub.SourceMetadata[smetaPlaceType])
 }
 
-func TestOSMOverpass_Search_VerbatimQL(t *testing.T) {
+func TestOSMOverpass_Search_VerbatimQL_OptIn(t *testing.T) {
 	t.Parallel()
 	customQL := `[out:json][timeout:10];node["amenity"="cafe"](around:1000,52.52,13.40);out;`
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
-		// The plugin should pass the custom QL through unchanged.
+		// The plugin should pass the custom QL through (timeout under the cap).
 		assert.Equal(t, customQL, string(body))
 		_, _ = io.WriteString(w, `{"elements":[]}`)
 	}))
 	defer srv.Close()
 
-	p := newOSMOverpassTestPlugin(t, srv.URL)
+	// Opt in to raw QL via extra.allow_raw_ql=true.
+	p := &OSMOverpassPlugin{}
+	require.NoError(t, p.Initialize(context.Background(), PluginConfig{
+		Enabled:   true,
+		BaseURL:   srv.URL,
+		RateLimit: 100,
+		Extra:     map[string]string{osmOverpassExtraAllowRawQL: "true"},
+	}))
 	_, err := p.Search(context.Background(), SearchParams{
 		Query:   "ignored when custom QL provided",
 		Filters: SearchFilters{Categories: []string{customQL}},
 	})
 	require.NoError(t, err)
+}
+
+func TestOSMOverpass_Search_VerbatimQL_RefusedByDefault(t *testing.T) {
+	t.Parallel()
+	customQL := `[out:json][timeout:9000];node;out;` // hostile-looking long-timeout
+	p := newOSMOverpassTestPlugin(t, "http://unused")
+	_, err := p.Search(context.Background(), SearchParams{
+		Query:   "x",
+		Filters: SearchFilters{Categories: []string{customQL}},
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidInput))
+}
+
+func TestOSMOverpass_ClampOverpassTimeout(t *testing.T) {
+	t.Parallel()
+	in := `[out:json][timeout:9000];node;out;`
+	got := clampOverpassTimeout(in)
+	assert.Contains(t, got, "[timeout:25]")
+	assert.NotContains(t, got, "9000")
+
+	// Under-cap value left alone.
+	low := `[out:json][timeout:5];node;out;`
+	assert.Equal(t, low, clampOverpassTimeout(low))
 }
 
 func TestOSMOverpass_Search_WayWithCenter(t *testing.T) {
@@ -177,7 +208,7 @@ func TestOSMOverpass_Get_NotWired(t *testing.T) {
 
 func TestOSMOverpass_BuildQL_QuoteEscape(t *testing.T) {
 	t.Parallel()
-	got := overpassBuildQL(SearchParams{Query: `"weird"`}, 10)
+	got := overpassDefaultQL(SearchParams{Query: `"weird"`}, 10)
 	assert.Contains(t, got, `node["name"~"\"weird\"",i]`)
 	assert.True(t, strings.Contains(got, "out center 10;"))
 }

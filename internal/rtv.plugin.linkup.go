@@ -143,6 +143,7 @@ func (p *LinkupPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON, FormatMarkdown},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentDeepResearch},
 		Kinds:                    []ResultKind{KindWeb},
+		RequiresCredential:       true,
 	}
 }
 
@@ -273,7 +274,7 @@ func (p *LinkupPlugin) doSearch(ctx context.Context, body linkupSearchRequest, a
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("linkup: http: %w", err)
+		return nil, fmt.Errorf("linkup: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -344,6 +345,6 @@ func (p *LinkupPlugin) recordError(err error) {
 	defer p.mu.Unlock()
 	p.healthy = false
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

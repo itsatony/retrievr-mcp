@@ -226,6 +226,7 @@ func (p *BravePlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON, FormatMarkdown},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
 		Kinds:                    []ResultKind{KindWeb, KindNews, KindImage},
+		RequiresCredential:       true,
 	}
 }
 

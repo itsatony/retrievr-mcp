@@ -16,12 +16,24 @@ const (
 	contractTestMinMaxResults = 1 // minimum sane value for MaxResultsPerQuery
 )
 
-// validContentTypes is the set of allowed ContentType values for contract validation.
+// validContentTypes is the set of allowed ContentType values for
+// contract validation. Mirrors the IsValidContentType allowlist in
+// rtv.types.go — adding a new ContentType requires updating both.
+// Review-hardening pass: extended to cover v3 multimodal kinds + v5
+// Package/Patent + v6 Audio so the contract suite stays usable for
+// every shipped plugin.
 var validContentTypes = map[ContentType]bool{
 	ContentTypePaper:   true,
 	ContentTypeModel:   true,
 	ContentTypeDataset: true,
 	ContentTypeAny:     true,
+	ContentTypeVideo:   true,
+	ContentTypePlace:   true,
+	ContentTypeImage:   true,
+	ContentTypePost:    true,
+	ContentTypePackage: true,
+	ContentTypePatent:  true,
+	ContentTypeAudio:   true,
 }
 
 // ---------------------------------------------------------------------------

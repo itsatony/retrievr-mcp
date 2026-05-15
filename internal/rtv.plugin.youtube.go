@@ -263,6 +263,7 @@ func (p *YouTubePlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentReference},
 		Kinds:                    []ResultKind{KindVideo},
+		RequiresCredential:       true,
 	}
 }
 
@@ -513,7 +514,7 @@ func (p *YouTubePlugin) doJSON(ctx context.Context, reqURL string, out any) erro
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("youtube: http: %w", err)
+		return fmt.Errorf("youtube: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -748,6 +749,6 @@ func (p *YouTubePlugin) recordError(err error) {
 	// TestYouTube_Search_QuotaExceededMapsToRateLimitExceeded.
 	p.healthy = errors.Is(err, ErrRateLimitExceeded)
 	if err != nil {
-		p.lastError = err.Error()
+		p.lastError = sanitizeHealthError(err)
 	}
 }

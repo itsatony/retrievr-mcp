@@ -154,10 +154,10 @@ type RedditPlugin struct {
 	enabled    bool
 	rateLimit  float64
 
-	// Token cache.
-	tokenMu     sync.Mutex
-	cachedToken string
-	tokenExpiry time.Time
+	// Per-credential token cache. Each tenant's <client_id:secret> pair
+	// gets its own bearer-token entry so cross-tenant sessions never
+	// reuse one another's identity / billing / rate-limit attribution.
+	tokens *tokenCache
 
 	mu        sync.RWMutex
 	healthy   bool
@@ -208,6 +208,7 @@ func (p *RedditPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
 		Kinds:                    []ResultKind{KindPost},
+		RequiresCredential:       true,
 	}
 }
 
@@ -250,6 +251,7 @@ func (p *RedditPlugin) Initialize(_ context.Context, cfg PluginConfig) error {
 		timeout = DefaultPluginTimeout
 	}
 	p.httpClient = NewEgressClient(timeout)
+	p.tokens = newTokenCache(SourceReddit)
 	p.healthy = true
 	return nil
 }
@@ -296,6 +298,7 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 		p.recordError(err)
 		return nil, err
 	}
+	credKey := redditCredentialKey(clientID, clientSecret)
 
 	limit := params.Limit
 	if limit <= 0 {
@@ -306,7 +309,7 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 	}
 
 	if len(subreddits) == 0 {
-		listing, err := p.doSearch(ctx, params, "", limit, token)
+		listing, err := p.doSearch(ctx, params, "", limit, token, credKey)
 		if err != nil {
 			p.recordError(err)
 			return nil, err
@@ -329,7 +332,7 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 	seen := make(map[string]struct{}, len(subreddits)*limit)
 	hasMore := false
 	for _, sub := range subreddits {
-		listing, err := p.doSearch(ctx, params, sub, limit, token)
+		listing, err := p.doSearch(ctx, params, sub, limit, token, credKey)
 		if err != nil {
 			p.recordError(err)
 			return nil, err
@@ -385,14 +388,21 @@ func (p *RedditPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ Cont
 // HTTP transport
 // ---------------------------------------------------------------------------
 
+// credentialKey returns the cache key under which a (clientID,
+// clientSecret) pair's bearer token lives. Used by ensureToken and the
+// 401-invalidation path so cache lookups and writes agree.
+func redditCredentialKey(clientID, clientSecret string) string {
+	return clientID + ":" + clientSecret
+}
+
 // ensureToken returns a cached access token if still valid (with safety
 // margin), otherwise exchanges client_id:client_secret for a fresh one.
+// The token cache is keyed per credential pair so multi-tenant callers
+// never reuse one another's bearer token.
 func (p *RedditPlugin) ensureToken(ctx context.Context, clientID, clientSecret string) (string, error) {
-	p.tokenMu.Lock()
-	defer p.tokenMu.Unlock()
-
-	if p.cachedToken != "" && time.Now().Add(redditTokenRefreshSafetyMargin).Before(p.tokenExpiry) {
-		return p.cachedToken, nil
+	credKey := redditCredentialKey(clientID, clientSecret)
+	if tok, ok := p.tokens.Get(credKey); ok {
+		return tok, nil
 	}
 
 	body := strings.NewReader(redditTokenGrantBody)
@@ -407,7 +417,7 @@ func (p *RedditPlugin) ensureToken(ctx context.Context, clientID, clientSecret s
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("reddit: token http: %w", err)
+		return "", fmt.Errorf("reddit: token http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -434,15 +444,18 @@ func (p *RedditPlugin) ensureToken(ctx context.Context, clientID, clientSecret s
 	if expiresIn <= 0 {
 		expiresIn = redditTokenDefaultExpiresInSec
 	}
-	p.cachedToken = tok.AccessToken
-	p.tokenExpiry = time.Now().Add(time.Duration(expiresIn) * time.Second)
-	return p.cachedToken, nil
+	lifetime := time.Duration(expiresIn)*time.Second - redditTokenRefreshSafetyMargin
+	if lifetime < time.Minute {
+		lifetime = time.Minute
+	}
+	p.tokens.Set(credKey, tok.AccessToken, lifetime)
+	return tok.AccessToken, nil
 }
 
 // doSearch issues one search request. If subreddit is non-empty, the path
 // becomes /r/<sub>/search with restrict_sr=on so Reddit limits results to
 // that community; otherwise /search runs against /r/all by default.
-func (p *RedditPlugin) doSearch(ctx context.Context, params SearchParams, subreddit string, limit int, token string) (*redditListing, error) {
+func (p *RedditPlugin) doSearch(ctx context.Context, params SearchParams, subreddit string, limit int, token, credKey string) (*redditListing, error) {
 	q := url.Values{}
 	q.Set(redditQueryParamQ, params.Query)
 	q.Set(redditQueryParamLimit, strconv.Itoa(limit))
@@ -466,17 +479,19 @@ func (p *RedditPlugin) doSearch(ctx context.Context, params SearchParams, subred
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("reddit: search http: %w", err)
+		return nil, fmt.Errorf("reddit: search http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
 	switch {
-	case httpResp.StatusCode == http.StatusUnauthorized:
-		// Invalidate cached token so next call re-exchanges.
-		p.tokenMu.Lock()
-		p.cachedToken = ""
-		p.tokenMu.Unlock()
-		return nil, fmt.Errorf("%w: reddit search returned 401 — token rejected", ErrCredentialInvalid)
+	case httpResp.StatusCode == http.StatusUnauthorized,
+		httpResp.StatusCode == http.StatusForbidden:
+		// Invalidate THIS tenant's cached token only; other tenants
+		// keep their entries. Reddit returns 401 for expired tokens
+		// and 403 for revoked/suspended apps — both require re-auth
+		// on the next call, so the cache miss must propagate.
+		p.tokens.Invalidate(credKey)
+		return nil, fmt.Errorf("%w: reddit search returned %d — token rejected or app revoked", ErrCredentialInvalid, httpResp.StatusCode)
 	case httpResp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: reddit", ErrRateLimitExceeded)
 	case httpResp.StatusCode >= 400:

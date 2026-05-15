@@ -145,11 +145,14 @@ func (p *SerpAPINewsPlugin) Search(ctx context.Context, params SearchParams) (*S
 
 	resp, err := p.inner.doSearch(ctx, params, limit, apiKey, serpapinewsEngine)
 	if err != nil {
-		// inner.doSearch already recorded the failure on the inner
-		// SerpAPI plugin's health state; wrap the error so log readers
-		// can distinguish news from web while preserving the sentinel.
-		return nil, mapSerpAPINewsError(err)
+		// inner.doSearch does NOT touch health state — the cycle-4
+		// outer Search is what calls recordSuccess/recordError. Mirror
+		// that here so a news-only outage moves the inner plugin's
+		// Health() indicator (Health() delegates to inner).
+		p.inner.recordError(err)
+		return nil, wrapSerpAPINewsError(err)
 	}
+	p.inner.recordSuccess()
 
 	pubs := make([]Publication, 0, len(resp.OrganicResults))
 	for i := range resp.OrganicResults {
@@ -167,16 +170,18 @@ func (p *SerpAPINewsPlugin) Get(_ context.Context, _ string, _ []IncludeField, _
 	return nil, fmt.Errorf("%w: serpapinews Get is not wired in cycle 6", ErrFormatUnsupported)
 }
 
-// mapSerpAPINewsError rewrites cycle-4 inner errors that mention
-// "serpapi" so log readers can tell whether they came from the web or
-// the news plugin. The underlying sentinel (`ErrCredentialInvalid`,
-// `ErrRateLimitExceeded`, ...) is preserved.
-func mapSerpAPINewsError(err error) error {
+// wrapSerpAPINewsError prepends "serpapinews: " to inner SerpAPI plugin
+// errors so log readers can tell which engine produced the failure.
+// Sentinel errors stay reachable via errors.Is because the original
+// chain is preserved with %w.
+func wrapSerpAPINewsError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if msg := err.Error(); strings.Contains(msg, "serpapi") && !strings.Contains(msg, "serpapinews") {
-		return fmt.Errorf("%w", err) // preserves the sentinel via wrapping
+	// Skip the prefix if the message already mentions serpapinews
+	// (defensive — keeps re-wrapping idempotent).
+	if strings.Contains(err.Error(), "serpapinews") {
+		return err
 	}
-	return err
+	return fmt.Errorf("serpapinews: %w", err)
 }

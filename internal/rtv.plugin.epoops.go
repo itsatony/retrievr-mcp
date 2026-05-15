@@ -136,11 +136,13 @@ type EPOOPSPlugin struct {
 	enabled    bool
 	rateLimit  float64
 
-	mu          sync.RWMutex
-	healthy     bool
-	lastError   string
-	accessToken string
-	tokenExpiry time.Time
+	mu        sync.RWMutex
+	healthy   bool
+	lastError string
+
+	// tokens caches bearer tokens per credential pair so multi-tenant
+	// callers never reuse one another's OPS session.
+	tokens *tokenCache
 }
 
 // ID returns "epoops".
@@ -185,6 +187,7 @@ func (p *EPOOPSPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentDeepResearch, IntentPrimarySource},
 		Kinds:                    []ResultKind{KindPatent},
+		RequiresCredential:       true,
 	}
 }
 
@@ -209,6 +212,7 @@ func (p *EPOOPSPlugin) Initialize(_ context.Context, cfg PluginConfig) error {
 		timeout = epoopsDefaultTimeout
 	}
 	p.httpClient = NewEgressClient(timeout)
+	p.tokens = newTokenCache(SourceEPOOPS)
 	p.healthy = true
 	return nil
 }
@@ -246,7 +250,7 @@ func (p *EPOOPSPlugin) Search(ctx context.Context, params SearchParams) (*Search
 		return nil, err
 	}
 
-	env, err := p.doSearch(ctx, params, limit, token)
+	env, err := p.doSearch(ctx, params, limit, token, apiKey)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -281,12 +285,8 @@ func (p *EPOOPSPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ Cont
 // ensureToken returns a cached access token if still valid, otherwise
 // fetches a fresh one via client_credentials.
 func (p *EPOOPSPlugin) ensureToken(ctx context.Context, apiKey string) (string, error) {
-	p.mu.RLock()
-	cached := p.accessToken
-	expiry := p.tokenExpiry
-	p.mu.RUnlock()
-	if cached != "" && time.Now().Before(expiry) {
-		return cached, nil
+	if tok, ok := p.tokens.Get(apiKey); ok {
+		return tok, nil
 	}
 
 	parts := strings.SplitN(apiKey, ":", 2)
@@ -306,7 +306,7 @@ func (p *EPOOPSPlugin) ensureToken(ctx context.Context, apiKey string) (string, 
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("epoops: token http: %w", err)
+		return "", fmt.Errorf("epoops: token http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -326,14 +326,11 @@ func (p *EPOOPSPlugin) ensureToken(ctx context.Context, apiKey string) (string, 
 		return "", fmt.Errorf("%w: epoops empty access token", ErrCredentialInvalid)
 	}
 
-	p.mu.Lock()
-	p.accessToken = tr.AccessToken
-	p.tokenExpiry = time.Now().Add(epoopsTokenLifetime)
-	p.mu.Unlock()
+	p.tokens.Set(apiKey, tr.AccessToken, epoopsTokenLifetime)
 	return tr.AccessToken, nil
 }
 
-func (p *EPOOPSPlugin) doSearch(ctx context.Context, params SearchParams, limit int, token string) (*epoopsSearchEnvelope, error) {
+func (p *EPOOPSPlugin) doSearch(ctx context.Context, params SearchParams, limit int, token, apiKey string) (*epoopsSearchEnvelope, error) {
 	q := url.Values{}
 	q.Set("q", epoopsBuildQuery(params))
 	rangeStart := params.Offset + 1
@@ -353,7 +350,7 @@ func (p *EPOOPSPlugin) doSearch(ctx context.Context, params SearchParams, limit 
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("epoops: http: %w", err)
+		return nil, fmt.Errorf("epoops: http: %w", redactURLErr(err))
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
@@ -361,10 +358,8 @@ func (p *EPOOPSPlugin) doSearch(ctx context.Context, params SearchParams, limit 
 	case httpResp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: epoops", ErrRateLimitExceeded)
 	case httpResp.StatusCode == http.StatusUnauthorized, httpResp.StatusCode == http.StatusForbidden:
-		// Force token refresh on next call.
-		p.mu.Lock()
-		p.accessToken = ""
-		p.mu.Unlock()
+		// Force token refresh on next call (this tenant only).
+		p.tokens.Invalidate(apiKey)
 		return nil, fmt.Errorf("%w: epoops", ErrCredentialInvalid)
 	case httpResp.StatusCode >= 400:
 		buf, _ := io.ReadAll(httpResp.Body)

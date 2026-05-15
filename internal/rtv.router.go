@@ -55,8 +55,17 @@ const (
 // Credential acceptance
 // ---------------------------------------------------------------------------
 
-// sourcesAcceptingCredentials identifies sources that accept per-call credentials.
-var sourcesAcceptingCredentials = map[string]bool{
+// sourcesAcceptingOptionalCredentials lists plugins that operate anonymously
+// but accept an optional API key for higher quotas. Used by
+// SourceAcceptsCredentials together with the capability-derived
+// RequiresCredential flag — the latter captures fail-fast paid plugins
+// across the v2-v6 catalog; this map captures the legacy
+// optional-key surface (pubmed, s2, openalex, huggingface, ads).
+//
+// Adding a new optional-key plugin: register it here. Adding a new
+// must-have-key plugin: set Capabilities.RequiresCredential=true on
+// the plugin and don't touch this map.
+var sourcesAcceptingOptionalCredentials = map[string]bool{
 	SourcePubMed:      true,
 	SourceS2:          true,
 	SourceOpenAlex:    true,
@@ -64,9 +73,36 @@ var sourcesAcceptingCredentials = map[string]bool{
 	SourceADS:         true,
 }
 
-// SourceAcceptsCredentials returns true if the given source supports per-call credentials.
+// SourceAcceptsCredentials returns true if the given source supports
+// per-call credentials. Looks up the plugin factory by sourceID,
+// instantiates it, reads Capabilities().RequiresCredential, and falls
+// back to the legacy sourcesAcceptingOptionalCredentials allowlist for
+// pre-RequiresCredential sources (pubmed, s2, openalex, hf, ads).
+//
+// The function is intentionally not cheap on a hot path because the
+// only callers are introspection surfaces (rtv_list_sources, audit
+// logs, docs generators). Cached lookup is not warranted today; if a
+// hot caller appears, wrap with sync.Once-based memoization.
 func SourceAcceptsCredentials(sourceID string) bool {
-	return sourcesAcceptingCredentials[sourceID]
+	if sourcesAcceptingOptionalCredentials[sourceID] {
+		return true
+	}
+	factory, ok := PluginFactories()[sourceID]
+	if !ok {
+		return false
+	}
+	plugin := factory()
+	return plugin.Capabilities().RequiresCredential
+}
+
+// sourceAcceptsCredentialsFromCaps is the preferred form. Returns true
+// when the plugin either declares it strictly requires a key (paid
+// plugin) or appears in the legacy optional-credential allowlist.
+func sourceAcceptsCredentialsFromCaps(sourceID string, caps SourceCapabilities) bool {
+	if caps.RequiresCredential {
+		return true
+	}
+	return sourcesAcceptingOptionalCredentials[sourceID]
 }
 
 // ---------------------------------------------------------------------------
@@ -903,7 +939,8 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 		}
 
 		residency := plugin.Residency()
-		acceptsCreds := SourceAcceptsCredentials(plugin.ID())
+		acceptsCreds := sourceAcceptsCredentialsFromCaps(plugin.ID(), caps)
+		requiresKey := caps.RequiresCredential
 
 		infos = append(infos, SourceInfo{
 			ID:                     plugin.ID(),
@@ -934,8 +971,11 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 			Region:          residency.Region,
 			DPAStatus:       residency.DPAStatus,
 			SubprocessorURL: residency.SubprocessorURL,
-			FreeTier:        !acceptsCreds, // working approximation: anon-tier sources are "free"
-			RequiresKey:     acceptsCreds,
+			// FreeTier means the plugin works without a key (anonymous
+			// or optional-credential). RequiresKey means it refuses
+			// without one (paid / strictly-keyed).
+			FreeTier:    !requiresKey,
+			RequiresKey: requiresKey,
 		})
 	}
 
@@ -1051,11 +1091,30 @@ func dedup(results []Publication) []Publication {
 			}
 			tryDedup(dedupFamilyPostURL, results[i].URL, i)
 		case ContentTypePackage:
-			tryDedup(dedupFamilyPackage, stringFromMeta(results[i].SourceMetadata, MetaKeyPackageID), i)
+			if tryDedup(dedupFamilyPackage, stringFromMeta(results[i].SourceMetadata, MetaKeyPackageID), i) {
+				continue
+			}
+			// Some package records (Zenodo software releases) carry a
+			// DOI; honour it as a secondary key inside the package
+			// family so they still dedup when the ecosystem-prefixed
+			// package_id wasn't synthesized upstream.
+			tryDedup(dedupFamilyDOI, results[i].DOI, i)
 		case ContentTypePatent:
-			tryDedup(dedupFamilyPatent, stringFromMeta(results[i].SourceMetadata, MetaKeyPatentNumber), i)
+			if tryDedup(dedupFamilyPatent, stringFromMeta(results[i].SourceMetadata, MetaKeyPatentNumber), i) {
+				continue
+			}
+			// A patent record from googlepatents may fail to parse the
+			// publication number under the unofficial xhr endpoint;
+			// fall back to DOI when present (EPO OPS records also
+			// carry an `epodoc` publication number that's effectively
+			// a DOI-like identifier).
+			tryDedup(dedupFamilyDOI, results[i].DOI, i)
 		case ContentTypeAudio:
-			tryDedup(dedupFamilyAudio, stringFromMeta(results[i].SourceMetadata, MetaKeyAudioID), i)
+			if tryDedup(dedupFamilyAudio, stringFromMeta(results[i].SourceMetadata, MetaKeyAudioID), i) {
+				continue
+			}
+			// Audio fallback: identical preview/audio URL.
+			tryDedup(dedupFamilyMediaURL, results[i].MediaURL, i)
 		default:
 			// paper / model / dataset / "" / any — DOI + ArXiv ID family.
 			// DOI hit short-circuits ArXivID indexing (matches v2 behavior:

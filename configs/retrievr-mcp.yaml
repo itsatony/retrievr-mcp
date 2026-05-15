@@ -338,3 +338,29 @@ sources:
     timeout: "15s"
     rate_limit: 2.0
     rate_limit_burst: 2
+
+  googlepatents:
+    enabled: false               # v5 cycle 5 (v2.12.0). Free, no auth. Rides unofficial xhr/query endpoint; fragility documented in retrievr_v5.md §12.
+    timeout: "15s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+
+  epoops:
+    enabled: false               # v5 cycle 5 (v2.12.0). Free with registration. EU (Munich). OAuth2 client_credentials.
+    api_key: ""                  # Format: "consumer_key:consumer_secret". Or RETRIEVR_EPOOPS_API_KEY env. Per-call override: credentials.epoops.
+    timeout: "30s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+
+  courtlistener:
+    enabled: false               # v5 cycle 5 (v2.12.0). Free, non-profit. Optional token bumps rate limit.
+    api_key: ""                  # Optional CourtListener API token; or RETRIEVR_COURTLISTENER_API_KEY env. Per-call override: credentials.courtlistener.
+    timeout: "15s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+
+  eurlex:
+    enabled: false               # v5 cycle 5 (v2.12.0). Free, no auth; HTML search-page parse. EU (Luxembourg).
+    timeout: "20s"
+    rate_limit: 2.0
+    rate_limit_burst: 2

@@ -88,6 +88,12 @@ func PluginFactories() map[string]PluginFactory {
 		SourcePyPI:     func() SourcePlugin { return &PyPIPlugin{} },
 		SourceCrates:   func() SourcePlugin { return &CratesPlugin{} },
 		SourcePkgGoDev: func() SourcePlugin { return &PkgGoDevPlugin{} },
+
+		// v5 cycle 5 / v2.12.0 — patents + law.
+		SourceGooglePatents: func() SourcePlugin { return &GooglePatentsPlugin{} },
+		SourceEPOOPS:        func() SourcePlugin { return &EPOOPSPlugin{} },
+		SourceCourtListener: func() SourcePlugin { return &CourtListenerPlugin{} },
+		SourceEURLex:        func() SourcePlugin { return &EURLexPlugin{} },
 	}
 }
 

@@ -970,6 +970,8 @@ const (
 	dedupFamilyPostURL   = "post_url"
 	dedupFamilyQA        = "qa_question_id"
 	dedupFamilyPackage   = "package_id"
+	dedupFamilyPatent    = "patent_number"
+	dedupFamilyLaw       = "citation_code"
 
 	// dedupCoordPrecisionFmt rounds lat/lon to 5 decimal places (~1 m),
 	// applied to place results lacking osm_id. Two places within ~1 m of
@@ -1049,6 +1051,8 @@ func dedup(results []Publication) []Publication {
 			tryDedup(dedupFamilyPostURL, results[i].URL, i)
 		case ContentTypePackage:
 			tryDedup(dedupFamilyPackage, stringFromMeta(results[i].SourceMetadata, MetaKeyPackageID), i)
+		case ContentTypePatent:
+			tryDedup(dedupFamilyPatent, stringFromMeta(results[i].SourceMetadata, MetaKeyPatentNumber), i)
 		default:
 			// paper / model / dataset / "" / any — DOI + ArXiv ID family.
 			// DOI hit short-circuits ArXivID indexing (matches v2 behavior:
@@ -1060,6 +1064,15 @@ func dedup(results []Publication) []Publication {
 			// have no DOI/ArXivID, so route them on the QA family.
 			if qaKey := stringFromMeta(results[i].SourceMetadata, MetaKeyQAQuestionID); qaKey != "" {
 				tryDedup(dedupFamilyQA, qaKey, i)
+				continue
+			}
+			// Law results (CourtListener, EUR-Lex) emit ContentTypePaper
+			// with MetaKeyCitationCode populated — route on the law
+			// family so cross-citation dedup works (e.g. CourtListener
+			// "410 U.S. 113" and a paper preprint referencing the same
+			// case never collide because the family is distinct).
+			if lawKey := stringFromMeta(results[i].SourceMetadata, MetaKeyCitationCode); lawKey != "" {
+				tryDedup(dedupFamilyLaw, lawKey, i)
 				continue
 			}
 			if tryDedup(dedupFamilyDOI, results[i].DOI, i) {

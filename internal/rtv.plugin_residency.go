@@ -249,3 +249,44 @@ func (*PkgGoDevPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Google Patents' data-residency posture (US —
+// Google LLC, Mountain View). Rides the public xhr/query endpoint.
+func (*GooglePatentsPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports EPO OPS's data-residency posture (EU — European
+// Patent Office, Munich). DPA signed via the OPS registration TOS.
+func (*EPOOPSPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPASigned,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports CourtListener's data-residency posture (US —
+// Free Law Project, non-profit). SCC applies for any account-linked
+// requests; anonymous search is unaffected.
+func (*CourtListenerPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports EUR-Lex's data-residency posture (EU —
+// Publications Office of the European Union, Luxembourg).
+func (*EURLexPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

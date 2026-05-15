@@ -5,6 +5,94 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.12.0] - 2026-05-15
+
+Minor release. **KnowledgeCommons cycle 5 — PatentsAndLaw**
+(`project_plan/retrievr_v5.md` §9). Adds patents and case-law as
+searchable evidence via Google Patents, EPO OPS, CourtListener, and
+EUR-Lex. Introduces `ContentTypePatent`, `KindLaw`, and two new dedup
+families.
+
+### Added
+
+- **`ContentType` `ContentTypePatent`** (`internal/rtv.types.go`) for
+  patent records. Dedup keyed on `SourceMetadata["patent_number"]`.
+- **`ResultKind` `KindPatent`** and **`KindLaw`**
+  (`internal/rtv.result.go`). Patents land as
+  `ContentTypePatent`/`KindPatent`; court decisions and EU regulations
+  emit `ContentTypePaper` with `Result.Kind = KindLaw` and dedup on
+  `SourceMetadata["citation_code"]`.
+- **`SourceGooglePatents` plugin**
+  (`internal/rtv.plugin.googlepatents.go`):
+  `https://patents.google.com/xhr/query`. Free, no auth. Rides
+  Google's internal xhr/query endpoint (with `)]}'` anti-hijack
+  prefix stripping). Returns publication number, title, snippet,
+  inventors, assignee, CPC classifications, dates. **Documented
+  fragility** in retrievr_v5.md §12.
+- **`SourceEPOOPS` plugin** (`internal/rtv.plugin.epoops.go`):
+  `https://ops.epo.org/3.2/rest-services/published-data/search`. Free
+  with registration; full OAuth2 client_credentials flow with cached
+  Bearer-token refresh. Per-call credential: `epoops`, value
+  `"consumer_key:consumer_secret"`. EU-resident (Munich, DPA-signed).
+  Handles the OPS object-vs-array shape switch on
+  `publication-reference`.
+- **`SourceCourtListener` plugin**
+  (`internal/rtv.plugin.courtlistener.go`):
+  `https://www.courtlistener.com/api/rest/v4/search/?type=o`. Free,
+  non-profit; optional Token-auth header (per-call: `courtlistener`)
+  bumps rate limit. Emits paper-typed results with citation_code,
+  court slug, jurisdiction = "US". 8M+ US federal + state opinions.
+- **`SourceEURLex` plugin** (`internal/rtv.plugin.eurlex.go`):
+  `https://eur-lex.europa.eu/search.html`. Free, no auth; HTML
+  search-page parse extracting CELEX identifiers as citation codes.
+  Supports `filters.language` (24 EU official languages). EU-resident
+  (Luxembourg).
+- **Dedup families** in router (`internal/rtv.router.go`):
+  `dedupFamilyPatent` (routes `ContentTypePatent` results on
+  `patent_number`); `dedupFamilyLaw` (routes paper-typed law results
+  on `citation_code` before DOI). Cross-class collision impossible by
+  construction.
+- **Per-component patent + law metadata keys** in types
+  (`smetaPatentAssignee`, `smetaPatentInventors`, `smetaPatentCPC`,
+  `smetaPatentJurisdiction`, `smetaPatentKindCode`,
+  `smetaPatentFilingDate`; `smetaLawCourt`, `smetaLawJurisdiction`,
+  `smetaLawCitationCode`, `smetaLawDecisionDate`,
+  `smetaLawDocketNumber`, `smetaLawCelex`).
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `googlepatents` → US/SCC; `epoops` → EU/signed-DPA; `courtlistener`
+  → US/SCC (non-profit); `eurlex` → EU/n/a.
+- **Config blocks** for the four new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default).
+- **Unit tests** for all four plugins (httptest fixtures): identity,
+  capabilities, residency, happy-path search, anti-hijack-prefix
+  stripping (Google), OAuth2 token flow + cache (EPO), object-vs-array
+  publication-reference shape (EPO), Token-auth + court/date filter
+  routing (CourtListener), CELEX-anchor extraction + CELEX-dedup +
+  language hint (EUR-Lex), 401 → `ErrCredentialInvalid`, 429 →
+  `ErrRateLimitExceeded`, Get-not-wired path.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 40 → 44; `validSourceIDs`
+  registers `googlepatents`, `epoops`, `courtlistener`, `eurlex`;
+  registry factory map + test-expected count updated.
+  `IsValidContentType` accepts `ContentTypePatent`. Config / E2E /
+  registry fixtures extended with the four new source blocks.
+
+### Notes
+
+- Google Patents and EUR-Lex both ride non-API surfaces (xhr/query
+  and HTML search respectively). Integration tests catch breakage
+  before deploy; risk-register entries in retrievr_v5.md §12 cover
+  TOS shifts and structural drift.
+- EPO OPS biblio enrichment (inventors, applicants, abstracts via
+  `/published-data/publication/.../biblio`) is a follow-on cycle.
+  The publication number already returned today is the dedup key,
+  so cross-source patent dedup works without enrichment.
+- Patent / law BibTeX entry types (`@patent`, `@misc howpublished="court
+  decision"`) deferred to a future tidy cycle. The metadata layer
+  already carries everything needed to assemble them.
+
 ## [2.11.0] - 2026-05-15
 
 Minor release. **KnowledgeCommons cycle 4 — Packages**

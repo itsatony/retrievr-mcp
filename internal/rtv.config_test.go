@@ -446,6 +446,18 @@ sources:
   pkggodev:
     enabled: false
     timeout: "10s"
+  googlepatents:
+    enabled: false
+    timeout: "10s"
+  epoops:
+    enabled: false
+    timeout: "10s"
+  courtlistener:
+    enabled: false
+    timeout: "10s"
+  eurlex:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

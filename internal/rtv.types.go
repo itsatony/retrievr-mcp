@@ -32,6 +32,13 @@ const (
 	// as "<ecosystem>:<name>" (e.g. "npm:react", "pypi:requests") so
 	// same-name packages across ecosystems never collide.
 	ContentTypePackage ContentType = "package"
+
+	// v5 cycle 5 / v2.12.0 — patent records (Google Patents, EPO OPS).
+	// Dedup keyed by SourceMetadata["patent_number"] (publication number,
+	// e.g. "EP3456789A1", "US2023123456"). Court decisions and EU
+	// regulations stay on ContentTypePaper with Result.Kind = KindLaw and
+	// dedup on SourceMetadata["citation_code"].
+	ContentTypePatent ContentType = "patent"
 )
 
 // IsValidContentType returns true if the given string maps to a known
@@ -42,7 +49,7 @@ func IsValidContentType(ct string) bool {
 	switch ContentType(ct) {
 	case ContentTypePaper, ContentTypeModel, ContentTypeDataset, ContentTypeAny,
 		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost,
-		ContentTypePackage:
+		ContentTypePackage, ContentTypePatent:
 		return true
 	}
 	return false
@@ -159,6 +166,12 @@ const (
 	SourcePyPI     = "pypi"
 	SourceCrates   = "crates"
 	SourcePkgGoDev = "pkggodev"
+
+	// v5 cycle 5 / v2.12.0 — patents + law.
+	SourceGooglePatents = "googlepatents"
+	SourceEPOOPS        = "epoops"
+	SourceCourtListener = "courtlistener"
+	SourceEURLex        = "eurlex"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -216,6 +229,11 @@ var validSourceIDs = map[string]bool{
 	SourcePyPI:     true,
 	SourceCrates:   true,
 	SourcePkgGoDev: true,
+	// v5 cycle 5 — patents + law.
+	SourceGooglePatents: true,
+	SourceEPOOPS:        true,
+	SourceCourtListener: true,
+	SourceEURLex:        true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -242,7 +260,9 @@ func AllSourceIDs() []string {
 // HackerNews → 30. v5 cycle 2 / v2.9.0 added Zenodo + CORE + OpenAIRE → 33.
 // v5 cycle 3 / v2.10.0 added Wikidata + DataCite + ORCID → 36.
 // v5 cycle 4 / v2.11.0 added npm + PyPI + crates + pkg.go.dev → 40.
-const SourceCount = 40
+// v5 cycle 5 / v2.12.0 added Google Patents + EPO OPS + CourtListener +
+// EUR-Lex → 44.
+const SourceCount = 44
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can
@@ -276,6 +296,35 @@ const (
 	smetaPackageHomeURL   = "package_home_url"
 	smetaPackageKeywords  = "package_keywords"
 	smetaPackageScore     = "package_score"
+
+	// v5 cycle 5 / v2.12.0 — patent + law dedup keys.
+	//
+	// MetaKeyPatentNumber namespaces a patent publication number (e.g.
+	// "EP3456789A1", "US2023123456"). The router dedup family is
+	// scoped to ContentTypePatent so a patent and a paper with the
+	// same string never collide.
+	MetaKeyPatentNumber = "patent_number"
+	// MetaKeyCitationCode namespaces a court-decision or regulation
+	// citation (e.g. "410 U.S. 113", "Regulation (EU) 2016/679").
+	// Routed before DOI when present on a ContentTypePaper hit.
+	MetaKeyCitationCode = "citation_code"
+
+	// Per-component patent metadata keys (the dedup key MetaKeyPatentNumber
+	// doubles as the canonical "patent_number" entry).
+	smetaPatentAssignee     = "patent_assignee"
+	smetaPatentInventors    = "patent_inventors"
+	smetaPatentCPC          = "patent_cpc"
+	smetaPatentJurisdiction = "patent_jurisdiction"
+	smetaPatentKindCode     = "patent_kind_code"
+	smetaPatentFilingDate   = "patent_filing_date"
+
+	// Per-component law metadata keys.
+	smetaLawCourt        = "law_court"
+	smetaLawJurisdiction = "law_jurisdiction"
+	smetaLawCitationCode = "law_citation_code"
+	smetaLawDecisionDate = "law_decision_date"
+	smetaLawDocketNumber = "law_docket_number"
+	smetaLawCelex        = "law_celex"
 )
 
 // ---------------------------------------------------------------------------

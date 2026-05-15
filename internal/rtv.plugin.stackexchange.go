@@ -54,7 +54,7 @@ import (
 const (
 	stackExchangePluginID          = SourceStackExchange
 	stackExchangePluginName        = "Stack Exchange"
-	stackExchangePluginDescription = "Search Q&A across the Stack Exchange network (Stack Overflow, Server Fault, Ask Ubuntu, Math Overflow, and 170+ other sites). Free — anonymous access caps at 300/day/IP; configure a free API key for 10k/day. CC-BY-SA content. Per-call credential: stackexchange_key. Default site is stackoverflow; override per-deployment via extra.default_site or per-call via filters.extra.site."
+	stackExchangePluginDescription = "Search Q&A across the Stack Exchange network (Stack Overflow, Server Fault, Ask Ubuntu, Math Overflow, and 170+ other sites). Free — anonymous access caps at 300/day/IP; configure a free API key for 10k/day. CC-BY-SA content. Per-call credential: stackexchange. Default site is stackoverflow; override per-deployment via extra.default_site."
 
 	stackExchangeDefaultBaseURL = "https://api.stackexchange.com"
 	stackExchangeSearchPath     = "/2.3/search/advanced"
@@ -121,19 +121,19 @@ type stackExchangeSearchResponse struct {
 }
 
 type stackExchangeQuestion struct {
-	QuestionID       int64               `json:"question_id"`
-	Title            string              `json:"title"`
-	Body             string              `json:"body,omitempty"`
-	Link             string              `json:"link"`
-	Tags             []string            `json:"tags,omitempty"`
-	Score            int                 `json:"score"`
-	AnswerCount      int                 `json:"answer_count"`
-	IsAnswered       bool                `json:"is_answered"`
-	AcceptedAnswerID int64               `json:"accepted_answer_id,omitempty"`
-	CreationDate     int64               `json:"creation_date"`
-	LastActivityDate int64               `json:"last_activity_date,omitempty"`
-	Owner            stackExchangeOwner  `json:"owner"`
-	ContentLicense   string              `json:"content_license,omitempty"`
+	QuestionID       int64              `json:"question_id"`
+	Title            string             `json:"title"`
+	Body             string             `json:"body,omitempty"`
+	Link             string             `json:"link"`
+	Tags             []string           `json:"tags,omitempty"`
+	Score            int                `json:"score"`
+	AnswerCount      int                `json:"answer_count"`
+	IsAnswered       bool               `json:"is_answered"`
+	AcceptedAnswerID int64              `json:"accepted_answer_id,omitempty"`
+	CreationDate     int64              `json:"creation_date"`
+	LastActivityDate int64              `json:"last_activity_date,omitempty"`
+	Owner            stackExchangeOwner `json:"owner"`
+	ContentLicense   string             `json:"content_license,omitempty"`
 }
 
 type stackExchangeOwner struct {
@@ -353,7 +353,6 @@ func (p *StackExchangePlugin) doSearch(ctx context.Context, params SearchParams,
 	}
 	return &resp, nil
 }
-
 
 // ---------------------------------------------------------------------------
 // Wire → Publication mapping

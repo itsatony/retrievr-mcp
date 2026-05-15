@@ -37,13 +37,16 @@ const (
 	KindPlace ResultKind = "place"
 	KindImage ResultKind = "image"
 	KindPost  ResultKind = "post"
+
+	// v5 cycle 1 / v2.8.0 — Q&A (Stack Exchange, Hacker News).
+	KindQA ResultKind = "qa"
 )
 
 // IsValidResultKind returns true if the given string is a known kind.
 func IsValidResultKind(k string) bool {
 	switch ResultKind(k) {
 	case KindPaper, KindModel, KindDataset, KindWeb, KindNews, KindCode, KindEncyclopedia,
-		KindVideo, KindPlace, KindImage, KindPost:
+		KindVideo, KindPlace, KindImage, KindPost, KindQA:
 		return true
 	}
 	return false
@@ -96,6 +99,9 @@ type Result struct {
 	Place *PlaceData `json:"place,omitempty"`
 	Image *ImageData `json:"image,omitempty"`
 	Post  *PostData  `json:"post,omitempty"`
+
+	// v5 cycle 1 / v2.8.0 — Q&A block.
+	QA *QAData `json:"qa,omitempty"`
 
 	// Raw provider response (opt-in via WithIncludeRaw).
 	Raw json.RawMessage `json:"raw,omitempty"`
@@ -258,6 +264,21 @@ type PostData struct {
 	Subreddit    string `json:"subreddit,omitempty"` // Reddit-specific
 	Instance     string `json:"instance,omitempty"`  // Mastodon-specific (hostname)
 	Verified     bool   `json:"verified,omitempty"`
+}
+
+// QAData carries Q&A-specific fields (Stack Exchange, Hacker News).
+// v5 cycle 1 / v2.8.0. Site discriminates per-network sub-sites (Stack
+// Exchange's "stackoverflow", "serverfault", "askubuntu", ...; HN uses
+// "hackernews"). QuestionID + Site form the cross-source dedup key.
+type QAData struct {
+	Site             string   `json:"site,omitempty"`               // stackoverflow | hackernews | ...
+	QuestionID       string   `json:"question_id,omitempty"`        // provider-native ID
+	Tags             []string `json:"tags,omitempty"`               // SE tags / HN _tags filter
+	AnswerCount      *int     `json:"answer_count,omitempty"`       // SE answer count; HN num_comments
+	AcceptedAnswerID string   `json:"accepted_answer_id,omitempty"` // SE accepted_answer_id (HN unused)
+	Score            *int     `json:"score,omitempty"`              // SE question score / HN points
+	IsAnswered       *bool    `json:"is_answered,omitempty"`        // SE is_answered (HN unused)
+	AuthorHandle     string   `json:"author_handle,omitempty"`      // SE owner display_name / HN author
 }
 
 // EncyclopediaData carries reference-style article fields (Wikipedia, etc.).

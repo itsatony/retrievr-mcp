@@ -821,6 +821,77 @@ func TestIntegrationEuropeanaLanguageFilter(t *testing.T) {
 	require.NotEmpty(t, res.Results)
 }
 
+// TestIntegrationStackExchangeSearch exercises a live Stack Exchange query.
+// Per project_plan/retrievr_v5.md §5 test plan: "kubernetes ingress" must
+// return ≥3 stackoverflow results with QA tags populated.
+func TestIntegrationStackExchangeSearch(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	apiKey := os.Getenv("RETRIEVR_STACKEXCHANGE_API_KEY") // optional; lifts daily quota
+	plugin := &StackExchangePlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{
+		Enabled:   true,
+		APIKey:    apiKey,
+		RateLimit: 0.5,
+		Extra:     map[string]string{stackExchangeExtraDefaultSite: stackExchangeTestSite},
+	}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query: "kubernetes ingress",
+		Limit: 10,
+	})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(res.Results), 3, "expected at least 3 SO results for 'kubernetes ingress'")
+
+	for _, pub := range res.Results {
+		assert.NotEmpty(t, pub.Title)
+		assert.NotEmpty(t, pub.URL)
+		assert.NotEmpty(t, pub.SourceMetadata[MetaKeyQAQuestionID], "every QA result must carry a namespaced dedup key")
+		assert.Equal(t, stackExchangeTestSite, pub.SourceMetadata[smetaQASite])
+		tags := pub.Categories
+		assert.NotNil(t, tags, "stackoverflow questions for 'kubernetes ingress' must surface at least one tag")
+	}
+}
+
+// TestIntegrationHackerNewsSearch exercises a live HN Algolia query.
+// Per project_plan/retrievr_v5.md §5 test plan: "rust async" must return
+// ≥5 results with score and tags populated.
+func TestIntegrationHackerNewsSearch(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &HackerNewsPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, RateLimit: 5}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query: "rust async",
+		Limit: 10,
+	})
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(res.Results), 5, "expected at least 5 HN results for 'rust async'")
+
+	scoreSeen := false
+	tagsSeen := false
+	for _, pub := range res.Results {
+		assert.NotEmpty(t, pub.Title)
+		assert.NotEmpty(t, pub.SourceMetadata[MetaKeyQAQuestionID])
+		assert.Equal(t, hackerNewsSiteForDedup, pub.SourceMetadata[smetaQASite])
+		if v, ok := pub.SourceMetadata[smetaQAScore].(int); ok && v > 0 {
+			scoreSeen = true
+		}
+		if len(pub.Categories) > 0 {
+			tagsSeen = true
+		}
+	}
+	assert.True(t, scoreSeen, "at least one HN result must have a non-zero score")
+	assert.True(t, tagsSeen, "at least one HN result must have tags")
+}
+
 // TestIntegrationListSourcesCapabilities asserts the v2.7.0 capability flags
 // are exposed via Router.ListSources() for the providers we wired. No upstream
 // calls — local registry only.

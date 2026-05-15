@@ -258,3 +258,18 @@ sources:
     rate_limit_burst: 2
     extra:
       user_agent: "retrievr-mcp/2.6 (+https://github.com/itsatony/retrievr-mcp; REPLACE-WITH-YOUR-CONTACT@example.com)"  # Required by Reddit policy
+
+  stackexchange:
+    enabled: false               # v5 cycle 1 (v2.8.0). Free anonymous tier 300/day/IP; api_key lifts cap to 10k/day.
+    api_key: ""                  # optional Stack Exchange app key; or RETRIEVR_STACKEXCHANGE_API_KEY env. Per-call override: credentials.stackexchange.
+    timeout: "10s"
+    rate_limit: 0.5              # well under 10k/day cap even with key; anonymous tier needs <300/day
+    rate_limit_burst: 2
+    extra:
+      default_site: "stackoverflow"  # any Stack Exchange site slug: stackoverflow | serverfault | askubuntu | mathoverflow | superuser | ...
+
+  hackernews:
+    enabled: false               # v5 cycle 1 (v2.8.0). Algolia-hosted public mirror; no auth required.
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5

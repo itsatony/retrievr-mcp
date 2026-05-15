@@ -100,6 +100,18 @@ const (
 	smetaUpstreamScore = "upstream_score"
 	smetaDataProvider  = "data_provider"
 	smetaExternalURL   = "external_url"
+
+	// v5 cycle 1 / v2.8.0 — Q&A-kind keys. QuestionID is namespaced by
+	// Site at dedup time (MetaKeyQAQuestionID stores "<site>:<id>"). The
+	// per-component fields live separately so plugins can populate them
+	// independently without parsing the composite dedup key.
+	smetaQASite             = "qa_site"               // stackoverflow | hackernews | ...
+	smetaQARawQuestionID    = "qa_raw_question_id"    // provider-native ID (string form)
+	smetaQATags             = "qa_tags"               // []string
+	smetaQAAnswerCount      = "qa_answer_count"       // int
+	smetaQAAcceptedAnswerID = "qa_accepted_answer_id" // string
+	smetaQAScore            = "qa_score"              // int (question score)
+	smetaQAIsAnswered       = "qa_is_answered"        // bool
 )
 
 // kindForSource picks the Kind for a Publication produced by sourceID.
@@ -225,6 +237,8 @@ func (r *Router) toResult(p Publication, rank int) Result {
 		res.Image = imageDataFromPublication(p)
 	case KindPost:
 		res.Post = postDataFromPublication(p)
+	case KindQA:
+		res.QA = qaDataFromPublication(p)
 	}
 
 	// Provenance — single tag for now; cycle-3 will append for each
@@ -413,6 +427,30 @@ func postDataFromPublication(p Publication) *PostData {
 		pd.Verified = v
 	}
 	return pd
+}
+
+// qaDataFromPublication builds the kind-specific QAData block for Stack
+// Exchange / Hacker News results. Reads SourceMetadata for site, raw
+// question ID, tags, counts, score, accepted answer, and author handle.
+// v5 cycle 1 / v2.8.0.
+func qaDataFromPublication(p Publication) *QAData {
+	qd := &QAData{
+		Site:             metaString(p.SourceMetadata, smetaQASite),
+		QuestionID:       metaString(p.SourceMetadata, smetaQARawQuestionID),
+		Tags:             metaStringSlice(p.SourceMetadata, smetaQATags),
+		AcceptedAnswerID: metaString(p.SourceMetadata, smetaQAAcceptedAnswerID),
+		AuthorHandle:     metaString(p.SourceMetadata, smetaAuthorHandle),
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaQAAnswerCount); ok {
+		qd.AnswerCount = &v
+	}
+	if v, ok := metaInt(p.SourceMetadata, smetaQAScore); ok {
+		qd.Score = &v
+	}
+	if v, ok := p.SourceMetadata[smetaQAIsAnswered].(bool); ok {
+		qd.IsAnswered = &v
+	}
+	return qd
 }
 
 func datasetDataFromPublication(p Publication) *DatasetData {

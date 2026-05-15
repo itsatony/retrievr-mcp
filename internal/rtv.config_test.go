@@ -410,6 +410,12 @@ sources:
   reddit:
     enabled: false
     timeout: "10s"
+  stackexchange:
+    enabled: false
+    timeout: "10s"
+  hackernews:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

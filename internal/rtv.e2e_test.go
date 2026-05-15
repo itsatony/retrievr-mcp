@@ -195,6 +195,16 @@ sources:
     timeout: "10s"
     rate_limit: 1.5
     rate_limit_burst: 2
+  stackexchange:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 0.5
+    rate_limit_burst: 2
+  hackernews:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

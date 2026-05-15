@@ -968,6 +968,7 @@ const (
 	dedupFamilyMediaURL  = "media_url"
 	dedupFamilyAtproto   = "atproto_uri"
 	dedupFamilyPostURL   = "post_url"
+	dedupFamilyQA        = "qa_question_id"
 
 	// dedupCoordPrecisionFmt rounds lat/lon to 5 decimal places (~1 m),
 	// applied to place results lacking osm_id. Two places within ~1 m of
@@ -1049,6 +1050,15 @@ func dedup(results []Publication) []Publication {
 			// paper / model / dataset / "" / any — DOI + ArXiv ID family.
 			// DOI hit short-circuits ArXivID indexing (matches v2 behavior:
 			// secondary identifiers of a duplicate are not back-indexed).
+			//
+			// QA results (Stack Exchange, Hacker News) emit ContentTypePaper
+			// with a populated MetaKeyQAQuestionID — the composite
+			// "<site>:<id>" namespaces across sites by construction. They
+			// have no DOI/ArXivID, so route them on the QA family.
+			if qaKey := stringFromMeta(results[i].SourceMetadata, MetaKeyQAQuestionID); qaKey != "" {
+				tryDedup(dedupFamilyQA, qaKey, i)
+				continue
+			}
 			if tryDedup(dedupFamilyDOI, results[i].DOI, i) {
 				continue
 			}

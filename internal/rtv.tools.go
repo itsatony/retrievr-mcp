@@ -25,7 +25,7 @@ const (
 // ---------------------------------------------------------------------------
 
 const (
-	ToolDescSearch = `Search across published information: papers, AI models, datasets, web pages, news, code repos, and encyclopedia articles. 17 sources behind one tool.
+	ToolDescSearch = `Search across published information: papers, AI models, datasets, web pages, news, code repos, encyclopedia articles, multimedia, social posts, and Q&A threads. 30 sources behind one tool.
 
 Use rtv_search when you need: academic papers, code provenance, web context, encyclopedia lookup, mixed evidence-gathering. Do NOT use for: real-time data (prices, weather), private documents, authenticated services.
 

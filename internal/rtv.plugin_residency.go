@@ -120,3 +120,26 @@ func (*BioRxivPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Stack Exchange's data-residency posture (US — Stack
+// Exchange Inc., NYC). Content is licensed CC-BY-SA so admissible under
+// eu_preferred with attribution; blocked under eu_strict. SCC coverage
+// applies to the platform's processing of any opt-in account fields.
+func (*StackExchangePlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Hacker News's data-residency posture (US — Y
+// Combinator). Public read-only Algolia mirror; no account binding for
+// search, hence DPA unknown.
+func (*HackerNewsPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPAUnknown,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

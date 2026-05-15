@@ -132,6 +132,10 @@ const (
 	SourceMastodon = "mastodon"
 	SourceBluesky  = "bluesky"
 	SourceReddit   = "reddit"
+
+	// v5 cycle 1 / v2.8.0 — Q&A providers.
+	SourceStackExchange = "stackexchange"
+	SourceHackerNews    = "hackernews"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -173,6 +177,9 @@ var validSourceIDs = map[string]bool{
 	SourceMastodon: true,
 	SourceBluesky:  true,
 	SourceReddit:   true,
+	// v5 cycle 1 — Q&A.
+	SourceStackExchange: true,
+	SourceHackerNews:    true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -195,8 +202,9 @@ func AllSourceIDs() []string {
 // added Photon + TomTom + Nominatim → 23. v3 cycle 4 / v2.5.0 added
 // Wikimedia + Europeana → 25 (Brave gained image search without
 // becoming a new SourceID). v3 cycle 5 / v2.6.0 added Mastodon +
-// Bluesky + Reddit → 28.
-const SourceCount = 28
+// Bluesky + Reddit → 28. v5 cycle 1 / v2.8.0 added StackExchange +
+// HackerNews → 30.
+const SourceCount = 30
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can
@@ -207,6 +215,13 @@ const (
 	MetaKeyOSMID         = "osm_id"         // place
 	MetaKeyWikimediaFile = "wikimedia_file" // image
 	MetaKeyAtprotoURI    = "atproto_uri"    // post
+
+	// v5 cycle 1 / v2.8.0 — Q&A dedup key. The value is the
+	// provider-namespaced question identifier: "<site>:<question_id>"
+	// (e.g. "stackoverflow:12345", "hackernews:9001234"). Cross-site
+	// dedup is disabled by construction — Stack Overflow #1 and Server
+	// Fault #1 are distinct questions.
+	MetaKeyQAQuestionID = "qa_question_id"
 )
 
 // ---------------------------------------------------------------------------

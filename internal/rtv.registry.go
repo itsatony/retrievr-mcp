@@ -68,6 +68,10 @@ func PluginFactories() map[string]PluginFactory {
 		SourceMastodon: func() SourcePlugin { return &MastodonPlugin{} },
 		SourceBluesky:  func() SourcePlugin { return &BlueskyPlugin{} },
 		SourceReddit:   func() SourcePlugin { return &RedditPlugin{} },
+
+		// v5 cycle 1 / v2.8.0 — Q&A.
+		SourceStackExchange: func() SourcePlugin { return &StackExchangePlugin{} },
+		SourceHackerNews:    func() SourcePlugin { return &HackerNewsPlugin{} },
 	}
 }
 

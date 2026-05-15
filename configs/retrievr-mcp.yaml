@@ -417,3 +417,17 @@ sources:
     timeout: "15s"
     rate_limit: 5.0
     rate_limit_burst: 5
+
+  dimensions:
+    enabled: false               # v6 cycle 3 (v2.16.0). Free for academic users; paid commercial. REQUIRES api_key.
+    api_key: ""                  # Dimensions.ai DSL API key; or RETRIEVR_DIMENSIONS_API_KEY env. Per-call override: credentials.dimensions.
+    timeout: "30s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
+
+  lens:
+    enabled: false               # v6 cycle 3 (v2.16.0). Paid Lens.org subscription required.
+    api_key: ""                  # Lens.org bearer token; or RETRIEVR_LENS_API_KEY env. Per-call override: credentials.lens.
+    timeout: "30s"
+    rate_limit: 2.0
+    rate_limit_burst: 2

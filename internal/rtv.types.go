@@ -193,6 +193,10 @@ const (
 	// v6 cycle 2 / v2.15.0 — audio / podcast.
 	SourceListenNotes = "listennotes"
 	SourceITunes      = "itunes"
+
+	// v6 cycle 3 / v2.16.0 — premium scholarly.
+	SourceDimensions = "dimensions"
+	SourceLens       = "lens"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -266,6 +270,9 @@ var validSourceIDs = map[string]bool{
 	// v6 cycle 2 — audio / podcast.
 	SourceListenNotes: true,
 	SourceITunes:      true,
+	// v6 cycle 3 — premium scholarly.
+	SourceDimensions: true,
+	SourceLens:       true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -296,8 +303,8 @@ func AllSourceIDs() []string {
 // EUR-Lex → 44. v5 cycle 6 / v2.13.0 added GDELT + IA Scholar +
 // Wayback → 47. v6 cycle 1 / v2.14.0 added Google Places + OSM
 // Overpass + HERE → 50. v6 cycle 2 / v2.15.0 added Listen Notes +
-// iTunes → 52.
-const SourceCount = 52
+// iTunes → 52. v6 cycle 3 / v2.16.0 added Dimensions + Lens → 54.
+const SourceCount = 54
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

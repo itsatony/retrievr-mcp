@@ -376,3 +376,24 @@ func (*ITunesPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Dimensions.ai's data-residency posture (US/AU —
+// Digital Science with mixed infrastructure; SCC applies via the
+// API subscription TOS).
+func (*DimensionsPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Lens.org's data-residency posture (AU — Cambia,
+// Brisbane Australia). SCC applies via the API subscription TOS.
+func (*LensPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS, // AU is not modelled as a Region; SCC keeps it admissible eu_preferred
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

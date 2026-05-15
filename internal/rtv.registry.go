@@ -108,6 +108,10 @@ func PluginFactories() map[string]PluginFactory {
 		// v6 cycle 2 / v2.15.0 — audio / podcast.
 		SourceListenNotes: func() SourcePlugin { return &ListenNotesPlugin{} },
 		SourceITunes:      func() SourcePlugin { return &ITunesPlugin{} },
+
+		// v6 cycle 3 / v2.16.0 — premium scholarly.
+		SourceDimensions: func() SourcePlugin { return &DimensionsPlugin{} },
+		SourceLens:       func() SourcePlugin { return &LensPlugin{} },
 	}
 }
 

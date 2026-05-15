@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.16.0] - 2026-05-15
+
+Minor release. **PaidScholarly — v6 cycle 3**
+(`project_plan/retrievr_v6.md` §7). Adds the premium citation-graph
+tier: Dimensions.ai (free for academics) and Lens.org (paid).
+
+### Added
+
+- **`SourceDimensions` plugin** (`internal/rtv.plugin.dimensions.go`):
+  `https://app.dimensions.ai/api/dsl` (POST DSL text). Two-step auth
+  flow: POST `/api/auth` with `{"key":"..."}` → cached bearer token
+  (25-min TTL with early-refresh; auto-invalidated on 401/403).
+  Dimensions uses the **bare token** in the Authorization header
+  (no "Bearer" prefix — verified inline). DSL synthesis: free-text
+  query is double-quote-escaped, year filters become a
+  `where year>=N and year<=N` clause, `filters.categories[*]` map
+  to `category_for.name in [...]`. Sorts: date-desc, date-asc,
+  citations-desc → `sort by times_cited desc`. Returns publications
+  with DOI, authors, citation count, journal, publisher. Per-call
+  credential: `dimensions`; refuses to start without one.
+- **`SourceLens` plugin** (`internal/rtv.plugin.lens.go`):
+  `https://api.lens.org/scholarly/search` (POST JSON). `Authorization:
+  Bearer <token>` auth. Bool query with must-match on `full_text`
+  plus optional `range` on `year_published` and `term` predicates on
+  `subjects.subject_name.keyword` from `filters.categories[*]`.
+  Returns DOI + ArXiv ID from typed `external_ids` array, citation
+  count, source journal title, publication type. Sorts via
+  `date_published` / `scholarly_citations_count`. Per-call
+  credential: `lens`.
+- **Residency tags**: both US/SCC (Lens is AU-resident but the
+  `Region` enum lacks an AU constant; SCC keeps it admissible
+  eu_preferred — flagged inline for a future Region.AU addition).
+- **Config blocks** for both new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default; both document
+  the API-key + per-call override).
+- **Unit tests** with httptest fixtures: identity, capabilities
+  (including `SupportsCitations`/`SupportsSortCitations`),
+  missing-credential refusal, full happy-path search shapes,
+  date+category filter routing, sort routing (citations-desc),
+  Dimensions DSL quote-escape, Lens external-ids DOI+ArXiv
+  extraction, Dimensions auth-failure → `ErrCredentialInvalid`,
+  401/429 mapping on the search path, Get-not-wired path.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 52 → 54; `validSourceIDs`
+  registers `dimensions`, `lens`; registry factory map +
+  test-expected count updated. Config / E2E / registry fixtures
+  extended with both new source blocks.
+
+### Notes
+
+- Dimensions tokens nominally last 30 minutes; we refresh at 25min
+  to avoid mid-search expiry. A 401/403 on the DSL endpoint
+  invalidates the cached token so the next call re-auths.
+- No paid integration test runs in CI — both plugins gate on
+  `RETRIEVR_PAID_INTEGRATION=1` per v6 plan §11. Unit tests cover
+  the wire shapes deterministically via httptest.
+- Dimensions DSL is powerful but verbose; the cycle ships only the
+  free-text path + year/category filters. Future cycle can expose
+  raw-DSL pass-through via `filters.extra["dsl"]` similar to the
+  Overpass plugin's escape hatch.
+
 ## [2.15.0] - 2026-05-15
 
 Minor release. **AudioPodcast — v6 cycle 2**

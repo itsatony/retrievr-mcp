@@ -482,6 +482,12 @@ sources:
   itunes:
     enabled: false
     timeout: "10s"
+  dimensions:
+    enabled: false
+    timeout: "10s"
+  lens:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

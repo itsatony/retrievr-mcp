@@ -257,6 +257,9 @@ func (p *ExaPlugin) Search(ctx context.Context, params SearchParams) (*SearchRes
 	if err := ValidateDomainList(params.Filters.ExcludeDomains); err != nil {
 		return nil, fmt.Errorf("exa: exclude_domains: %w", err)
 	}
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("exa: language: %w", err)
+	}
 
 	body := exaSearchRequest{
 		Query:          params.Query,
@@ -379,7 +382,7 @@ func exaResultToPublication(r exaResult) Publication {
 		meta[smetaSnippet] = truncateSnippet(r.Text)
 	}
 	if r.Score > 0 {
-		meta["upstream_score"] = r.Score
+		meta[smetaUpstreamScore] = r.Score
 	}
 	if r.PublishedDate != "" {
 		meta[smetaPublishedAt] = r.PublishedDate

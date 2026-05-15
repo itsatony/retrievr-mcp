@@ -100,8 +100,10 @@ type FullTextContent = internal.FullTextContent
 
 // SearchParams contains all parameters for a search request.
 //
-// Cycle-2 additions (planned, not yet present): Intent, EUMode,
-// IncludeDomains, ExcludeDomains, Language, License, MinStars.
+// The struct gained Intent (v2.1.0), and SearchFilters gained
+// IncludeDomains, ExcludeDomains, Channels, Subreddits, Language
+// (v2.7.0). EUMode is handled server-side (config + per-request audit
+// gate), not in SearchParams. License and MinStars are not implemented.
 type SearchParams = internal.SearchParams
 
 // SearchFilters contains optional filters to narrow search results.

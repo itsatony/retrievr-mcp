@@ -336,6 +336,9 @@ func (p *YouTubePlugin) Search(ctx context.Context, params SearchParams) (*Searc
 		return nil, fmt.Errorf("%w: youtube accepts at most %d channels per call, got %d",
 			ErrTooManyChannels, youtubeMaxChannelFanout, len(channels))
 	}
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("youtube: language: %w", err)
+	}
 
 	// Single-channel (or unscoped) path: one upstream request.
 	if len(channels) <= 1 {
@@ -738,9 +741,11 @@ func (p *YouTubePlugin) recordSuccess() {
 func (p *YouTubePlugin) recordError(err error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	// Quota / rate-limit errors don't mean the plugin is unhealthy — they
-	// mean we're being throttled. Mark healthy=true so admins don't get
-	// page-the-team noise for expected daily quota churn.
+	// Intentional divergence from the majority recordError pattern: quota /
+	// rate-limit errors are throttling signals, not health failures, so we
+	// keep the plugin "healthy" for retry-middleware rotation. Every other
+	// error class flips healthy=false. Pinned by
+	// TestYouTube_Search_QuotaExceededMapsToRateLimitExceeded.
 	p.healthy = errors.Is(err, ErrRateLimitExceeded)
 	if err != nil {
 		p.lastError = err.Error()

@@ -83,6 +83,51 @@ six providers, and the long-standing Brave date-filter defect.
   header names (`Authorization`, `Content-Type`), the OAuth grant body
   string, and the bearer prefix.
 
+### Hardened (post-review)
+
+After `/review` flagged 15 follow-ups, every applicable item was addressed
+in-cycle (no v2.7.1 deferrals):
+
+- **Brave 422-retry guard tightened**: now requires `DateFrom` set,
+  freshness containing the literal `to` separator, AND at least four
+  date hyphens — eliminating spurious retries when a 422 originates from
+  something other than the custom-range syntax (`isBraveRangeRetryable`).
+- **Brave custom-range input validation**: both `DateFrom` and `DateTo`
+  must parse as full `YYYY-MM-DD`; year-only inputs in either endpoint
+  now drop the freshness param (previously generated invalid
+  `"2026to2026-05-15"`).
+- **Brave future-date rejection**: a `DateFrom` value beyond `time.Now()`
+  no longer buckets to `pd`; returns `""`.
+- **`ValidateLanguageTag`** added and wired into every plugin that
+  honors `Filters.Language` (brave, exa, youtube, scrapingdog_youtube,
+  bluesky, europeana, mastodon). Wraps `ErrInvalidLanguageTag`, which was
+  declared but unused.
+- **`ValidateDomainList` tightened**: rejects bare hostnames without a
+  dot (e.g. `"localhost"`), leading/trailing dots, double dots, and ports.
+- **Reddit subreddit-name validation** (`^[A-Za-z0-9_]{2,21}$`) before
+  path interpolation — path-injection defense for the `/r/<sub>/search`
+  router.
+- **Reddit fan-out dedup key** changed from URL to Submission ID
+  (`pub.ID` carries the `t3_<id>` fullname). Crossposts that share an
+  external URL across subreddits now collapse to one merged result.
+- **Mastodon `HasMore` semantics** corrected: compares against
+  pre-filter `len(resp.Statuses)` so language filtering doesn't lie
+  about pagination availability.
+- **Inline `braveBucketFromDate` wrapper**: one-liner removed; bucket
+  derivation reads directly from `braveFreshnessFromDate`.
+- **Metadata-key constants extracted**: `smetaUpstreamScore` (exa),
+  `smetaDataProvider` (europeana), `smetaExternalURL` (reddit).
+- **`extractCredentials` ADS check**: pre-existing miss — the
+  all-empty short-circuit ignored `creds.ADSAPIKey`, dropping ADS-only
+  credentials silently.
+- **`pkg/retrievr/types.go` comment** corrected: previously claimed
+  `Intent`, `IncludeDomains`, etc. were "planned, not yet present".
+
+Test coverage expanded by 5 new cases: BCP-47 validation table, Brave
+422-not-retried-without-range, year-only range rejection, future-date
+rejection, Mastodon empty-results post-filter, invalid-subreddit
+rejection.
+
 ### Deferred (planned v2.8.0+)
 
 Per `project_plan/retrievr_v4.md` §2.2: safe-search per call, place

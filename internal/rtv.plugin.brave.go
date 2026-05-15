@@ -89,11 +89,16 @@ const (
 	braveAgeYear  = 365 * 24 * time.Hour
 )
 
-// Brave custom-range syntax: "YYYY-MM-DDtoYYYY-MM-DD" — documented in the
-// Brave Search API reference for the freshness param. Less battle-tested
-// than the buckets; on a 422 response the doSearch path retries once with
-// the nearest bucket derived from DateFrom (see OQ-4 in retrievr_v4.md).
-const braveFreshnessRangeFormat = "%sto%s"
+// Brave custom-range syntax for the freshness param: two ISO dates joined
+// by the literal separator below. Documented in the Brave Search API
+// reference. Less battle-tested than the bucket tokens; on a 422 response
+// the doSearch path retries once with the nearest bucket derived from
+// DateFrom (see OQ-4 in retrievr_v4.md).
+const (
+	braveFreshnessRangeSep    = "to"
+	braveFilterDateLayout     = "2006-01-02" // mirrors time.DateOnly; named for intent
+	braveFilterYearOnlyLayout = "2006"
+)
 
 // ---------------------------------------------------------------------------
 // Brave wire types
@@ -285,6 +290,9 @@ func (p *BravePlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 	}
 	if err := ValidateDomainList(params.Filters.ExcludeDomains); err != nil {
 		return nil, fmt.Errorf("brave: exclude_domains: %w", err)
+	}
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("brave: language: %w", err)
 	}
 
 	if params.ContentType == ContentTypeImage {
@@ -482,10 +490,13 @@ func (p *BravePlugin) resolveSearchLang(filterLang string) string {
 
 // braveFreshnessFromDate maps a SearchFilters date range to Brave's
 // freshness parameter:
-//   - DateFrom + DateTo set: custom range "YYYY-MM-DDtoYYYY-MM-DD".
+//   - DateFrom + DateTo set: custom range "YYYY-MM-DDtoYYYY-MM-DD". Both
+//     endpoints MUST parse as a calendar date — year-only or malformed
+//     inputs return "" and the caller proceeds without a freshness param
+//     (Brave would reject e.g. "2026to2026-05-15" with 422 anyway).
 //   - DateFrom only: nearest bucket (pd/pw/pm/py) based on age vs `now`.
-//     Older than braveAgeYear returns "" (Brave has no "older than 1y" bucket
-//     and we'd rather omit the param than send a misleading value).
+//     Future-dated `DateFrom` (negative age) returns "". Older than
+//     braveAgeYear returns "" (Brave has no "older than 1y" bucket).
 //   - Neither set: returns "".
 //
 // Invalid date strings return "" and no error — the caller chose to omit
@@ -496,7 +507,15 @@ func braveFreshnessFromDate(filters SearchFilters, now time.Time) string {
 		return ""
 	}
 	if filters.DateFrom != "" && filters.DateTo != "" {
-		return fmt.Sprintf(braveFreshnessRangeFormat, filters.DateFrom, filters.DateTo)
+		// Both endpoints must be full calendar dates — Brave's custom range
+		// syntax does not accept year-only segments. Reject mismatched
+		// granularity by returning "" so the bucket path can still try.
+		fromDate, okFrom := parseFilterDateCalendar(filters.DateFrom)
+		toDate, okTo := parseFilterDateCalendar(filters.DateTo)
+		if !okFrom || !okTo {
+			return ""
+		}
+		return fromDate + braveFreshnessRangeSep + toDate
 	}
 	if filters.DateFrom == "" {
 		return ""
@@ -506,6 +525,9 @@ func braveFreshnessFromDate(filters SearchFilters, now time.Time) string {
 		return ""
 	}
 	age := now.Sub(from)
+	if age < 0 {
+		return "" // future date — no meaningful "past N" bucket
+	}
 	switch {
 	case age <= braveAgeDay:
 		return braveFreshnessDay
@@ -519,29 +541,33 @@ func braveFreshnessFromDate(filters SearchFilters, now time.Time) string {
 	return ""
 }
 
-// braveBucketFromDate returns the closest single-token bucket given only
-// DateFrom (no range). Used as the retry fallback when Brave rejects a
-// custom-range freshness with HTTP 422 (per retrievr_v4.md OQ-4).
-func braveBucketFromDate(filters SearchFilters, now time.Time) string {
-	bucket := braveFreshnessFromDate(SearchFilters{DateFrom: filters.DateFrom}, now)
-	return bucket
-}
-
 // parseFilterDateStart parses a filter date ("YYYY-MM-DD" or "YYYY") as the
 // start-of-day in UTC. Returns false on any parse error.
 func parseFilterDateStart(s string) (time.Time, bool) {
 	if len(s) == 4 {
-		t, err := time.Parse("2006", s)
+		t, err := time.Parse(braveFilterYearOnlyLayout, s)
 		if err != nil {
 			return time.Time{}, false
 		}
 		return t, true
 	}
-	t, err := time.Parse(time.DateOnly, s)
+	t, err := time.Parse(braveFilterDateLayout, s)
 	if err != nil {
 		return time.Time{}, false
 	}
 	return t, true
+}
+
+// parseFilterDateCalendar requires a full YYYY-MM-DD calendar date.
+// Year-only inputs are rejected (returns "", false). Returns the canonical
+// "YYYY-MM-DD" string on success so the custom-range syntax is always
+// well-formed regardless of accidental input quirks.
+func parseFilterDateCalendar(s string) (string, bool) {
+	t, err := time.Parse(braveFilterDateLayout, s)
+	if err != nil {
+		return "", false
+	}
+	return t.Format(braveFilterDateLayout), true
 }
 
 func (p *BravePlugin) buildSearchQuery(params SearchParams, count int, freshness string) url.Values {
@@ -579,12 +605,14 @@ func (p *BravePlugin) doSearch(ctx context.Context, params SearchParams, count i
 		return resp, nil
 	}
 	// Custom-range freshness syntax is less battle-tested than bucket tokens;
-	// when Brave rejects with 422 we retry once with the nearest bucket
-	// derived from DateFrom alone, per retrievr_v4.md OQ-4. Bucketless dates
-	// (no DateFrom) or already-bucketed values skip the retry.
-	if status == http.StatusUnprocessableEntity && strings.Contains(freshness, "to") {
-		bucket := braveBucketFromDate(params.Filters, time.Now())
-		if bucket != "" {
+	// when Brave rejects with 422 AND we sent a range AND DateFrom is set,
+	// retry once with the nearest bucket derived from DateFrom alone
+	// (retrievr_v4.md OQ-4). All three predicates must hold: a plain bucket
+	// failure or a 422 from a different cause (bad q, bad lang) must not
+	// rewrite the freshness param and resubmit.
+	if isBraveRangeRetryable(status, freshness, params.Filters) {
+		bucket := braveFreshnessFromDate(SearchFilters{DateFrom: params.Filters.DateFrom}, time.Now())
+		if bucket != "" && bucket != freshness {
 			resp, _, err = p.executeSearch(ctx, p.buildSearchQuery(params, count, bucket), apiKey)
 			if err == nil {
 				return resp, nil
@@ -592,6 +620,19 @@ func (p *BravePlugin) doSearch(ctx context.Context, params SearchParams, count i
 		}
 	}
 	return nil, err
+}
+
+// isBraveRangeRetryable reports whether the doSearch path should retry a
+// 422 by collapsing a custom-range freshness to its closest bucket. Three
+// predicates must all hold so we never retry an unrelated 422.
+func isBraveRangeRetryable(status int, freshness string, filters SearchFilters) bool {
+	if status != http.StatusUnprocessableEntity {
+		return false
+	}
+	if filters.DateFrom == "" {
+		return false
+	}
+	return strings.Contains(freshness, braveFreshnessRangeSep) && strings.Count(freshness, "-") >= 4
 }
 
 // executeSearch performs a single HTTP request against the web/news

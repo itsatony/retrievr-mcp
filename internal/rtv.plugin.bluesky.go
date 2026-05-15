@@ -201,6 +201,9 @@ func (p *BlueskyPlugin) Health(_ context.Context) SourceHealth {
 
 // Search executes a Bluesky public-search request.
 func (p *BlueskyPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("bluesky: language: %w", err)
+	}
 	limit := params.Limit
 	if limit <= 0 {
 		limit = blueskyDefaultLimit

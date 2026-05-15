@@ -93,6 +93,13 @@ const (
 	smetaSubreddit   = "subreddit"
 	smetaInstance    = "instance"
 	smetaVerified    = "verified"
+
+	// v2.7.0 review-driven: metadata keys missed by the previous cycle's
+	// constants extraction (rtv.plugin.exa.go upstream score, rtv.plugin.europeana.go
+	// data provider, rtv.plugin.reddit.go crosspost target URL).
+	smetaUpstreamScore = "upstream_score"
+	smetaDataProvider  = "data_provider"
+	smetaExternalURL   = "external_url"
 )
 
 // kindForSource picks the Kind for a Publication produced by sourceID.

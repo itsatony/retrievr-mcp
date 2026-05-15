@@ -592,18 +592,68 @@ func MatchesLanguagePrefix(recordLang, filterLang string) bool {
 }
 
 // ValidateDomainList returns ErrInvalidDomainList if any entry in the list is
-// not a bare registered-domain (no scheme, no path, no whitespace). Empty list
-// and nil are valid. Used by plugins that wire IncludeDomains/ExcludeDomains.
+// not a bare registered-domain (no scheme, no path, no whitespace, must
+// contain at least one dot, no leading/trailing/double dots, no port). Empty
+// list and nil are valid. Used by plugins that wire
+// IncludeDomains/ExcludeDomains.
+//
+// This is a shape check, not a DNS validator — it does NOT resolve the
+// domain or check for Public Suffix List membership. The intent is to
+// prevent obvious URL-form misuse (e.g. `https://example.com/path`) which
+// would always 4xx from Brave/Exa.
 func ValidateDomainList(domains []string) error {
 	for _, d := range domains {
 		if d == "" {
 			return ErrInvalidDomainList
 		}
-		if strings.ContainsAny(d, " \t\r\n/") {
+		if strings.ContainsAny(d, " \t\r\n/:") {
 			return ErrInvalidDomainList
 		}
 		if strings.Contains(d, "://") {
 			return ErrInvalidDomainList
+		}
+		if strings.HasPrefix(d, ".") || strings.HasSuffix(d, ".") {
+			return ErrInvalidDomainList
+		}
+		if strings.Contains(d, "..") {
+			return ErrInvalidDomainList
+		}
+		if !strings.Contains(d, ".") {
+			// Bare hostnames like "localhost" are not registered domains.
+			return ErrInvalidDomainList
+		}
+	}
+	return nil
+}
+
+// ValidateLanguageTag returns ErrInvalidLanguageTag if the BCP-47 tag is
+// not a plausible language code. The check is intentionally permissive —
+// it only rejects obvious garbage (whitespace, control bytes, non-ASCII,
+// path/query characters) so well-formed yet exotic tags like "zh-Hant-TW"
+// pass through. Empty input is allowed (means "no language filter").
+//
+// Called by plugins that wire SearchFilters.Language before forwarding it
+// to the upstream API. Currently every wired plugin extracts only the
+// first BCP-47 subtag via BCP47FirstSubtag, but the upstream may still
+// see the raw tag if the plugin's API consumes the full form — defensive
+// validation prevents header / path injection regardless.
+func ValidateLanguageTag(tag string) error {
+	if tag == "" {
+		return nil
+	}
+	t := strings.TrimSpace(tag)
+	if t == "" || t != tag {
+		// Leading/trailing whitespace is not valid.
+		return ErrInvalidLanguageTag
+	}
+	for _, r := range tag {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-':
+		default:
+			return ErrInvalidLanguageTag
 		}
 	}
 	return nil

@@ -220,6 +220,9 @@ func (p *EuropeanaPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 	if apiKey == "" {
 		return nil, fmt.Errorf("%w: europeana requires an API key (wskey)", ErrCredentialRequired)
 	}
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("europeana: language: %w", err)
+	}
 
 	rows := params.Limit
 	if rows <= 0 {
@@ -362,7 +365,7 @@ func europeanaItemToPublication(item europeanaItem) Publication {
 		pub.SourceMetadata[smetaCountry] = country
 	}
 	if dataProvider != "" {
-		pub.SourceMetadata["data_provider"] = dataProvider
+		pub.SourceMetadata[smetaDataProvider] = dataProvider
 	}
 	return pub
 }

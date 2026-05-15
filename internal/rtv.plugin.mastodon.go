@@ -240,6 +240,10 @@ func (p *MastodonPlugin) Health(_ context.Context) SourceHealth {
 
 // Search executes a Mastodon public-statuses search.
 func (p *MastodonPlugin) Search(ctx context.Context, params SearchParams) (*SearchResult, error) {
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("mastodon: language: %w", err)
+	}
+
 	limit := params.Limit
 	if limit <= 0 {
 		limit = mastodonDefaultLimit
@@ -262,10 +266,14 @@ func (p *MastodonPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 		}
 		pubs = append(pubs, mastodonStatusToPublication(s, p.instanceHostname()))
 	}
+	// HasMore reflects whether the upstream had more matches — compare
+	// against the pre-filter response size, not the post-filter slice.
+	// Otherwise a language filter that drops most results would falsely
+	// report no further pages.
 	return &SearchResult{
 		Total:   len(pubs),
 		Results: pubs,
-		HasMore: len(pubs) >= limit,
+		HasMore: len(resp.Statuses) >= limit,
 	}, nil
 }
 

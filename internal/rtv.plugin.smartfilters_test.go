@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -113,6 +115,11 @@ func TestBraveFreshnessFromDate(t *testing.T) {
 		{"older-than-year-dropped", "2024-01-01", "", []string{""}},
 		{"custom-range", "2026-01-01", "2026-03-31", []string{"2026-01-01to2026-03-31"}},
 		{"invalid-date-omits", "not-a-date", "", []string{""}},
+		// v2.7.0 review-driven additions:
+		{"year-only-range-rejected", "2026", "2026-03-31", []string{""}},
+		{"year-only-range-rejected-reverse", "2026-01-01", "2026", []string{""}},
+		{"future-date-rejected", "2027-01-01", "", []string{""}},
+		{"range-malformed-from", "not-a-date", "2026-03-31", []string{""}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -202,6 +209,8 @@ func TestBrave_Search_InvalidDomainRejected(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrInvalidDomainList))
 }
 
+var braveCustomRangeRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}to\d{4}-\d{2}-\d{2}$`)
+
 func TestBrave_Search_CustomRange422FallsBackToBucket(t *testing.T) {
 	t.Parallel()
 	var calls atomic.Int32
@@ -210,15 +219,18 @@ func TestBrave_Search_CustomRange422FallsBackToBucket(t *testing.T) {
 		got := r.URL.Query().Get(braveParamFreshness)
 		switch n {
 		case 1:
-			assert.Contains(t, got, "to", "first call uses custom range")
+			assert.Regexp(t, braveCustomRangeRE, got,
+				"first call must use full YYYY-MM-DDtoYYYY-MM-DD range syntax")
 			http.Error(w, "bad range", http.StatusUnprocessableEntity)
 		case 2:
-			assert.NotContains(t, got, "to", "retry uses bucket token")
-			assert.Contains(t, []string{braveFreshnessDay, braveFreshnessWeek, braveFreshnessMonth, braveFreshnessYear}, got)
+			assert.Contains(t,
+				[]string{braveFreshnessDay, braveFreshnessWeek, braveFreshnessMonth, braveFreshnessYear},
+				got,
+				"retry must use a bucket token, not a range")
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = io.WriteString(w, buildBraveTestResponse(nil, nil))
 		default:
-			t.Fatalf("unexpected third call")
+			t.Fatalf("unexpected third call to brave server")
 		}
 	}))
 	defer srv.Close()
@@ -233,6 +245,29 @@ func TestBrave_Search_CustomRange422FallsBackToBucket(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, calls.Load(), "must retry exactly once with bucket")
+}
+
+// TestBrave_Search_422NotRetriedWithoutRange asserts the 422-retry guard:
+// a 422 response with a bucket-token freshness (not a range) must NOT
+// trigger a retry, because the 422 cannot be due to the range syntax.
+func TestBrave_Search_422NotRetriedWithoutRange(t *testing.T) {
+	t.Parallel()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls.Add(1)
+		http.Error(w, "bad q", http.StatusUnprocessableEntity)
+	}))
+	defer srv.Close()
+
+	from := time.Now().AddDate(0, -1, 0).Format(time.DateOnly)
+	p := newBraveTestPlugin(t, srv.URL, braveTestServerKey)
+	_, err := p.Search(context.Background(), SearchParams{
+		Query:   "x",
+		Limit:   1,
+		Filters: SearchFilters{DateFrom: from}, // bucket, not range
+	})
+	require.Error(t, err)
+	assert.EqualValues(t, 1, calls.Load(), "must not retry on 422 with a bucket-token freshness")
 }
 
 // ---------------------------------------------------------------------------
@@ -305,16 +340,18 @@ func TestYouTube_Search_ChannelAndLanguage(t *testing.T) {
 
 func TestYouTube_Search_MultiChannelFansOut(t *testing.T) {
 	t.Parallel()
-	var calls atomic.Int32
-	seenChannels := make(map[string]bool)
-	var mu = make(chan struct{}, 1)
+	var (
+		calls        atomic.Int32
+		mu           sync.Mutex
+		seenChannels = make(map[string]bool)
+	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		ch := r.URL.Query().Get(youtubeParamChannelID)
 		require.NotEmpty(t, ch, "every fan-out call must carry a channelId")
-		mu <- struct{}{}
+		mu.Lock()
 		seenChannels[ch] = true
-		<-mu
+		mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, buildYouTubeSearchTestResponse(nil, "", 0))
 	}))
@@ -330,7 +367,9 @@ func TestYouTube_Search_MultiChannelFansOut(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.EqualValues(t, 3, calls.Load())
+	mu.Lock()
 	assert.Len(t, seenChannels, 3)
+	mu.Unlock()
 }
 
 func TestYouTube_Search_TooManyChannelsRejected(t *testing.T) {
@@ -418,8 +457,11 @@ func TestReddit_Search_SubredditScoped(t *testing.T) {
 
 func TestReddit_Search_MultiSubredditFanOut(t *testing.T) {
 	t.Parallel()
-	var calls atomic.Int32
-	subsSeen := map[string]bool{}
+	var (
+		calls    atomic.Int32
+		mu       sync.Mutex
+		subsSeen = map[string]bool{}
+	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/api/v1/access_token":
@@ -427,7 +469,9 @@ func TestReddit_Search_MultiSubredditFanOut(t *testing.T) {
 		case strings.HasPrefix(r.URL.Path, "/r/") && strings.HasSuffix(r.URL.Path, "/search"):
 			calls.Add(1)
 			sub := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/r/"), "/search")
+			mu.Lock()
 			subsSeen[sub] = true
+			mu.Unlock()
 			writeRedditSearchResponse(w, makeRedditListing(nil, ""))
 		default:
 			t.Fatalf("unexpected path %s", r.URL.Path)
@@ -443,7 +487,23 @@ func TestReddit_Search_MultiSubredditFanOut(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, calls.Load())
+	mu.Lock()
 	assert.Equal(t, map[string]bool{"golang": true, "kubernetes": true}, subsSeen)
+	mu.Unlock()
+}
+
+// TestReddit_Search_InvalidSubredditRejected asserts the subreddit name
+// validator (path-injection defense).
+func TestReddit_Search_InvalidSubredditRejected(t *testing.T) {
+	t.Parallel()
+	p := newRedditTestPlugin(t, "http://unused", "client:secret")
+	_, err := p.Search(context.Background(), SearchParams{
+		Query:   "x",
+		Limit:   1,
+		Filters: SearchFilters{Subreddits: []string{"golang/comments/abc"}},
+	})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrInvalidInput))
 }
 
 func TestReddit_TooManySubredditsRejected(t *testing.T) {
@@ -527,6 +587,51 @@ func TestMastodon_Search_LanguagePostFilter(t *testing.T) {
 			}
 			assert.ElementsMatch(t, c.wantIDs, ids)
 		})
+	}
+}
+
+// TestMastodon_Search_LanguageFilterEmptyResult exercises the edge case
+// where every returned status has a known non-matching language and no
+// fail-open passthrough record exists.
+func TestMastodon_Search_LanguageFilterEmptyResult(t *testing.T) {
+	t.Parallel()
+	statuses := []mastodonStatus{
+		{ID: "1", URL: "https://example.social/1", Content: "<p>en</p>", Language: "en"},
+		{ID: "2", URL: "https://example.social/2", Content: "<p>fr</p>", Language: "fr"},
+	}
+	body := mastodonSearchResponse{Statuses: statuses}
+	raw, _ := json.Marshal(body)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+	}))
+	defer srv.Close()
+
+	p := newMastodonTestPlugin(t, srv.URL, string(RegionEU))
+	got, err := p.Search(context.Background(), SearchParams{
+		Query: "x", Limit: 10, Filters: SearchFilters{Language: "de"},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, got.Results, "no fail-open records, filter rejects both")
+	// HasMore must reflect upstream availability, not post-filter slice size.
+	// 2 statuses < limit=10 → HasMore false.
+	assert.False(t, got.HasMore)
+}
+
+// ---------------------------------------------------------------------------
+// Language tag validation (v2.7.0 post-review fix)
+// ---------------------------------------------------------------------------
+
+func TestValidateLanguageTag(t *testing.T) {
+	t.Parallel()
+	require.NoError(t, ValidateLanguageTag(""))
+	for _, ok := range []string{"en", "en-US", "DE", "fr-CA", "zh-Hant-TW"} {
+		assert.NoError(t, ValidateLanguageTag(ok), "must accept %q", ok)
+	}
+	for _, bad := range []string{"  ", "en US", "en/US", "en;rm", "en\nrf", "엔글리시"} {
+		err := ValidateLanguageTag(bad)
+		require.Error(t, err, "must reject %q", bad)
+		assert.True(t, errors.Is(err, ErrInvalidLanguageTag), "must wrap ErrInvalidLanguageTag for %q", bad)
 	}
 }
 

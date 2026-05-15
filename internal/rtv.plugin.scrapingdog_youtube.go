@@ -242,6 +242,9 @@ func (p *ScrapingdogYouTubePlugin) Search(ctx context.Context, params SearchPara
 		return nil, fmt.Errorf("%w: scrapingdog_youtube accepts at most %d channels per call, got %d",
 			ErrTooManyChannels, scrapingdogYouTubeMaxChannelFanout, len(channels))
 	}
+	if err := ValidateLanguageTag(params.Filters.Language); err != nil {
+		return nil, fmt.Errorf("scrapingdog_youtube: language: %w", err)
+	}
 
 	// Single (or unscoped) path.
 	if len(channels) <= 1 {

@@ -399,7 +399,8 @@ func extractCredentials(args map[string]any) *CallCredentials {
 
 	// Return nil if all fields are empty (no credentials provided).
 	if creds.PubMedAPIKey == "" && creds.S2APIKey == "" &&
-		creds.OpenAlexAPIKey == "" && creds.HFToken == "" {
+		creds.OpenAlexAPIKey == "" && creds.HFToken == "" &&
+		creds.ADSAPIKey == "" {
 		return nil
 	}
 

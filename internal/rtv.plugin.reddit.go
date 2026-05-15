@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,6 +80,10 @@ const (
 	redditQueryParamRestrictY = "on"
 
 	redditListingKindSubmission = "t3"
+
+	// Reddit's documented subreddit-name charset; same pattern as the
+	// /etc/account-creation validator. Lengths 2-21 per Reddit FAQ.
+	redditSubredditNamePattern = "^[A-Za-z0-9_]{2,21}$"
 
 	redditCategoriesHint = "Reddit submissions (posts), including title + selftext; restrict by community via filters.subreddits"
 
@@ -279,6 +284,12 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 		return nil, fmt.Errorf("%w: reddit accepts at most %d subreddits per call, got %d",
 			ErrTooManySubreddits, redditMaxSubredditFanout, len(subreddits))
 	}
+	for _, sub := range subreddits {
+		if !isValidSubredditName(sub) {
+			return nil, fmt.Errorf("%w: reddit subreddit name %q is invalid (allowed: %s)",
+				ErrInvalidInput, sub, redditSubredditNamePattern)
+		}
+	}
 
 	token, err := p.ensureToken(ctx, clientID, clientSecret)
 	if err != nil {
@@ -310,7 +321,10 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 	}
 
 	// Subreddit fan-out: one request per subreddit, results merged with
-	// dedup by canonical permalink URL.
+	// dedup keyed on the prefixed submission ID (Reddit's t3_<id> via
+	// pub.ID). The same submission crossposted to multiple subreddits has
+	// distinct permalinks but a single submission name, so URL-based dedup
+	// would let crossposts through. Fallback to URL when ID is empty.
 	merged := make([]Publication, 0, len(subreddits)*limit)
 	seen := make(map[string]struct{}, len(subreddits)*limit)
 	hasMore := false
@@ -324,9 +338,9 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 			hasMore = true
 		}
 		for _, pub := range redditPublicationsFromListing(listing) {
-			key := pub.URL
+			key := pub.ID
 			if key == "" {
-				key = pub.ID
+				key = pub.URL
 			}
 			if _, dup := seen[key]; dup {
 				continue
@@ -341,6 +355,14 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 		Results: merged,
 		HasMore: hasMore,
 	}, nil
+}
+
+// redditSubredditNameRE caches the compiled subreddit-name validator.
+var redditSubredditNameRE = regexp.MustCompile(redditSubredditNamePattern)
+
+// isValidSubredditName reports whether the given name fits Reddit's charset.
+func isValidSubredditName(name string) bool {
+	return redditSubredditNameRE.MatchString(name)
 }
 
 func redditPublicationsFromListing(listing *redditListing) []Publication {
@@ -526,7 +548,7 @@ func redditSubmissionToPublication(s redditSubmission) Publication {
 		},
 	}
 	if externalURL != "" {
-		pub.SourceMetadata["external_url"] = externalURL
+		pub.SourceMetadata[smetaExternalURL] = externalURL
 	}
 	return pub
 }

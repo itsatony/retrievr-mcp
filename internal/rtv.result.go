@@ -40,13 +40,16 @@ const (
 
 	// v5 cycle 1 / v2.8.0 — Q&A (Stack Exchange, Hacker News).
 	KindQA ResultKind = "qa"
+
+	// v5 cycle 3 / v2.10.0 — structured facts (Wikidata).
+	KindFact ResultKind = "fact"
 )
 
 // IsValidResultKind returns true if the given string is a known kind.
 func IsValidResultKind(k string) bool {
 	switch ResultKind(k) {
 	case KindPaper, KindModel, KindDataset, KindWeb, KindNews, KindCode, KindEncyclopedia,
-		KindVideo, KindPlace, KindImage, KindPost, KindQA:
+		KindVideo, KindPlace, KindImage, KindPost, KindQA, KindFact:
 		return true
 	}
 	return false

@@ -425,6 +425,15 @@ sources:
   openaire:
     enabled: false
     timeout: "10s"
+  wikidata:
+    enabled: false
+    timeout: "10s"
+  datacite:
+    enabled: false
+    timeout: "10s"
+  orcid:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

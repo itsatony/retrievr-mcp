@@ -175,3 +175,34 @@ func (*OpenAIREPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Wikidata's data-residency posture
+// (public-research-infrastructure — Wikimedia Foundation).
+func (*WikidataPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionPublicResearch,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports DataCite's data-residency posture
+// (EU — DataCite e.V., Hannover DE).
+func (*DataCitePlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports ORCID's data-residency posture (US — ORCID Inc.,
+// Bethesda MD; non-profit). SCC applies for any account-linked
+// processing of researcher profile data.
+func (*ORCIDPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

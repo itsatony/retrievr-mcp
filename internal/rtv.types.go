@@ -141,6 +141,11 @@ const (
 	SourceZenodo   = "zenodo"
 	SourceCORE     = "core"
 	SourceOpenAIRE = "openaire"
+
+	// v5 cycle 3 / v2.10.0 — Structured knowledge.
+	SourceWikidata = "wikidata"
+	SourceDataCite = "datacite"
+	SourceORCID    = "orcid"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -189,6 +194,10 @@ var validSourceIDs = map[string]bool{
 	SourceZenodo:   true,
 	SourceCORE:     true,
 	SourceOpenAIRE: true,
+	// v5 cycle 3 — Structured knowledge.
+	SourceWikidata: true,
+	SourceDataCite: true,
+	SourceORCID:    true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -213,7 +222,8 @@ func AllSourceIDs() []string {
 // becoming a new SourceID). v3 cycle 5 / v2.6.0 added Mastodon +
 // Bluesky + Reddit → 28. v5 cycle 1 / v2.8.0 added StackExchange +
 // HackerNews → 30. v5 cycle 2 / v2.9.0 added Zenodo + CORE + OpenAIRE → 33.
-const SourceCount = 33
+// v5 cycle 3 / v2.10.0 added Wikidata + DataCite + ORCID → 36.
+const SourceCount = 36
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

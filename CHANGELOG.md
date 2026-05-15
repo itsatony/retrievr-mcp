@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.10.0] - 2026-05-15
+
+Minor release. **KnowledgeCommons cycle 3 — Structured**
+(`project_plan/retrievr_v5.md` §7). Adds structured-knowledge sources
+distinct from prose articles: Wikidata for facts, DataCite for dataset
+DOIs, ORCID for researcher profiles. Introduces the `KindFact`
+ResultKind discriminator.
+
+### Added
+
+- **`ResultKind` `KindFact`** (`internal/rtv.result.go`) for
+  structured-fact responses (Wikidata entities, ORCID profiles).
+- **`SourceWikidata` plugin** (`internal/rtv.plugin.wikidata.go`):
+  `https://www.wikidata.org/w/api.php?action=wbsearchentities`. Free,
+  throttled. Surfaces entity QIDs + label + description + aliases.
+  `SupportsLanguageFilter: true` (multilingual labels). SPARQL path
+  intentionally deferred to a future cycle — text-lookup is the 95%
+  case for agents and keeps the cycle's integration tests
+  deterministic.
+- **`SourceDataCite` plugin** (`internal/rtv.plugin.datacite.go`):
+  `https://api.datacite.org/dois?query=...`. Free, no auth.
+  Complements CrossRef with dataset / software DOIs. Supports
+  `filters.date_from`/`date_to` (range on `registered`),
+  `filters.categories[0]` (maps to `resource-type-id`), and
+  `-created`/`created`/`-relevance` sorts. Pagination via
+  `page[size]`+`page[number]`. Native + Get supported.
+- **`SourceORCID` plugin** (`internal/rtv.plugin.orcid.go`):
+  `https://pub.orcid.org/v3.0/expanded-search/`. Free w/ public-data
+  token (per-call credential: `orcid`). Returns person records as
+  Publication-shaped hits with Title=display-name and
+  Authors=[self+affiliation]. Cross-source dedup keys on ORCID iD via
+  `SourceMetadata["orcid_id"]`. Maps 401/403 → `ErrCredentialInvalid`,
+  429 → `ErrRateLimitExceeded`.
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `wikidata` → `{Region: public-research-infrastructure}`;
+  `datacite` → `{Region: EU, DPAStatus: n/a}`; `orcid` →
+  `{Region: US, DPAStatus: covered-by-scc}`.
+- **Config blocks** for the three new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default).
+- **Unit tests** with httptest fixtures for all three plugins:
+  identity, capabilities, residency, happy-path, language override
+  (Wikidata), date/category filters (DataCite), name-fallback (ORCID),
+  401 → `ErrCredentialInvalid`, 429 → `ErrRateLimitExceeded`, Get path
+  (DataCite), Get-not-wired (Wikidata + ORCID), relative-URL
+  normalization.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 33 → 36; `validSourceIDs`
+  registers `wikidata`, `datacite`, `orcid`; registry factory map +
+  test-expected count updated. Config / E2E / registry fixtures
+  extended with the three new source blocks.
+
+### Notes
+
+- No new `ContentType` introduced — Wikidata and ORCID return
+  `paper`-typed Publications with `KindFact` at the v2 layer; DataCite
+  surfaces `dataset`/`paper` based on `resourceTypeGeneral`.
+- Cross-source DOI dedup applies transparently to DataCite results,
+  so Zenodo/CrossRef/DataCite all merge on a shared DOI.
+
 ## [2.9.0] - 2026-05-15
 
 Minor release. **KnowledgeCommons cycle 2 — OpenScience**

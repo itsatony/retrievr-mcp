@@ -77,6 +77,11 @@ func PluginFactories() map[string]PluginFactory {
 		SourceZenodo:   func() SourcePlugin { return &ZenodoPlugin{} },
 		SourceCORE:     func() SourcePlugin { return &COREPlugin{} },
 		SourceOpenAIRE: func() SourcePlugin { return &OpenAIREPlugin{} },
+
+		// v5 cycle 3 / v2.10.0 — Structured knowledge.
+		SourceWikidata: func() SourcePlugin { return &WikidataPlugin{} },
+		SourceDataCite: func() SourcePlugin { return &DataCitePlugin{} },
+		SourceORCID:    func() SourcePlugin { return &ORCIDPlugin{} },
 	}
 }
 

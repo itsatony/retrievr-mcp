@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 33 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0) + 2 v5-cycle-1 Q&A (v2.8.0) + 3 v5-cycle-2 OpenScience (v2.9.0)
+	testRegistryExpectedFactoryCount = 36 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0) + 2 v5-cycle-1 Q&A (v2.8.0) + 3 v5-cycle-2 OpenScience (v2.9.0) + 3 v5-cycle-3 Structured (v2.10.0)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -146,6 +146,9 @@ func TestInitializePlugins(t *testing.T) {
 				SourceZenodo:             {Enabled: true}, // v5 cycle 2 / v2.9.0
 				SourceCORE:               {Enabled: true}, // v5 cycle 2 / v2.9.0
 				SourceOpenAIRE:           {Enabled: true}, // v5 cycle 2 / v2.9.0
+				SourceWikidata:           {Enabled: true}, // v5 cycle 3 / v2.10.0
+				SourceDataCite:           {Enabled: true}, // v5 cycle 3 / v2.10.0
+				SourceORCID:              {Enabled: true}, // v5 cycle 3 / v2.10.0
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

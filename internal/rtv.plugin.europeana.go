@@ -49,7 +49,17 @@ const (
 	europeanaAcceptHdr   = "Accept"
 	europeanaAcceptJSON  = "application/json"
 
-	europeanaCategoriesHint = "EU cultural-heritage images (paintings, photographs, manuscripts, museum objects)"
+	// Query-param name constants (extracted v2.7.0).
+	europeanaQueryParamKey     = "wskey"
+	europeanaQueryParamQuery   = "query"
+	europeanaQueryParamRows    = "rows"
+	europeanaQueryParamQF      = "qf"
+	europeanaQueryParamMedia   = "media"
+	europeanaQueryParamMediaY  = "true"
+	europeanaQueryParamProfile = "profile"
+	europeanaQueryParamLang    = "lang"
+
+	europeanaCategoriesHint = "EU cultural-heritage images (paintings, photographs, manuscripts, museum objects); filters.language wired via the lang param"
 )
 
 // Extra-key constants.
@@ -144,6 +154,9 @@ func (p *EuropeanaPlugin) Capabilities() SourceCapabilities {
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     false,
+		SupportsChannelFilter:    false,
+		SupportsLanguageFilter:   true, // lang query param (first BCP-47 subtag)
 		SupportsPagination:       true, // via start+rows; not wired in cycle 4
 		MaxResultsPerQuery:       europeanaMaxRowsCap,
 		CategoriesHint:           europeanaCategoriesHint,
@@ -216,7 +229,7 @@ func (p *EuropeanaPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 		rows = europeanaMaxRowsCap
 	}
 
-	resp, err := p.doSearch(ctx, params.Query, rows, apiKey)
+	resp, err := p.doSearch(ctx, params, rows, apiKey)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -249,15 +262,18 @@ func (p *EuropeanaPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ C
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *EuropeanaPlugin) doSearch(ctx context.Context, query string, rows int, apiKey string) (*europeanaSearchResponse, error) {
+func (p *EuropeanaPlugin) doSearch(ctx context.Context, params SearchParams, rows int, apiKey string) (*europeanaSearchResponse, error) {
 	q := url.Values{}
-	q.Set("wskey", apiKey)
-	q.Set("query", query)
-	q.Set("rows", strconv.Itoa(rows))
-	q.Set("qf", europeanaTypeImageFilter)
-	q.Set("media", "true") // only items that have downloadable media
+	q.Set(europeanaQueryParamKey, apiKey)
+	q.Set(europeanaQueryParamQuery, params.Query)
+	q.Set(europeanaQueryParamRows, strconv.Itoa(rows))
+	q.Set(europeanaQueryParamQF, europeanaTypeImageFilter)
+	q.Set(europeanaQueryParamMedia, europeanaQueryParamMediaY) // only items that have downloadable media
 	if p.profile != "" {
-		q.Set("profile", p.profile)
+		q.Set(europeanaQueryParamProfile, p.profile)
+	}
+	if lang := BCP47FirstSubtag(params.Filters.Language); lang != "" {
+		q.Set(europeanaQueryParamLang, lang)
 	}
 
 	reqURL := p.baseURL + europeanaSearchPath + "?" + q.Encode()

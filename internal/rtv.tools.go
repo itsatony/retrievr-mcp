@@ -81,7 +81,13 @@ const (
 	FieldDescSort        = "Sort order for results: relevance, date_desc, date_asc, or citations"
 	FieldDescLimit       = "Maximum number of results to return (1-100)"
 	FieldDescOffset      = "Number of results to skip for pagination"
-	FieldDescFilters     = "Optional filters to narrow search results"
+	FieldDescFilters     = "Optional filters to narrow search results. Keys: title (string), authors ([]string), " +
+		"date_from / date_to (YYYY-MM-DD or YYYY), categories ([]string), open_access (bool), " +
+		"min_citations (int), include_domains / exclude_domains ([]string, honoured by brave + exa), " +
+		"channels ([]string, honoured by youtube + scrapingdog_youtube), subreddits ([]string, honoured " +
+		"by reddit), language (BCP-47 tag, honoured by brave + youtube + scrapingdog_youtube + bluesky + " +
+		"europeana; mastodon applies as post-fetch filter). Providers that do not natively support a " +
+		"filter silently ignore it — query SourceCapabilities via rtv_list_sources for the truth matrix."
 	FieldDescCredentials = "Optional per-call API credentials that override server defaults"
 	FieldDescID          = "Prefixed publication ID (e.g., \"arxiv:2401.12345\", \"s2:abc123\")"
 	FieldDescInclude     = "Additional data to include: abstract, full_text, references, citations, related, metadata"
@@ -100,6 +106,16 @@ const (
 	FilterCategories   = "categories"
 	FilterOpenAccess   = "open_access"
 	FilterMinCitations = "min_citations"
+
+	// v2.7.0 smart-filter keys. Per-provider honoring is documented in
+	// docs/filter-reference.md and surfaced at runtime via
+	// SourceCapabilities.SupportsDomainFilter / SupportsChannelFilter /
+	// SupportsLanguageFilter on each entry of rtv_list_sources.
+	FilterIncludeDomains = "include_domains"
+	FilterExcludeDomains = "exclude_domains"
+	FilterChannels       = "channels"
+	FilterSubreddits     = "subreddits"
+	FilterLanguage       = "language"
 )
 
 // ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -46,7 +47,7 @@ const (
 	braveMaxCount     = 20 // Brave caps web search at 20 per request
 	braveDefaultRPS   = 1.0
 
-	braveCategoriesHint = "general web, news, blogs (domain include/exclude via filters.include_domains)"
+	braveCategoriesHint = "general web, news, blogs"
 )
 
 // Extra-key constants (PluginConfig.Extra).
@@ -55,6 +56,44 @@ const (
 	braveExtraSearchLang = "search_lang" // ISO 639-1; default not set
 	braveExtraSafesearch = "safesearch"  // off | moderate | strict
 )
+
+// Outbound query-param name constants. Extracted in v2.7.0 from prior
+// string-literal usage to comply with the "no magic strings" code rule.
+const (
+	braveParamQ              = "q"
+	braveParamCount          = "count"
+	braveParamOffset         = "offset"
+	braveParamCountry        = "country"
+	braveParamSearchLang     = "search_lang"
+	braveParamSafesearch     = "safesearch"
+	braveParamFreshness      = "freshness"
+	braveParamIncludeDomains = "include_domains"
+	braveParamExcludeDomains = "exclude_domains"
+)
+
+// Freshness bucket constants — Brave's documented relative-time tokens.
+const (
+	braveFreshnessDay   = "pd"
+	braveFreshnessWeek  = "pw"
+	braveFreshnessMonth = "pm"
+	braveFreshnessYear  = "py"
+)
+
+// Age thresholds used to map a DateFrom value to the nearest freshness
+// bucket. The cut-offs match Brave's documented bucket semantics: results
+// produced inside the last 24h, 7d, 31d, or 365d respectively.
+const (
+	braveAgeDay   = 24 * time.Hour
+	braveAgeWeek  = 7 * 24 * time.Hour
+	braveAgeMonth = 31 * 24 * time.Hour
+	braveAgeYear  = 365 * 24 * time.Hour
+)
+
+// Brave custom-range syntax: "YYYY-MM-DDtoYYYY-MM-DD" — documented in the
+// Brave Search API reference for the freshness param. Less battle-tested
+// than the buckets; on a 422 response the doSearch path retries once with
+// the nearest bucket derived from DateFrom (see OQ-4 in retrievr_v4.md).
+const braveFreshnessRangeFormat = "%sto%s"
 
 // ---------------------------------------------------------------------------
 // Brave wire types
@@ -145,17 +184,24 @@ func (p *BravePlugin) AvailableFormats() []ContentFormat {
 }
 
 // Capabilities reports Brave-specific filtering + sorting support.
+//
+// v2.7.0: SupportsDateFilter is now real (freshness bucket + custom range);
+// SupportsDomainFilter (include_domains / exclude_domains, comma-joined);
+// SupportsLanguageFilter (search_lang, first BCP-47 subtag).
 func (p *BravePlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
 		SupportsFullText:         false,
 		SupportsCitations:        false,
-		SupportsDateFilter:       true, // via freshness (pd, pw, pm, py)
+		SupportsDateFilter:       true,
 		SupportsAuthorFilter:     false,
 		SupportsCategoryFilter:   false,
 		SupportsSortRelevance:    true,
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     true,
+		SupportsChannelFilter:    false,
+		SupportsLanguageFilter:   true,
 		SupportsPagination:       true, // via offset+count
 		MaxResultsPerQuery:       braveMaxCount,
 		CategoriesHint:           braveCategoriesHint,
@@ -234,11 +280,18 @@ func (p *BravePlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 		count = braveMaxCount
 	}
 
-	if params.ContentType == ContentTypeImage {
-		return p.searchImages(ctx, params.Query, count, apiKey)
+	if err := ValidateDomainList(params.Filters.IncludeDomains); err != nil {
+		return nil, fmt.Errorf("brave: include_domains: %w", err)
+	}
+	if err := ValidateDomainList(params.Filters.ExcludeDomains); err != nil {
+		return nil, fmt.Errorf("brave: exclude_domains: %w", err)
 	}
 
-	resp, err := p.doSearch(ctx, params.Query, count, params.Offset, apiKey)
+	if params.ContentType == ContentTypeImage {
+		return p.searchImages(ctx, params, count, apiKey)
+	}
+
+	resp, err := p.doSearch(ctx, params, count, apiKey)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -287,8 +340,8 @@ type braveImageProperties struct {
 }
 
 // searchImages hits /res/v1/images/search and maps results to Publication.
-func (p *BravePlugin) searchImages(ctx context.Context, query string, count int, apiKey string) (*SearchResult, error) {
-	resp, err := p.doImageSearch(ctx, query, count, apiKey)
+func (p *BravePlugin) searchImages(ctx context.Context, params SearchParams, count int, apiKey string) (*SearchResult, error) {
+	resp, err := p.doImageSearch(ctx, params, count, apiKey)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -310,18 +363,18 @@ func (p *BravePlugin) searchImages(ctx context.Context, query string, count int,
 	}, nil
 }
 
-func (p *BravePlugin) doImageSearch(ctx context.Context, query string, count int, apiKey string) (*braveImageSearchResponse, error) {
+func (p *BravePlugin) doImageSearch(ctx context.Context, params SearchParams, count int, apiKey string) (*braveImageSearchResponse, error) {
 	q := url.Values{}
-	q.Set("q", query)
-	q.Set("count", fmt.Sprintf("%d", count))
+	q.Set(braveParamQ, params.Query)
+	q.Set(braveParamCount, fmt.Sprintf("%d", count))
 	if p.defaultCountry != "" {
-		q.Set("country", p.defaultCountry)
+		q.Set(braveParamCountry, p.defaultCountry)
 	}
-	if p.searchLang != "" {
-		q.Set("search_lang", p.searchLang)
+	if lang := p.resolveSearchLang(params.Filters.Language); lang != "" {
+		q.Set(braveParamSearchLang, lang)
 	}
 	if p.safesearch != "" {
-		q.Set("safesearch", p.safesearch)
+		q.Set(braveParamSafesearch, p.safesearch)
 	}
 
 	reqURL := p.baseURL + braveImageSearchPath + "?" + q.Encode()
@@ -417,27 +470,138 @@ func (p *BravePlugin) Get(_ context.Context, _ string, _ []IncludeField, _ Conte
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *BravePlugin) doSearch(ctx context.Context, query string, count, offset int, apiKey string) (*braveSearchResponse, error) {
+// resolveSearchLang returns the per-call language (first BCP-47 subtag) if
+// set, otherwise the operator-configured default. Empty string means "do not
+// send the search_lang param".
+func (p *BravePlugin) resolveSearchLang(filterLang string) string {
+	if filterLang != "" {
+		return BCP47FirstSubtag(filterLang)
+	}
+	return p.searchLang
+}
+
+// braveFreshnessFromDate maps a SearchFilters date range to Brave's
+// freshness parameter:
+//   - DateFrom + DateTo set: custom range "YYYY-MM-DDtoYYYY-MM-DD".
+//   - DateFrom only: nearest bucket (pd/pw/pm/py) based on age vs `now`.
+//     Older than braveAgeYear returns "" (Brave has no "older than 1y" bucket
+//     and we'd rather omit the param than send a misleading value).
+//   - Neither set: returns "".
+//
+// Invalid date strings return "" and no error — the caller chose to omit
+// the filter; producing an error here would break searches whose date hint
+// is malformed at the source.
+func braveFreshnessFromDate(filters SearchFilters, now time.Time) string {
+	if filters.DateFrom == "" && filters.DateTo == "" {
+		return ""
+	}
+	if filters.DateFrom != "" && filters.DateTo != "" {
+		return fmt.Sprintf(braveFreshnessRangeFormat, filters.DateFrom, filters.DateTo)
+	}
+	if filters.DateFrom == "" {
+		return ""
+	}
+	from, ok := parseFilterDateStart(filters.DateFrom)
+	if !ok {
+		return ""
+	}
+	age := now.Sub(from)
+	switch {
+	case age <= braveAgeDay:
+		return braveFreshnessDay
+	case age <= braveAgeWeek:
+		return braveFreshnessWeek
+	case age <= braveAgeMonth:
+		return braveFreshnessMonth
+	case age <= braveAgeYear:
+		return braveFreshnessYear
+	}
+	return ""
+}
+
+// braveBucketFromDate returns the closest single-token bucket given only
+// DateFrom (no range). Used as the retry fallback when Brave rejects a
+// custom-range freshness with HTTP 422 (per retrievr_v4.md OQ-4).
+func braveBucketFromDate(filters SearchFilters, now time.Time) string {
+	bucket := braveFreshnessFromDate(SearchFilters{DateFrom: filters.DateFrom}, now)
+	return bucket
+}
+
+// parseFilterDateStart parses a filter date ("YYYY-MM-DD" or "YYYY") as the
+// start-of-day in UTC. Returns false on any parse error.
+func parseFilterDateStart(s string) (time.Time, bool) {
+	if len(s) == 4 {
+		t, err := time.Parse("2006", s)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
+	}
+	t, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}
+
+func (p *BravePlugin) buildSearchQuery(params SearchParams, count int, freshness string) url.Values {
 	q := url.Values{}
-	q.Set("q", query)
-	q.Set("count", fmt.Sprintf("%d", count))
-	if offset > 0 {
-		q.Set("offset", fmt.Sprintf("%d", offset))
+	q.Set(braveParamQ, params.Query)
+	q.Set(braveParamCount, fmt.Sprintf("%d", count))
+	if params.Offset > 0 {
+		q.Set(braveParamOffset, fmt.Sprintf("%d", params.Offset))
 	}
 	if p.defaultCountry != "" {
-		q.Set("country", p.defaultCountry)
+		q.Set(braveParamCountry, p.defaultCountry)
 	}
-	if p.searchLang != "" {
-		q.Set("search_lang", p.searchLang)
+	if lang := p.resolveSearchLang(params.Filters.Language); lang != "" {
+		q.Set(braveParamSearchLang, lang)
 	}
 	if p.safesearch != "" {
-		q.Set("safesearch", p.safesearch)
+		q.Set(braveParamSafesearch, p.safesearch)
 	}
+	if freshness != "" {
+		q.Set(braveParamFreshness, freshness)
+	}
+	if len(params.Filters.IncludeDomains) > 0 {
+		q.Set(braveParamIncludeDomains, strings.Join(params.Filters.IncludeDomains, ","))
+	}
+	if len(params.Filters.ExcludeDomains) > 0 {
+		q.Set(braveParamExcludeDomains, strings.Join(params.Filters.ExcludeDomains, ","))
+	}
+	return q
+}
 
+func (p *BravePlugin) doSearch(ctx context.Context, params SearchParams, count int, apiKey string) (*braveSearchResponse, error) {
+	freshness := braveFreshnessFromDate(params.Filters, time.Now())
+	resp, status, err := p.executeSearch(ctx, p.buildSearchQuery(params, count, freshness), apiKey)
+	if err == nil {
+		return resp, nil
+	}
+	// Custom-range freshness syntax is less battle-tested than bucket tokens;
+	// when Brave rejects with 422 we retry once with the nearest bucket
+	// derived from DateFrom alone, per retrievr_v4.md OQ-4. Bucketless dates
+	// (no DateFrom) or already-bucketed values skip the retry.
+	if status == http.StatusUnprocessableEntity && strings.Contains(freshness, "to") {
+		bucket := braveBucketFromDate(params.Filters, time.Now())
+		if bucket != "" {
+			resp, _, err = p.executeSearch(ctx, p.buildSearchQuery(params, count, bucket), apiKey)
+			if err == nil {
+				return resp, nil
+			}
+		}
+	}
+	return nil, err
+}
+
+// executeSearch performs a single HTTP request against the web/news
+// endpoint. Returns the decoded body, the HTTP status (for retry decisions),
+// and any error.
+func (p *BravePlugin) executeSearch(ctx context.Context, q url.Values, apiKey string) (*braveSearchResponse, int, error) {
 	reqURL := p.baseURL + braveSearchPath + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("brave: build request: %w", err)
+		return nil, 0, fmt.Errorf("brave: build request: %w", err)
 	}
 	req.Header.Set(braveAuthHeader, apiKey)
 	req.Header.Set(braveAcceptHeader, braveAcceptJSON)
@@ -445,26 +609,26 @@ func (p *BravePlugin) doSearch(ctx context.Context, query string, count, offset 
 
 	httpResp, err := p.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("brave: http: %w", err)
+		return nil, 0, fmt.Errorf("brave: http: %w", err)
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
 	if httpResp.StatusCode == http.StatusUnauthorized || httpResp.StatusCode == http.StatusForbidden {
-		return nil, fmt.Errorf("%w: brave returned %d", ErrCredentialInvalid, httpResp.StatusCode)
+		return nil, httpResp.StatusCode, fmt.Errorf("%w: brave returned %d", ErrCredentialInvalid, httpResp.StatusCode)
 	}
 	if httpResp.StatusCode == http.StatusTooManyRequests {
-		return nil, fmt.Errorf("%w: brave", ErrRateLimitExceeded)
+		return nil, httpResp.StatusCode, fmt.Errorf("%w: brave", ErrRateLimitExceeded)
 	}
 	if httpResp.StatusCode >= 400 {
 		buf, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("brave: status=%d body=%s", httpResp.StatusCode, truncateForError(string(buf)))
+		return nil, httpResp.StatusCode, fmt.Errorf("brave: status=%d body=%s", httpResp.StatusCode, truncateForError(string(buf)))
 	}
 
 	var resp braveSearchResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("brave: decode response: %w", err)
+		return nil, httpResp.StatusCode, fmt.Errorf("brave: decode response: %w", err)
 	}
-	return &resp, nil
+	return &resp, httpResp.StatusCode, nil
 }
 
 // mergeBraveSections collects web + news results into a single Publication

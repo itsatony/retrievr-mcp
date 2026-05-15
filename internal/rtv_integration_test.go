@@ -42,6 +42,21 @@ const (
 	// Environment variable names for optional API keys.
 	integrationEnvS2APIKey  = "RETRIEVR_S2_API_KEY"
 	integrationEnvADSAPIKey = "RETRIEVR_ADS_API_KEY"
+
+	// v2.7.0 smart-filter integration env keys. Each test skips when its
+	// key is unset, so a partial credential set still produces a green
+	// `go test -tags=integration` run for the providers we have keys for.
+	integrationEnvBraveKey     = "RETRIEVR_BRAVE_API_KEY"
+	integrationEnvExaKey       = "RETRIEVR_EXA_API_KEY"
+	integrationEnvYouTubeKey   = "RETRIEVR_YOUTUBE_API_KEY"
+	integrationEnvRedditKey    = "RETRIEVR_REDDIT_API_KEY"
+	integrationEnvEuropeanaKey = "RETRIEVR_EUROPEANA_API_KEY"
+	// Mastodon and Bluesky search require no credentials on v4+ public
+	// instances / public ATProto endpoints, so no env key is required.
+
+	// Stable channel id used in YouTube channel-filter live test
+	// (TechWorld with Nana — long-lived k8s educational channel).
+	integrationYouTubeStableChannelID = "UCdngmbVKX1Tgre699-XLlUA"
 )
 
 // NOTE: Integration tests intentionally omit t.Parallel() because they hit live
@@ -589,4 +604,244 @@ func TestIntegrationBioRxivGet(t *testing.T) {
 	assert.NotEmpty(t, pub.Title)
 	assert.NotEmpty(t, pub.Authors)
 	assert.Equal(t, SourceBioRxiv, pub.Source)
+}
+
+// ---------------------------------------------------------------------------
+// v2.7.0 smart-filter live integration tests
+// ---------------------------------------------------------------------------
+
+// TestIntegrationBraveDomainFilter exercises Brave's include_domains. Every
+// returned URL must be served by the requested domain (host or sub-host).
+func TestIntegrationBraveDomainFilter(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvBraveKey)
+	if apiKey == "" {
+		t.Skipf("set %s to run this test", integrationEnvBraveKey)
+	}
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &BravePlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, APIKey: apiKey, RateLimit: 1}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query: "ingress controller",
+		Limit: 5,
+		Filters: SearchFilters{
+			IncludeDomains: []string{"kubernetes.io"},
+		},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Results)
+	for _, pub := range res.Results {
+		assert.Contains(t, pub.URL, "kubernetes.io", "every URL must be from the included domain")
+	}
+}
+
+// TestIntegrationBraveDateFilter exercises the freshness wiring.
+func TestIntegrationBraveDateFilter(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvBraveKey)
+	if apiKey == "" {
+		t.Skipf("set %s to run this test", integrationEnvBraveKey)
+	}
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &BravePlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, APIKey: apiKey, RateLimit: 1}))
+
+	from := time.Now().AddDate(0, -1, 0).Format(time.DateOnly)
+	res, err := plugin.Search(ctx, SearchParams{
+		Query:   "kubernetes release",
+		Limit:   5,
+		Filters: SearchFilters{DateFrom: from},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Results, "freshness=pm should still surface results for k8s news")
+}
+
+// TestIntegrationExaDomainFilter exercises Exa's includeDomains/excludeDomains.
+func TestIntegrationExaDomainFilter(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvExaKey)
+	if apiKey == "" {
+		t.Skipf("set %s to run this test", integrationEnvExaKey)
+	}
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &ExaPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, APIKey: apiKey, RateLimit: 1}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query: "service mesh",
+		Limit: 5,
+		Filters: SearchFilters{
+			IncludeDomains: []string{"kubernetes.io"},
+		},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Results)
+	for _, pub := range res.Results {
+		assert.Contains(t, pub.URL, "kubernetes.io")
+	}
+}
+
+// TestIntegrationYouTubeChannelFilter exercises channelId scoping. Every
+// result's channel ID must match the requested channel.
+func TestIntegrationYouTubeChannelFilter(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvYouTubeKey)
+	if apiKey == "" {
+		t.Skipf("set %s to run this test", integrationEnvYouTubeKey)
+	}
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &YouTubePlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, APIKey: apiKey, RateLimit: 1}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query: "kubernetes",
+		Limit: 5,
+		Filters: SearchFilters{
+			Channels: []string{integrationYouTubeStableChannelID},
+		},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Results)
+	for _, pub := range res.Results {
+		// Channel ID stored under SourceMetadata
+		channelID, _ := pub.SourceMetadata[smetaChannelID].(string)
+		assert.Equal(t, integrationYouTubeStableChannelID, channelID,
+			"every result must be from the requested channel")
+	}
+}
+
+// TestIntegrationRedditSubredditFilter exercises subreddit-path routing.
+func TestIntegrationRedditSubredditFilter(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvRedditKey)
+	if apiKey == "" {
+		t.Skipf("set %s to run this test", integrationEnvRedditKey)
+	}
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &RedditPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, APIKey: apiKey, RateLimit: 1}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query:   "channels",
+		Limit:   5,
+		Filters: SearchFilters{Subreddits: []string{"golang"}},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Results)
+	for _, pub := range res.Results {
+		sub, _ := pub.SourceMetadata[smetaSubreddit].(string)
+		assert.Equal(t, "golang", sub, "every post must be from r/golang")
+	}
+}
+
+// TestIntegrationMastodonLanguageFilter exercises the client-side language
+// post-filter. mastodon.social returns multilingual content; filtering to
+// "de" should leave only German posts (or posts with no language tag).
+func TestIntegrationMastodonLanguageFilter(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &MastodonPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, RateLimit: 5}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query:   "kubernetes",
+		Limit:   10,
+		Filters: SearchFilters{Language: "de"},
+	})
+	if err != nil {
+		t.Skipf("mastodon search failed (likely instance throttling): %v", err)
+	}
+	for _, pub := range res.Results {
+		lang, _ := pub.SourceMetadata[smetaLanguage].(string)
+		assert.True(t, MatchesLanguagePrefix(lang, "de"),
+			"post language %q must match filter or be empty (fail-open)", lang)
+	}
+}
+
+// TestIntegrationBlueskyLanguageFilter exercises the lang query param.
+func TestIntegrationBlueskyLanguageFilter(t *testing.T) {
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &BlueskyPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, RateLimit: 5}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query:   "kubernetes",
+		Limit:   10,
+		Filters: SearchFilters{Language: "de"},
+	})
+	if err != nil {
+		t.Skipf("bluesky search failed: %v", err)
+	}
+	require.NotEmpty(t, res.Results, "bluesky must return at least some matching German posts")
+}
+
+// TestIntegrationEuropeanaLanguageFilter exercises the lang query param.
+func TestIntegrationEuropeanaLanguageFilter(t *testing.T) {
+	apiKey := os.Getenv(integrationEnvEuropeanaKey)
+	if apiKey == "" {
+		t.Skipf("set %s to run this test", integrationEnvEuropeanaKey)
+	}
+	time.Sleep(integrationRateLimitDelay)
+
+	ctx, cancel := context.WithTimeout(context.Background(), integrationTimeout)
+	defer cancel()
+
+	plugin := &EuropeanaPlugin{}
+	require.NoError(t, plugin.Initialize(ctx, PluginConfig{Enabled: true, APIKey: apiKey, RateLimit: 5}))
+
+	res, err := plugin.Search(ctx, SearchParams{
+		Query:   "Vermeer",
+		Limit:   5,
+		Filters: SearchFilters{Language: "nl"},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Results)
+}
+
+// TestIntegrationListSourcesCapabilities asserts the v2.7.0 capability flags
+// are exposed via Router.ListSources() for the providers we wired. No upstream
+// calls — local registry only.
+func TestIntegrationListSourcesCapabilities(t *testing.T) {
+	type sourceCaps struct{ Domain, Channel, Language bool }
+	expected := map[string]sourceCaps{
+		SourceBrave:              {Domain: true, Channel: false, Language: true},
+		SourceExa:                {Domain: true, Channel: false, Language: false},
+		SourceYouTube:            {Domain: false, Channel: true, Language: true},
+		SourceScrapingdogYouTube: {Domain: false, Channel: true, Language: true},
+		SourceReddit:             {Domain: false, Channel: true, Language: false},
+		SourceMastodon:           {Domain: false, Channel: false, Language: true},
+		SourceBluesky:            {Domain: false, Channel: false, Language: true},
+		SourceEuropeana:          {Domain: false, Channel: false, Language: true},
+	}
+	factories := PluginFactories()
+	for id, want := range expected {
+		factory, ok := factories[id]
+		require.True(t, ok, "plugin %s missing from registry", id)
+		caps := factory().Capabilities()
+		got := sourceCaps{caps.SupportsDomainFilter, caps.SupportsChannelFilter, caps.SupportsLanguageFilter}
+		assert.Equal(t, want, got, "capability flags for %s", id)
+	}
 }

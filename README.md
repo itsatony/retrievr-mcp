@@ -116,7 +116,7 @@ Search academic publications across multiple sources. Returns merged, deduplicat
 | `sort` | string | no | `"relevance"` | `relevance`, `date_desc`, `date_asc`, or `citations` |
 | `limit` | number | no | `10` | Max results (1–100) |
 | `offset` | number | no | `0` | Pagination offset |
-| `filters` | object | no | — | `title`, `authors`, `date_from`, `date_to`, `categories`, `open_access`, `min_citations` |
+| `filters` | object | no | — | `title`, `authors`, `date_from`, `date_to`, `categories`, `open_access`, `min_citations`, `include_domains`, `exclude_domains`, `channels`, `subreddits`, `language` (see [`docs/filter-reference.md`](docs/filter-reference.md) for the per-provider capability matrix) |
 | `credentials` | object | no | — | Per-call API keys: `pubmed_api_key`, `s2_api_key`, `openalex_api_key`, `hf_token` |
 
 **Example:**

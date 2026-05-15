@@ -26,6 +26,12 @@ const (
 	ErrMsgCacheKeyGeneration  = "failed to generate cache key"
 	ErrMsgBibTeXGeneration    = "failed to generate bibtex"
 	ErrMsgBibTeXUnsupported   = "bibtex generation is not supported for this content type"
+
+	// v2.7.0 smart-filters error messages.
+	ErrMsgTooManyChannels    = "channels filter exceeds maximum allowed"
+	ErrMsgTooManySubreddits  = "subreddits filter exceeds maximum allowed"
+	ErrMsgInvalidLanguageTag = "language filter is not a valid BCP-47 tag"
+	ErrMsgInvalidDomainList  = "domain list contains invalid entries (use bare registered-domain form, no scheme or path)"
 )
 
 // ---------------------------------------------------------------------------
@@ -105,6 +111,12 @@ var (
 	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)
 	ErrBibTeXGeneration    = errors.New(ErrMsgBibTeXGeneration)
 	ErrBibTeXUnsupported   = errors.New(ErrMsgBibTeXUnsupported)
+
+	// v2.7.0 smart-filters sentinels.
+	ErrTooManyChannels    = errors.New(ErrMsgTooManyChannels)
+	ErrTooManySubreddits  = errors.New(ErrMsgTooManySubreddits)
+	ErrInvalidLanguageTag = errors.New(ErrMsgInvalidLanguageTag)
+	ErrInvalidDomainList  = errors.New(ErrMsgInvalidDomainList)
 
 	// EU-mode sentinels (Cycle 2).
 	ErrEUModeProviderConflict = errors.New(ErrMsgEUModeProviderConflict)

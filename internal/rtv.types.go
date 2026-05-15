@@ -1,6 +1,9 @@
 package internal
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ---------------------------------------------------------------------------
 // Content type constants
@@ -332,14 +335,29 @@ type SearchParams struct {
 }
 
 // SearchFilters contains optional filters to narrow search results.
+//
+// v2.7.0 additions (smart filters): IncludeDomains / ExcludeDomains
+// (honoured by brave, exa), Channels (honoured by youtube,
+// scrapingdog_youtube), Subreddits (honoured by reddit), and Language
+// (honoured by brave, youtube, scrapingdog_youtube, bluesky,
+// europeana, and post-fetch by mastodon). Plugins that do not
+// natively support a filter MUST ignore it — never post-filter
+// silently. The single sanctioned post-filter is mastodon language;
+// its capability is flagged via SourceCapabilities.SupportsLanguageFilter
+// with the post-fetch policy documented in docs/filter-reference.md.
 type SearchFilters struct {
-	Title        string   `json:"title,omitempty"`
-	Authors      []string `json:"authors,omitempty"`
-	DateFrom     string   `json:"date_from,omitempty"` // YYYY-MM-DD or YYYY
-	DateTo       string   `json:"date_to,omitempty"`   // YYYY-MM-DD or YYYY
-	Categories   []string `json:"categories,omitempty"`
-	OpenAccess   *bool    `json:"open_access,omitempty"`   // Pointer: nil = not set
-	MinCitations *int     `json:"min_citations,omitempty"` // Pointer: nil = not set
+	Title          string   `json:"title,omitempty"`
+	Authors        []string `json:"authors,omitempty"`
+	DateFrom       string   `json:"date_from,omitempty"` // YYYY-MM-DD or YYYY
+	DateTo         string   `json:"date_to,omitempty"`   // YYYY-MM-DD or YYYY
+	Categories     []string `json:"categories,omitempty"`
+	OpenAccess     *bool    `json:"open_access,omitempty"`   // Pointer: nil = not set
+	MinCitations   *int     `json:"min_citations,omitempty"` // Pointer: nil = not set
+	IncludeDomains []string `json:"include_domains,omitempty"`
+	ExcludeDomains []string `json:"exclude_domains,omitempty"`
+	Channels       []string `json:"channels,omitempty"`
+	Subreddits     []string `json:"subreddits,omitempty"`
+	Language       string   `json:"language,omitempty"` // BCP-47, e.g. "en", "de", "fr-CA"
 }
 
 // SearchResult is the per-plugin search return type.
@@ -434,6 +452,9 @@ type SourceCapabilities struct {
 	SupportsSortDate         bool            `json:"supports_sort_date"`
 	SupportsSortCitations    bool            `json:"supports_sort_citations"`
 	SupportsOpenAccessFilter bool            `json:"supports_open_access_filter"`
+	SupportsDomainFilter     bool            `json:"supports_domain_filter"`
+	SupportsChannelFilter    bool            `json:"supports_channel_filter"`
+	SupportsLanguageFilter   bool            `json:"supports_language_filter"`
 	SupportsPagination       bool            `json:"supports_pagination"`
 	MaxResultsPerQuery       int             `json:"max_results_per_query"`
 	CategoriesHint           string          `json:"categories_hint,omitempty"`
@@ -510,6 +531,9 @@ type SourceInfo struct {
 	SupportsDateFilter     bool            `json:"supports_date_filter"`
 	SupportsAuthorFilter   bool            `json:"supports_author_filter"`
 	SupportsCategoryFilter bool            `json:"supports_category_filter"`
+	SupportsDomainFilter   bool            `json:"supports_domain_filter"`
+	SupportsChannelFilter  bool            `json:"supports_channel_filter"`
+	SupportsLanguageFilter bool            `json:"supports_language_filter"`
 	RateLimit              RateLimitInfo   `json:"rate_limit"`
 	CategoriesHint         string          `json:"categories_hint,omitempty"`
 	AcceptsCredentials     bool            `json:"accepts_credentials"`
@@ -522,4 +546,65 @@ type SourceInfo struct {
 	SubprocessorURL string       `json:"subprocessor_url,omitempty"`
 	FreeTier        bool         `json:"free_tier,omitempty"`    // works without a paid key (incl. anon-tier providers)
 	RequiresKey     bool         `json:"requires_key,omitempty"` // mirror of AcceptsCredentials but renamed for clarity
+}
+
+// ---------------------------------------------------------------------------
+// BCP-47 language helpers (v2.7.0 smart filters)
+// ---------------------------------------------------------------------------
+
+// BCP47FirstSubtag returns the primary language subtag (lower-cased) from a
+// BCP-47 tag. Examples: "en" -> "en", "en-US" -> "en", "fr-CA" -> "fr",
+// "DE-DE" -> "de". Whitespace is trimmed. Empty input returns "".
+//
+// This helper is used by plugins whose upstream APIs accept only a two/three
+// letter primary language code (Brave search_lang, YouTube relevanceLanguage,
+// Bluesky lang, Europeana lang).
+func BCP47FirstSubtag(tag string) string {
+	t := strings.TrimSpace(tag)
+	if t == "" {
+		return ""
+	}
+	if i := strings.IndexByte(t, '-'); i > 0 {
+		t = t[:i]
+	}
+	return strings.ToLower(t)
+}
+
+// MatchesLanguagePrefix reports whether a returned record-level language tag
+// (e.g. "de-DE") satisfies a filter tag (e.g. "de"). Match is case-insensitive
+// and accepts either exact equality or a prefix-with-dash relationship
+// ("de" matches "de", "de-DE", "DE-AT"; "de" does NOT match "deu" or "den").
+// Empty recordLang fails open: returns true so providers do not silently
+// drop records whose language metadata is missing.
+func MatchesLanguagePrefix(recordLang, filterLang string) bool {
+	if filterLang == "" {
+		return true
+	}
+	if recordLang == "" {
+		return true // fail-open: missing record metadata is not a rejection signal
+	}
+	r := strings.ToLower(strings.TrimSpace(recordLang))
+	f := strings.ToLower(strings.TrimSpace(filterLang))
+	if r == f {
+		return true
+	}
+	return strings.HasPrefix(r, f+"-")
+}
+
+// ValidateDomainList returns ErrInvalidDomainList if any entry in the list is
+// not a bare registered-domain (no scheme, no path, no whitespace). Empty list
+// and nil are valid. Used by plugins that wire IncludeDomains/ExcludeDomains.
+func ValidateDomainList(domains []string) error {
+	for _, d := range domains {
+		if d == "" {
+			return ErrInvalidDomainList
+		}
+		if strings.ContainsAny(d, " \t\r\n/") {
+			return ErrInvalidDomainList
+		}
+		if strings.Contains(d, "://") {
+			return ErrInvalidDomainList
+		}
+	}
+	return nil
 }

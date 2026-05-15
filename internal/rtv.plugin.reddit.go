@@ -48,18 +48,39 @@ const (
 	redditPluginName        = "Reddit"
 	redditPluginDescription = "Search Reddit posts (type=link) via OAuth2 client-credentials. Credential format is <client_id>:<client_secret> as a single value. ~100 QPM on the free tier. US-resident; blocked under eu_strict."
 
-	redditTokenURL         = "https://www.reddit.com/api/v1/access_token"
-	redditDefaultBaseURL   = "https://oauth.reddit.com"
-	redditSearchPath       = "/search"
-	redditDefaultLimit     = 10
-	redditMaxLimitCap      = 100
-	redditDefaultRPS       = 1.5 // 100 QPM ≈ 1.67 req/s; leave headroom
-	redditAcceptHeader     = "Accept"
-	redditAcceptJSON       = "application/json"
-	redditUAHeader         = "User-Agent"
-	redditDefaultUserAgent = "retrievr-mcp/2.6 (+https://github.com/itsatony/retrievr-mcp; please-override-user-agent@example.com)"
+	redditTokenURL                  = "https://www.reddit.com/api/v1/access_token"
+	redditDefaultBaseURL            = "https://oauth.reddit.com"
+	redditSearchPath                = "/search"
+	redditSubredditSearchPathFormat = "/r/%s/search"
+	redditDefaultLimit              = 10
+	redditMaxLimitCap               = 100
+	redditMaxSubredditFanout        = 5
+	redditDefaultRPS                = 1.5 // 100 QPM ≈ 1.67 req/s; leave headroom
+	redditAcceptHeader              = "Accept"
+	redditAcceptJSON                = "application/json"
+	redditContentTypeHeader         = "Content-Type"
+	redditContentTypeFormURLEncoded = "application/x-www-form-urlencoded"
+	redditAuthHeader                = "Authorization"
+	redditAuthBearerPrefix          = "Bearer "
+	redditUAHeader                  = "User-Agent"
+	redditDefaultUserAgent          = "retrievr-mcp/2.7 (+https://github.com/itsatony/retrievr-mcp; please-override-user-agent@example.com)"
 
-	redditCategoriesHint = "Reddit submissions (posts), including title + selftext"
+	redditTokenGrantBody           = "grant_type=client_credentials"
+	redditTokenDefaultExpiresInSec = 3600
+
+	// Query-param name constants (extracted v2.7.0).
+	redditQueryParamQ         = "q"
+	redditQueryParamLimit     = "limit"
+	redditQueryParamType      = "type"
+	redditQueryParamTypeLink  = "link"
+	redditQueryParamRawJSON   = "raw_json"
+	redditQueryParamRawJSONOn = "1"
+	redditQueryParamRestrict  = "restrict_sr"
+	redditQueryParamRestrictY = "on"
+
+	redditListingKindSubmission = "t3"
+
+	redditCategoriesHint = "Reddit submissions (posts), including title + selftext; restrict by community via filters.subreddits"
 
 	// Token expiry safety margin: refresh 60s before the upstream expires.
 	redditTokenRefreshSafetyMargin = 60 * time.Second
@@ -165,13 +186,16 @@ func (p *RedditPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
 		SupportsFullText:         false,
 		SupportsCitations:        false,
-		SupportsDateFilter:       false, // t= filter not wired in cycle 5
+		SupportsDateFilter:       false, // t= filter not wired in v2.7.0; see retrievr_v4.md deferrals
 		SupportsAuthorFilter:     false,
 		SupportsCategoryFilter:   false,
 		SupportsSortRelevance:    true,
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     false,
+		SupportsChannelFilter:    true, // subreddit scoping = "channel" semantics
+		SupportsLanguageFilter:   false,
 		SupportsPagination:       true, // after= cursor; not wired in cycle 5
 		MaxResultsPerQuery:       redditMaxLimitCap,
 		CategoriesHint:           redditCategoriesHint,
@@ -248,6 +272,14 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 		return nil, err
 	}
 
+	// Validate the fan-out cap BEFORE touching the network so callers get a
+	// fast typed error instead of waiting on token exchange to fail later.
+	subreddits := params.Filters.Subreddits
+	if len(subreddits) > redditMaxSubredditFanout {
+		return nil, fmt.Errorf("%w: reddit accepts at most %d subreddits per call, got %d",
+			ErrTooManySubreddits, redditMaxSubredditFanout, len(subreddits))
+	}
+
 	token, err := p.ensureToken(ctx, clientID, clientSecret)
 	if err != nil {
 		p.recordError(err)
@@ -262,25 +294,64 @@ func (p *RedditPlugin) Search(ctx context.Context, params SearchParams) (*Search
 		limit = redditMaxLimitCap
 	}
 
-	listing, err := p.doSearch(ctx, params.Query, limit, token)
-	if err != nil {
-		p.recordError(err)
-		return nil, err
+	if len(subreddits) == 0 {
+		listing, err := p.doSearch(ctx, params, "", limit, token)
+		if err != nil {
+			p.recordError(err)
+			return nil, err
+		}
+		p.recordSuccess()
+		pubs := redditPublicationsFromListing(listing)
+		return &SearchResult{
+			Total:   len(pubs),
+			Results: pubs,
+			HasMore: listing.Data.After != "",
+		}, nil
+	}
+
+	// Subreddit fan-out: one request per subreddit, results merged with
+	// dedup by canonical permalink URL.
+	merged := make([]Publication, 0, len(subreddits)*limit)
+	seen := make(map[string]struct{}, len(subreddits)*limit)
+	hasMore := false
+	for _, sub := range subreddits {
+		listing, err := p.doSearch(ctx, params, sub, limit, token)
+		if err != nil {
+			p.recordError(err)
+			return nil, err
+		}
+		if listing.Data.After != "" {
+			hasMore = true
+		}
+		for _, pub := range redditPublicationsFromListing(listing) {
+			key := pub.URL
+			if key == "" {
+				key = pub.ID
+			}
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			merged = append(merged, pub)
+		}
 	}
 	p.recordSuccess()
+	return &SearchResult{
+		Total:   len(merged),
+		Results: merged,
+		HasMore: hasMore,
+	}, nil
+}
 
+func redditPublicationsFromListing(listing *redditListing) []Publication {
 	pubs := make([]Publication, 0, len(listing.Data.Children))
 	for _, c := range listing.Data.Children {
-		if c.Kind != "t3" {
-			continue // not a submission
+		if c.Kind != redditListingKindSubmission {
+			continue
 		}
 		pubs = append(pubs, redditSubmissionToPublication(c.Data))
 	}
-	return &SearchResult{
-		Total:   len(pubs),
-		Results: pubs,
-		HasMore: listing.Data.After != "",
-	}, nil
+	return pubs
 }
 
 // Get is not wired in cycle 5. Reddit's /by_id/<fullname>.json covers it.
@@ -302,13 +373,13 @@ func (p *RedditPlugin) ensureToken(ctx context.Context, clientID, clientSecret s
 		return p.cachedToken, nil
 	}
 
-	body := strings.NewReader("grant_type=client_credentials")
+	body := strings.NewReader(redditTokenGrantBody)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.tokenURL, body)
 	if err != nil {
 		return "", fmt.Errorf("reddit: build token request: %w", err)
 	}
 	req.SetBasicAuth(clientID, clientSecret)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set(redditContentTypeHeader, redditContentTypeFormURLEncoded)
 	req.Header.Set(redditAcceptHeader, redditAcceptJSON)
 	req.Header.Set(redditUAHeader, p.userAgent)
 
@@ -339,26 +410,35 @@ func (p *RedditPlugin) ensureToken(ctx context.Context, clientID, clientSecret s
 
 	expiresIn := tok.ExpiresIn
 	if expiresIn <= 0 {
-		expiresIn = 3600
+		expiresIn = redditTokenDefaultExpiresInSec
 	}
 	p.cachedToken = tok.AccessToken
 	p.tokenExpiry = time.Now().Add(time.Duration(expiresIn) * time.Second)
 	return p.cachedToken, nil
 }
 
-func (p *RedditPlugin) doSearch(ctx context.Context, query string, limit int, token string) (*redditListing, error) {
+// doSearch issues one search request. If subreddit is non-empty, the path
+// becomes /r/<sub>/search with restrict_sr=on so Reddit limits results to
+// that community; otherwise /search runs against /r/all by default.
+func (p *RedditPlugin) doSearch(ctx context.Context, params SearchParams, subreddit string, limit int, token string) (*redditListing, error) {
 	q := url.Values{}
-	q.Set("q", query)
-	q.Set("limit", strconv.Itoa(limit))
-	q.Set("type", "link") // submissions only — exclude comments
-	q.Set("raw_json", "1")
+	q.Set(redditQueryParamQ, params.Query)
+	q.Set(redditQueryParamLimit, strconv.Itoa(limit))
+	q.Set(redditQueryParamType, redditQueryParamTypeLink) // submissions only — exclude comments
+	q.Set(redditQueryParamRawJSON, redditQueryParamRawJSONOn)
 
-	reqURL := p.baseURL + redditSearchPath + "?" + q.Encode()
+	path := redditSearchPath
+	if subreddit != "" {
+		path = fmt.Sprintf(redditSubredditSearchPathFormat, subreddit)
+		q.Set(redditQueryParamRestrict, redditQueryParamRestrictY)
+	}
+
+	reqURL := p.baseURL + path + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("reddit: build search request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(redditAuthHeader, redditAuthBearerPrefix+token)
 	req.Header.Set(redditAcceptHeader, redditAcceptJSON)
 	req.Header.Set(redditUAHeader, p.userAgent)
 

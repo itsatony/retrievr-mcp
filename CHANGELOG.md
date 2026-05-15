@@ -5,6 +5,91 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.7.0] - 2026-05-15
+
+Minor release. **Smart-filter surface** (`project_plan/retrievr_v4.md`).
+Closes the four highest-impact filter gaps from the May 2026 search-surface
+audit: include/exclude-domain scoping for web SERPs, channel/subreddit
+scoping for video and social providers, BCP-47 language filtering across
+six providers, and the long-standing Brave date-filter defect.
+
+### Added
+
+- **`SearchFilters` fields** (`internal/rtv.types.go`):
+  - `IncludeDomains` / `ExcludeDomains` (`[]string`) — honored by `brave`
+    (comma-joined `include_domains` / `exclude_domains`) and `exa`
+    (`includeDomains` / `excludeDomains` JSON body fields). Bare
+    registered-domain form only; validation rejects schemes, paths, and
+    whitespace with `ErrInvalidDomainList`.
+  - `Channels` (`[]string`) — honored by `youtube` (`channelId`, with
+    multi-channel fan-out capped at 5 — `ErrTooManyChannels` above the
+    cap) and `scrapingdog_youtube` (`channel:` query qualifier, same
+    fan-out).
+  - `Subreddits` (`[]string`) — honored by `reddit` via `/r/<sub>/search`
+    routing with `restrict_sr=on`, capped at 5 (`ErrTooManySubreddits`).
+  - `Language` (`string`, BCP-47) — honored server-side by `brave`
+    (`search_lang`), `youtube` (`relevanceLanguage`),
+    `scrapingdog_youtube` (`language`), `bluesky` (`lang`), `europeana`
+    (`lang`). `mastodon` applies it as a post-fetch filter on
+    `Status.language` with fail-open on missing metadata (the single
+    sanctioned client-side filter exception — see
+    `docs/filter-reference.md`).
+- **`SourceCapabilities` flags**: `SupportsDomainFilter`,
+  `SupportsChannelFilter`, `SupportsLanguageFilter`. Surfaced via
+  `rtv_list_sources` so callers can build the per-provider truth matrix
+  at runtime.
+- **`docs/filter-reference.md`** — full per-provider × per-filter
+  capability matrix with copy-pasteable request examples.
+- **MCP `rtv_search.filters` schema**: filter-key constants
+  (`FilterIncludeDomains`, `FilterExcludeDomains`, `FilterChannels`,
+  `FilterSubreddits`, `FilterLanguage`) and an expanded `FieldDescFilters`
+  description enumerating all keys and the provider mapping.
+- **BCP-47 helpers** (`rtv.types.go`): `BCP47FirstSubtag` extracts the
+  primary subtag (`"de-DE"` → `"de"`); `MatchesLanguagePrefix` applies the
+  prefix-with-dash match rule used by the Mastodon post-filter (fail-open
+  on missing record metadata).
+- **`ValidateDomainList`** — bare registered-domain validator shared by
+  Brave + Exa.
+- **Cross-plugin smart-filter test file**
+  (`internal/rtv.plugin.smartfilters_test.go`) — table-driven coverage
+  of every new filter axis, fan-out cap, post-filter rule, and Brave
+  freshness truth table including the 422-retry-with-bucket path. 8 live
+  integration tests under `//go:build integration` plus a capability
+  matrix assertion that runs without credentials.
+
+### Fixed
+
+- **Brave date filter was advertised but unwired** — `Capabilities()`
+  returned `SupportsDateFilter: true` (since v2.4) but `doSearch()` never
+  consulted `Filters.DateFrom`/`DateTo`. Now maps to Brave's `freshness`
+  parameter: bucket tokens (`pd`/`pw`/`pm`/`py`) for `date_from`-only
+  inputs based on age vs `time.Now()`; custom-range syntax
+  `YYYY-MM-DDtoYYYY-MM-DD` when both `date_from` and `date_to` are set.
+  On HTTP 422 from a custom range, retries once with the nearest bucket
+  derived from `date_from`.
+
+### Changed
+
+- **Plugin `doSearch` signatures** for brave, scrapingdog_youtube,
+  reddit, mastodon, bluesky, and europeana now accept `SearchParams`
+  instead of bare query strings — needed to plumb `Filters.*` through to
+  the request builder. Pre-release, no compatibility shim.
+- **Error sentinels** added: `ErrTooManyChannels`,
+  `ErrTooManySubreddits`, `ErrInvalidLanguageTag`, `ErrInvalidDomainList`.
+- **Constants extraction**: every query-param string literal in the eight
+  modified plugins is now a typed constant (`braveParamFreshness`,
+  `youtubeParamChannelID`, `redditQueryParamRestrict`, etc.) to comply
+  with the "no magic strings" code rule. Reddit additionally extracts
+  header names (`Authorization`, `Content-Type`), the OAuth grant body
+  string, and the bearer prefix.
+
+### Deferred (planned v2.8.0+)
+
+Per `project_plan/retrievr_v4.md` §2.2: safe-search per call, place
+radius/bounding-box, sort-order extensions (YouTube viewCount, GitHub
+forks/updated), Mastodon date filter via cursor pagination, peer-review
+status, YouTube `@handle` → `channelId` resolution.
+
 ## [2.6.0] - 2026-05-11
 
 Minor release. **Fifth and final cycle of the v3 "Multimodal Retrieval"

@@ -54,7 +54,15 @@ const (
 	mastodonAcceptHeader = "Accept"
 	mastodonAcceptJSON   = "application/json"
 
-	mastodonCategoriesHint = "public statuses (posts) on a Mastodon instance — content is the post text (HTML-stripped)"
+	// Query-param name constants (extracted v2.7.0).
+	mastodonQueryParamQ        = "q"
+	mastodonQueryParamType     = "type"
+	mastodonQueryParamLimit    = "limit"
+	mastodonQueryParamResolve  = "resolve"
+	mastodonQueryParamTypeStat = "statuses"
+	mastodonQueryParamResolveN = "false"
+
+	mastodonCategoriesHint = "public statuses (posts) on a Mastodon instance — content is the post text (HTML-stripped); filters.language post-filters on Status.language with fail-open on missing metadata"
 )
 
 // Extra-key constants.
@@ -149,20 +157,27 @@ func (p *MastodonPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
 		SupportsFullText:         false,
 		SupportsCitations:        false,
-		SupportsDateFilter:       false, // could be wired via min_id/max_id; not in cycle 5
+		SupportsDateFilter:       false, // cursor-based; deferred per retrievr_v4.md
 		SupportsAuthorFilter:     false,
 		SupportsCategoryFilter:   false,
 		SupportsSortRelevance:    true,
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
-		SupportsPagination:       false, // offset+limit on /api/v2/search not wired in cycle 5
-		MaxResultsPerQuery:       mastodonMaxLimitCap,
-		CategoriesHint:           mastodonCategoriesHint,
-		NativeFormat:             FormatJSON,
-		AvailableFormats:         []ContentFormat{FormatJSON},
-		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
-		Kinds:                    []ResultKind{KindPost},
+		SupportsDomainFilter:     false,
+		SupportsChannelFilter:    false,
+		// Mastodon has no server-side language filter on /api/v2/search; we
+		// post-filter on Status.language with fail-open on missing metadata.
+		// This is the single sanctioned client-side filter in v2.7.0 — see
+		// docs/filter-reference.md and project_plan/retrievr_v4.md §4.
+		SupportsLanguageFilter: true,
+		SupportsPagination:     false, // offset+limit on /api/v2/search not wired in cycle 5
+		MaxResultsPerQuery:     mastodonMaxLimitCap,
+		CategoriesHint:         mastodonCategoriesHint,
+		NativeFormat:           FormatJSON,
+		AvailableFormats:       []ContentFormat{FormatJSON},
+		QueryIntents:           []Intent{IntentQuickLookup, IntentNews},
+		Kinds:                  []ResultKind{KindPost},
 	}
 }
 
@@ -233,7 +248,7 @@ func (p *MastodonPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 		limit = mastodonMaxLimitCap
 	}
 
-	resp, err := p.doSearch(ctx, params.Query, limit)
+	resp, err := p.doSearch(ctx, params, limit)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -242,6 +257,9 @@ func (p *MastodonPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 
 	pubs := make([]Publication, 0, len(resp.Statuses))
 	for _, s := range resp.Statuses {
+		if !MatchesLanguagePrefix(s.Language, params.Filters.Language) {
+			continue
+		}
 		pubs = append(pubs, mastodonStatusToPublication(s, p.instanceHostname()))
 	}
 	return &SearchResult{
@@ -261,12 +279,12 @@ func (p *MastodonPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ Co
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *MastodonPlugin) doSearch(ctx context.Context, query string, limit int) (*mastodonSearchResponse, error) {
+func (p *MastodonPlugin) doSearch(ctx context.Context, params SearchParams, limit int) (*mastodonSearchResponse, error) {
 	q := url.Values{}
-	q.Set("q", query)
-	q.Set("type", "statuses")
-	q.Set("limit", strconv.Itoa(limit))
-	q.Set("resolve", "false") // do not eagerly fetch remote results — privacy-respecting default
+	q.Set(mastodonQueryParamQ, params.Query)
+	q.Set(mastodonQueryParamType, mastodonQueryParamTypeStat)
+	q.Set(mastodonQueryParamLimit, strconv.Itoa(limit))
+	q.Set(mastodonQueryParamResolve, mastodonQueryParamResolveN) // do not eagerly fetch remote results — privacy-respecting default
 
 	reqURL := p.baseURL + mastodonSearchPath + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)

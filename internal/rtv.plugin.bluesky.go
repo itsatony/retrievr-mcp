@@ -47,7 +47,12 @@ const (
 	blueskyAcceptHeader = "Accept"
 	blueskyAcceptJSON   = "application/json"
 
-	blueskyCategoriesHint = "public posts on Bluesky (atproto skeets); language filter via record.langs"
+	// Query-param name constants (extracted v2.7.0).
+	blueskyQueryParamQ     = "q"
+	blueskyQueryParamLimit = "limit"
+	blueskyQueryParamLang  = "lang"
+
+	blueskyCategoriesHint = "public posts on Bluesky (atproto skeets); filters.language wired via the lang query param"
 )
 
 // ---------------------------------------------------------------------------
@@ -136,6 +141,9 @@ func (p *BlueskyPlugin) Capabilities() SourceCapabilities {
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     false,
+		SupportsChannelFilter:    false,
+		SupportsLanguageFilter:   true, // lang query param (first BCP-47 subtag)
 		SupportsPagination:       true, // via cursor; not wired in cycle 5
 		MaxResultsPerQuery:       blueskyMaxLimitCap,
 		CategoriesHint:           blueskyCategoriesHint,
@@ -201,7 +209,7 @@ func (p *BlueskyPlugin) Search(ctx context.Context, params SearchParams) (*Searc
 		limit = blueskyMaxLimitCap
 	}
 
-	resp, err := p.doSearch(ctx, params.Query, limit)
+	resp, err := p.doSearch(ctx, params, limit)
 	if err != nil {
 		p.recordError(err)
 		return nil, err
@@ -229,10 +237,13 @@ func (p *BlueskyPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ Con
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *BlueskyPlugin) doSearch(ctx context.Context, query string, limit int) (*blueskySearchResponse, error) {
+func (p *BlueskyPlugin) doSearch(ctx context.Context, params SearchParams, limit int) (*blueskySearchResponse, error) {
 	q := url.Values{}
-	q.Set("q", query)
-	q.Set("limit", strconv.Itoa(limit))
+	q.Set(blueskyQueryParamQ, params.Query)
+	q.Set(blueskyQueryParamLimit, strconv.Itoa(limit))
+	if lang := BCP47FirstSubtag(params.Filters.Language); lang != "" {
+		q.Set(blueskyQueryParamLang, lang)
+	}
 
 	reqURL := p.baseURL + blueskySearchPath + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)

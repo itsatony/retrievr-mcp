@@ -44,15 +44,24 @@ const (
 	scrapingdogYouTubeDefaultBaseURL = "https://api.scrapingdog.com"
 	scrapingdogYouTubeSearchPath     = "/youtube/search/"
 
-	scrapingdogYouTubeQueryParamKey   = "api_key"
-	scrapingdogYouTubeQueryParamQuery = "query"
+	scrapingdogYouTubeQueryParamKey      = "api_key"
+	scrapingdogYouTubeQueryParamQuery    = "query"
+	scrapingdogYouTubeQueryParamCountry  = "country"
+	scrapingdogYouTubeQueryParamLanguage = "language"
+
+	// channel:<id> is YouTube's documented SERP qualifier for channel
+	// scoping. Scrapingdog passes the query through to YouTube's search,
+	// so the qualifier honours channelId or @handle equivalently.
+	scrapingdogYouTubeChannelQualifier = "channel:"
+
+	scrapingdogYouTubeMaxChannelFanout = 5
 
 	scrapingdogYouTubeDefaultRPS        = 2.0
 	scrapingdogYouTubeDefaultMaxResults = 10
 	scrapingdogYouTubeMaxResultsHardCap = 50
 	scrapingdogYouTubeAcceptHeader      = "Accept"
 	scrapingdogYouTubeAcceptJSON        = "application/json"
-	scrapingdogYouTubeCategoriesHint    = "youtube videos via SERP scraping"
+	scrapingdogYouTubeCategoriesHint    = "youtube videos via SERP scraping; restrict by channel via filters.channels"
 )
 
 // Extra-key constants (PluginConfig.Extra).
@@ -152,6 +161,9 @@ func (p *ScrapingdogYouTubePlugin) Capabilities() SourceCapabilities {
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     false,
+		SupportsChannelFilter:    true,
+		SupportsLanguageFilter:   true,
 		SupportsPagination:       false,
 		MaxResultsPerQuery:       scrapingdogYouTubeMaxResultsHardCap,
 		CategoriesHint:           scrapingdogYouTubeCategoriesHint,
@@ -225,13 +237,64 @@ func (p *ScrapingdogYouTubePlugin) Search(ctx context.Context, params SearchPara
 		limit = scrapingdogYouTubeMaxResultsHardCap
 	}
 
-	resp, err := p.doSearch(ctx, params.Query, apiKey)
-	if err != nil {
-		p.recordError(err)
-		return nil, err
+	channels := params.Filters.Channels
+	if len(channels) > scrapingdogYouTubeMaxChannelFanout {
+		return nil, fmt.Errorf("%w: scrapingdog_youtube accepts at most %d channels per call, got %d",
+			ErrTooManyChannels, scrapingdogYouTubeMaxChannelFanout, len(channels))
+	}
+
+	// Single (or unscoped) path.
+	if len(channels) <= 1 {
+		query := params.Query
+		if len(channels) == 1 {
+			query = scrapingdogYouTubeChannelQualifier + channels[0] + " " + params.Query
+		}
+		resp, err := p.doSearch(ctx, params, query, apiKey)
+		if err != nil {
+			p.recordError(err)
+			return nil, err
+		}
+		p.recordSuccess()
+		pubs := scrapingdogPublicationsFromResponse(resp, limit)
+		return &SearchResult{
+			Total:   len(pubs),
+			Results: pubs,
+			HasMore: len(resp.VideoResults) > limit,
+		}, nil
+	}
+
+	// Fan-out per channel (Scrapingdog passes channel: through to YouTube
+	// SERP which has no native multi-channel OR syntax). Merged by videoId.
+	merged := make([]Publication, 0, len(channels)*limit)
+	seen := make(map[string]struct{}, len(channels)*limit)
+	hasMore := false
+	for _, channelID := range channels {
+		query := scrapingdogYouTubeChannelQualifier + channelID + " " + params.Query
+		resp, err := p.doSearch(ctx, params, query, apiKey)
+		if err != nil {
+			p.recordError(err)
+			return nil, err
+		}
+		if len(resp.VideoResults) > limit {
+			hasMore = true
+		}
+		for _, pub := range scrapingdogPublicationsFromResponse(resp, limit) {
+			if _, dup := seen[pub.ID]; dup {
+				continue
+			}
+			seen[pub.ID] = struct{}{}
+			merged = append(merged, pub)
+		}
 	}
 	p.recordSuccess()
+	return &SearchResult{
+		Total:   len(merged),
+		Results: merged,
+		HasMore: hasMore,
+	}, nil
+}
 
+func scrapingdogPublicationsFromResponse(resp *scrapingdogYouTubeResponse, limit int) []Publication {
 	pubs := make([]Publication, 0, len(resp.VideoResults))
 	for _, item := range resp.VideoResults {
 		videoID := extractYouTubeVideoID(item.Link)
@@ -243,11 +306,7 @@ func (p *ScrapingdogYouTubePlugin) Search(ctx context.Context, params SearchPara
 			break
 		}
 	}
-	return &SearchResult{
-		Total:   len(pubs),
-		Results: pubs,
-		HasMore: len(resp.VideoResults) > limit,
-	}, nil
+	return pubs
 }
 
 // Get is not supported — Scrapingdog's per-video endpoint is a separate paid
@@ -262,15 +321,15 @@ func (p *ScrapingdogYouTubePlugin) Get(_ context.Context, _ string, _ []IncludeF
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *ScrapingdogYouTubePlugin) doSearch(ctx context.Context, query, apiKey string) (*scrapingdogYouTubeResponse, error) {
+func (p *ScrapingdogYouTubePlugin) doSearch(ctx context.Context, params SearchParams, query, apiKey string) (*scrapingdogYouTubeResponse, error) {
 	q := url.Values{}
 	q.Set(scrapingdogYouTubeQueryParamKey, apiKey)
 	q.Set(scrapingdogYouTubeQueryParamQuery, query)
 	if p.country != "" {
-		q.Set(scrapingdogYouTubeExtraCountry, p.country)
+		q.Set(scrapingdogYouTubeQueryParamCountry, p.country)
 	}
-	if p.language != "" {
-		q.Set(scrapingdogYouTubeExtraLanguage, p.language)
+	if lang := p.resolveLanguage(params.Filters.Language); lang != "" {
+		q.Set(scrapingdogYouTubeQueryParamLanguage, lang)
 	}
 
 	reqURL := p.baseURL + scrapingdogYouTubeSearchPath + "?" + q.Encode()
@@ -303,6 +362,15 @@ func (p *ScrapingdogYouTubePlugin) doSearch(ctx context.Context, query, apiKey s
 		return nil, fmt.Errorf("scrapingdog_youtube: decode response: %w", err)
 	}
 	return &resp, nil
+}
+
+// resolveLanguage returns the per-call language (first BCP-47 subtag) when
+// set, otherwise the operator-configured default. Empty omits the param.
+func (p *ScrapingdogYouTubePlugin) resolveLanguage(filterLang string) string {
+	if filterLang != "" {
+		return BCP47FirstSubtag(filterLang)
+	}
+	return p.language
 }
 
 // ---------------------------------------------------------------------------

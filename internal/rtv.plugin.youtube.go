@@ -62,7 +62,31 @@ const (
 	youtubeAcceptJSON    = "application/json"
 	youtubeQueryParamKey = "key"
 
-	youtubeCategoriesHint = "video content; channel/playlist filtering not supported (type=video forced)"
+	// Query-param name constants (extracted v2.7.0 — no magic strings).
+	youtubeParamPart              = "part"
+	youtubeParamType              = "type"
+	youtubeParamQ                 = "q"
+	youtubeParamMaxResults        = "maxResults"
+	youtubeParamOrder             = "order"
+	youtubeParamRegionCode        = "regionCode"
+	youtubeParamRelevanceLanguage = "relevanceLanguage"
+	youtubeParamSafeSearch        = "safeSearch"
+	youtubeParamPublishedAfter    = "publishedAfter"
+	youtubeParamPublishedBefore   = "publishedBefore"
+	youtubeParamChannelID         = "channelId"
+	youtubeParamID                = "id"
+
+	youtubePartSearch = "snippet"
+	youtubePartVideos = "snippet,contentDetails,statistics,liveStreamingDetails"
+	youtubeTypeVideo  = "video"
+
+	// Fan-out cap for multi-channel queries. YouTube's /search endpoint
+	// accepts only one channelId per call; we issue one HTTP request per
+	// channel and merge. Capped to protect quota — each call costs 100
+	// quota units against the daily 10k budget (≈100 searches/day/key).
+	youtubeMaxChannelFanout = 5
+
+	youtubeCategoriesHint = "video content; restrict by channel via filters.channels (channelId values)"
 )
 
 // Extra-key constants (PluginConfig.Extra). All optional.
@@ -229,6 +253,9 @@ func (p *YouTubePlugin) Capabilities() SourceCapabilities {
 		SupportsSortDate:         true,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     false,
+		SupportsChannelFilter:    true,
+		SupportsLanguageFilter:   true,
 		SupportsPagination:       true,
 		MaxResultsPerQuery:       youtubeMaxResultsCap,
 		CategoriesHint:           youtubeCategoriesHint,
@@ -304,13 +331,69 @@ func (p *YouTubePlugin) Search(ctx context.Context, params SearchParams) (*Searc
 		maxResults = youtubeMaxResultsCap
 	}
 
-	resp, err := p.doSearch(ctx, params, maxResults, apiKey)
-	if err != nil {
-		p.recordError(err)
-		return nil, err
+	channels := params.Filters.Channels
+	if len(channels) > youtubeMaxChannelFanout {
+		return nil, fmt.Errorf("%w: youtube accepts at most %d channels per call, got %d",
+			ErrTooManyChannels, youtubeMaxChannelFanout, len(channels))
+	}
+
+	// Single-channel (or unscoped) path: one upstream request.
+	if len(channels) <= 1 {
+		channelID := ""
+		if len(channels) == 1 {
+			channelID = channels[0]
+		}
+		resp, err := p.doSearch(ctx, params, channelID, maxResults, apiKey)
+		if err != nil {
+			p.recordError(err)
+			return nil, err
+		}
+		p.recordSuccess()
+		pubs := publicationsFromYouTubeResponse(resp)
+		return &SearchResult{
+			Total:   resp.PageInfo.TotalResults,
+			Results: pubs,
+			HasMore: resp.NextPageToken != "",
+		}, nil
+	}
+
+	// Multi-channel fan-out: one request per channel, sequential to respect
+	// the per-key quota budget. Results merged with router-style dedup by
+	// videoId. HasMore is true if any per-channel response had a nextPageToken.
+	merged := make([]Publication, 0, len(channels)*maxResults)
+	seen := make(map[string]struct{}, len(channels)*maxResults)
+	hasMore := false
+	totalSeen := 0
+	for _, channelID := range channels {
+		resp, err := p.doSearch(ctx, params, channelID, maxResults, apiKey)
+		if err != nil {
+			p.recordError(err)
+			return nil, err
+		}
+		totalSeen += resp.PageInfo.TotalResults
+		if resp.NextPageToken != "" {
+			hasMore = true
+		}
+		for _, pub := range publicationsFromYouTubeResponse(resp) {
+			if _, dup := seen[pub.ID]; dup {
+				continue
+			}
+			seen[pub.ID] = struct{}{}
+			merged = append(merged, pub)
+		}
 	}
 	p.recordSuccess()
 
+	return &SearchResult{
+		Total:   totalSeen,
+		Results: merged,
+		HasMore: hasMore,
+	}, nil
+}
+
+// publicationsFromYouTubeResponse maps a search response into Publications,
+// skipping items missing a videoId. Shared by single-channel and fan-out paths.
+func publicationsFromYouTubeResponse(resp *youtubeSearchResponse) []Publication {
 	pubs := make([]Publication, 0, len(resp.Items))
 	for _, item := range resp.Items {
 		if item.ID.VideoID == "" {
@@ -318,12 +401,7 @@ func (p *YouTubePlugin) Search(ctx context.Context, params SearchParams) (*Searc
 		}
 		pubs = append(pubs, youtubeSearchItemToPublication(item))
 	}
-
-	return &SearchResult{
-		Total:   resp.PageInfo.TotalResults,
-		Results: pubs,
-		HasMore: resp.NextPageToken != "",
-	}, nil
+	return pubs
 }
 
 // Get retrieves a single video's full metadata via /youtube/v3/videos.
@@ -355,34 +433,37 @@ func (p *YouTubePlugin) Get(ctx context.Context, id string, _ []IncludeField, _ 
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *YouTubePlugin) doSearch(ctx context.Context, params SearchParams, maxResults int, apiKey string) (*youtubeSearchResponse, error) {
+func (p *YouTubePlugin) doSearch(ctx context.Context, params SearchParams, channelID string, maxResults int, apiKey string) (*youtubeSearchResponse, error) {
 	q := url.Values{}
-	q.Set("part", "snippet")
-	q.Set("type", "video")
-	q.Set("q", params.Query)
-	q.Set("maxResults", strconv.Itoa(maxResults))
+	q.Set(youtubeParamPart, youtubePartSearch)
+	q.Set(youtubeParamType, youtubeTypeVideo)
+	q.Set(youtubeParamQ, params.Query)
+	q.Set(youtubeParamMaxResults, strconv.Itoa(maxResults))
 	q.Set(youtubeQueryParamKey, apiKey)
 
 	if order := youtubeOrderFromSort(params.Sort); order != "" {
-		q.Set("order", order)
+		q.Set(youtubeParamOrder, order)
 	}
 	if p.regionCode != "" {
-		q.Set("regionCode", p.regionCode)
+		q.Set(youtubeParamRegionCode, p.regionCode)
 	}
-	if p.relevanceLanguage != "" {
-		q.Set("relevanceLanguage", p.relevanceLanguage)
+	if lang := p.resolveRelevanceLanguage(params.Filters.Language); lang != "" {
+		q.Set(youtubeParamRelevanceLanguage, lang)
 	}
 	if p.safeSearch != "" {
-		q.Set("safeSearch", p.safeSearch)
+		q.Set(youtubeParamSafeSearch, p.safeSearch)
+	}
+	if channelID != "" {
+		q.Set(youtubeParamChannelID, channelID)
 	}
 	if params.Filters.DateFrom != "" {
 		if rfc := dateToRFC3339Start(params.Filters.DateFrom); rfc != "" {
-			q.Set("publishedAfter", rfc)
+			q.Set(youtubeParamPublishedAfter, rfc)
 		}
 	}
 	if params.Filters.DateTo != "" {
 		if rfc := dateToRFC3339End(params.Filters.DateTo); rfc != "" {
-			q.Set("publishedBefore", rfc)
+			q.Set(youtubeParamPublishedBefore, rfc)
 		}
 	}
 
@@ -394,10 +475,20 @@ func (p *YouTubePlugin) doSearch(ctx context.Context, params SearchParams, maxRe
 	return &resp, nil
 }
 
+// resolveRelevanceLanguage returns the per-call language (first BCP-47
+// subtag) when set, otherwise the operator-configured default. Empty means
+// "do not send the relevanceLanguage param".
+func (p *YouTubePlugin) resolveRelevanceLanguage(filterLang string) string {
+	if filterLang != "" {
+		return BCP47FirstSubtag(filterLang)
+	}
+	return p.relevanceLanguage
+}
+
 func (p *YouTubePlugin) doVideos(ctx context.Context, id, apiKey string) (*youtubeVideosResponse, error) {
 	q := url.Values{}
-	q.Set("part", "snippet,contentDetails,statistics,liveStreamingDetails")
-	q.Set("id", id)
+	q.Set(youtubeParamPart, youtubePartVideos)
+	q.Set(youtubeParamID, id)
 	q.Set(youtubeQueryParamKey, apiKey)
 
 	reqURL := p.baseURL + youtubeVideosPath + "?" + q.Encode()

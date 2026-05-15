@@ -918,6 +918,9 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 			SupportsDateFilter:     caps.SupportsDateFilter,
 			SupportsAuthorFilter:   caps.SupportsAuthorFilter,
 			SupportsCategoryFilter: caps.SupportsCategoryFilter,
+			SupportsDomainFilter:   caps.SupportsDomainFilter,
+			SupportsChannelFilter:  caps.SupportsChannelFilter,
+			SupportsLanguageFilter: caps.SupportsLanguageFilter,
 			RateLimit: RateLimitInfo{
 				RequestsPerSecond: health.RateLimit,
 				Remaining:         remaining,

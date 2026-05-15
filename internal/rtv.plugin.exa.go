@@ -70,13 +70,15 @@ const (
 // ---------------------------------------------------------------------------
 
 type exaSearchRequest struct {
-	Query      string       `json:"query"`
-	NumResults int          `json:"numResults,omitempty"`
-	Type       string       `json:"type,omitempty"`
-	Category   string       `json:"category,omitempty"`
-	Contents   *exaContents `json:"contents,omitempty"`
-	StartDate  string       `json:"startPublishedDate,omitempty"`
-	EndDate    string       `json:"endPublishedDate,omitempty"`
+	Query          string       `json:"query"`
+	NumResults     int          `json:"numResults,omitempty"`
+	Type           string       `json:"type,omitempty"`
+	Category       string       `json:"category,omitempty"`
+	Contents       *exaContents `json:"contents,omitempty"`
+	StartDate      string       `json:"startPublishedDate,omitempty"`
+	EndDate        string       `json:"endPublishedDate,omitempty"`
+	IncludeDomains []string     `json:"includeDomains,omitempty"`
+	ExcludeDomains []string     `json:"excludeDomains,omitempty"`
 }
 
 type exaContents struct {
@@ -171,6 +173,9 @@ func (p *ExaPlugin) Capabilities() SourceCapabilities {
 		SupportsSortDate:         false,
 		SupportsSortCitations:    false,
 		SupportsOpenAccessFilter: false,
+		SupportsDomainFilter:     true, // includeDomains / excludeDomains
+		SupportsChannelFilter:    false,
+		SupportsLanguageFilter:   false, // Exa has no language param
 		SupportsPagination:       false, // Exa returns top-N only
 		MaxResultsPerQuery:       exaMaxNumResults,
 		CategoriesHint:           exaPluginCategoriesHint,
@@ -246,13 +251,22 @@ func (p *ExaPlugin) Search(ctx context.Context, params SearchParams) (*SearchRes
 		num = exaMaxNumResults
 	}
 
+	if err := ValidateDomainList(params.Filters.IncludeDomains); err != nil {
+		return nil, fmt.Errorf("exa: include_domains: %w", err)
+	}
+	if err := ValidateDomainList(params.Filters.ExcludeDomains); err != nil {
+		return nil, fmt.Errorf("exa: exclude_domains: %w", err)
+	}
+
 	body := exaSearchRequest{
-		Query:      params.Query,
-		NumResults: num,
-		Type:       p.defaultType,
-		Category:   p.defaultCategory,
-		StartDate:  params.Filters.DateFrom,
-		EndDate:    params.Filters.DateTo,
+		Query:          params.Query,
+		NumResults:     num,
+		Type:           p.defaultType,
+		Category:       p.defaultCategory,
+		StartDate:      params.Filters.DateFrom,
+		EndDate:        params.Filters.DateTo,
+		IncludeDomains: params.Filters.IncludeDomains,
+		ExcludeDomains: params.Filters.ExcludeDomains,
 	}
 	if p.includeText {
 		body.Contents = &exaContents{Text: &exaTextOpts{MaxCharacters: 1000}}

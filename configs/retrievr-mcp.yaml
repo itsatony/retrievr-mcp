@@ -466,3 +466,16 @@ sources:
     timeout: "15s"
     rate_limit: 5.0
     rate_limit_burst: 5
+
+  newsapi:
+    enabled: false               # v6 cycle 6 (v2.19.0). Free dev tier (24h delay, dev-domain only). REQUIRES api_key.
+    api_key: ""                  # NewsAPI.org key; or RETRIEVR_NEWSAPI_API_KEY env. Per-call override: credentials.newsapi.
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+
+  serpapinews:
+    enabled: false               # v6 cycle 6 (v2.19.0). Paid; SHARES the SerpAPI key with the cycle-4 web plugin (credentials.serpapi).
+    timeout: "20s"
+    rate_limit: 2.0
+    rate_limit_burst: 2

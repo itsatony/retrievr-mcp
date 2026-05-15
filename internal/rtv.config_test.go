@@ -503,6 +503,12 @@ sources:
   kgapi:
     enabled: false
     timeout: "10s"
+  newsapi:
+    enabled: false
+    timeout: "10s"
+  serpapinews:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

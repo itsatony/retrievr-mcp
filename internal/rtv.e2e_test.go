@@ -350,6 +350,16 @@ sources:
     timeout: "15s"
     rate_limit: 5.0
     rate_limit_burst: 5
+  newsapi:
+    enabled: false
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+  serpapinews:
+    enabled: false
+    timeout: "20s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

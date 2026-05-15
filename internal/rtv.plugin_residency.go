@@ -446,3 +446,24 @@ func (*KGAPIPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports NewsAPI.org's data-residency posture (US-hosted
+// CDN; UK-incorporated entity but the API points at us-east).
+func (*NewsAPIPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports SerpAPI Google News' data-residency posture (US —
+// SerpAPI Inc.). Shares the auth and underlying transport with the
+// cycle-4 SerpAPIPlugin.
+func (*SerpAPINewsPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

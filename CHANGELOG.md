@@ -5,6 +5,82 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.19.0] - 2026-05-15
+
+Minor release. **PremiumNews — v6 cycle 6, closes v6**
+(`project_plan/retrievr_v6.md` §10). Adds two premium news sources
+and ships the final cycle of the v6 GeoExpansion + Premium-Tier
+masterplan.
+
+### Added
+
+- **`SourceNewsAPI` plugin** (`internal/rtv.plugin.newsapi.go`):
+  `https://newsapi.org/v2/everything?apiKey=...`. Free dev tier
+  (24-hour delay + dev-domain-only); paid plans real-time. Supports
+  `filters.language` (BCP-47 region tag stripped → ISO-639-1 short
+  code, e.g. `de-DE` → `de`), `filters.date_from`/`date_to` →
+  `from`/`to` params, `filters.include_domains`/`exclude_domains`
+  → comma-joined `domains`/`excludeDomains`. Sort:
+  date-asc/date-desc → `sortBy=publishedAt`, default → `relevancy`.
+  Surfaces the body-level `status: "error"` envelope (NewsAPI's
+  pattern for 200 OK + malformed-query errors) as a structured Go
+  error. Per-call credential: `newsapi`. US/SCC residency.
+- **`SourceSerpAPINews` plugin**
+  (`internal/rtv.plugin.serpapinews.go`): Reuses the cycle-4
+  `SerpAPIPlugin` as the transport via composition — same
+  `doSearch(engine)` helper, same wire types, same error mapping,
+  same Bearer-key resolution. The only differences are the
+  `engine=google_news` parameter, the `SourceSerpAPINews` identity,
+  and the `serpapinews:` ID prefix (so dedup keeps news + web
+  hits distinct). **Shares the SerpAPI API key** with the cycle-4
+  web plugin via the `SourceSerpAPI` credential key, on purpose —
+  SerpAPI keys are account-scoped, not engine-scoped. Per-call
+  credential resolution reads from `credentials.serpapi` whether
+  the call lands on `engine=google` or `engine=google_news`.
+- **Residency tags** (`internal/rtv.plugin_residency.go`): both
+  US/SCC.
+- **Config blocks** for both new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default). The
+  `serpapinews` block deliberately omits `api_key:` because the
+  same SerpAPI key drives both plugins — its inline comment points
+  callers at the shared `credentials.serpapi` per-call surface.
+- **Unit tests** with httptest fixtures for both plugins: identity,
+  capabilities (including `RequiresCredential` + `KindNews`),
+  residency, missing-credential → `ErrCredentialRequired`, happy
+  path, language+date+include/exclude-domain filter routing
+  (NewsAPI), engine=google_news verification (SerpAPI News),
+  ID-prefix distinctness from cycle-4 web plugin (so router dedup
+  doesn't merge news and web hits), BCP-47 region-tag stripping
+  (`de-DE` → `de`), body-level status:error envelope handling
+  (NewsAPI), credential-key sharing across engines (one-off test
+  that proves `credentials.serpapi` keys both plugins under
+  `WithPerCallCredsMap`), 401/429 mapping, Get-not-wired path.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 59 → **61** (final v6
+  count, closes the masterplan). `validSourceIDs` registers
+  `newsapi`, `serpapinews`; registry factory map + test-expected
+  count updated. Config / E2E / registry fixtures extended.
+
+### Notes
+
+- This release closes the v6 GeoExpansion + Premium-Tier masterplan.
+  Plugin total at v2.19.0: **61** (up from 47 at v2.13.0 close of
+  v5; the 14 new plugins across v6 are all paid/freemium per
+  the cycle-by-cycle plan).
+- v6 catalog by tier: 7 paid-only (Google Places, Listen Notes,
+  Dimensions, Lens, Kagi, SerpAPI, SerpAPI News, NewsAPI, Wolfram,
+  HERE — most have free dev tiers but all refuse to start without a
+  key), 4 free / no-auth (OSM Overpass, iTunes), and the
+  Google Knowledge Graph + Mojeek freemium pair. The plan's
+  "EU-first" tiebreaker held: OSM Overpass + HERE + Mojeek give v6
+  an EU-resident option for geo and web search.
+- SerpAPI News completes the credential-sharing pattern from cycle 4
+  — a future cycle wanting `engine=google_jobs`, `engine=youtube`,
+  etc. can ship a tiny plugin that composes the same inner
+  `SerpAPIPlugin` and points at a different engine constant.
+
 ## [2.18.0] - 2026-05-15
 
 Minor release. **Knowledge — v6 cycle 5**

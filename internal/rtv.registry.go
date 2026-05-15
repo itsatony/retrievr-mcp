@@ -121,6 +121,10 @@ func PluginFactories() map[string]PluginFactory {
 		// v6 cycle 5 / v2.18.0 — premium knowledge.
 		SourceWolframAlpha: func() SourcePlugin { return &WolframAlphaPlugin{} },
 		SourceKGAPI:        func() SourcePlugin { return &KGAPIPlugin{} },
+
+		// v6 cycle 6 / v2.19.0 — premium news.
+		SourceNewsAPI:     func() SourcePlugin { return &NewsAPIPlugin{} },
+		SourceSerpAPINews: func() SourcePlugin { return &SerpAPINewsPlugin{} },
 	}
 }
 

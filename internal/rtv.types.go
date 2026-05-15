@@ -136,6 +136,11 @@ const (
 	// v5 cycle 1 / v2.8.0 — Q&A providers.
 	SourceStackExchange = "stackexchange"
 	SourceHackerNews    = "hackernews"
+
+	// v5 cycle 2 / v2.9.0 — OpenScience aggregators.
+	SourceZenodo   = "zenodo"
+	SourceCORE     = "core"
+	SourceOpenAIRE = "openaire"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -180,6 +185,10 @@ var validSourceIDs = map[string]bool{
 	// v5 cycle 1 — Q&A.
 	SourceStackExchange: true,
 	SourceHackerNews:    true,
+	// v5 cycle 2 — OpenScience aggregators.
+	SourceZenodo:   true,
+	SourceCORE:     true,
+	SourceOpenAIRE: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -203,8 +212,8 @@ func AllSourceIDs() []string {
 // Wikimedia + Europeana → 25 (Brave gained image search without
 // becoming a new SourceID). v3 cycle 5 / v2.6.0 added Mastodon +
 // Bluesky + Reddit → 28. v5 cycle 1 / v2.8.0 added StackExchange +
-// HackerNews → 30.
-const SourceCount = 30
+// HackerNews → 30. v5 cycle 2 / v2.9.0 added Zenodo + CORE + OpenAIRE → 33.
+const SourceCount = 33
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

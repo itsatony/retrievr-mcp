@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.9.0] - 2026-05-15
+
+Minor release. **KnowledgeCommons cycle 2 — OpenScience**
+(`project_plan/retrievr_v5.md` §6). Adds three EU-friendly open-access
+research aggregators to the academic chain: Zenodo (CERN, EU), CORE
+(Open University, UK adequacy), and OpenAIRE (Athena RIC, Greece). All
+free; CORE and OpenAIRE accept optional API keys per call.
+
+### Added
+
+- **`SourceZenodo` plugin** (`internal/rtv.plugin.zenodo.go`):
+  `https://zenodo.org/api/records`. Free, no auth required. CERN-hosted.
+  Returns papers, datasets, and software with DOIs for cross-source
+  dedup. Supports `filters.date_from`/`date_to` (range on
+  `publication_date`), `filters.categories[0]` (Zenodo `type` —
+  publication / dataset / software / image / video / etc.), and
+  `filters.open_access` (maps to `access_right=open`). Sort:
+  relevance (default) and date_desc → `mostrecent`. Pagination via
+  page+size. Native + Get supported.
+- **`SourceCORE` plugin** (`internal/rtv.plugin.core.go`):
+  `https://api.core.ac.uk/v3/search/works` (POST + Bearer token).
+  Free with registration; 350M+ open-access works. Per-call
+  credential: `core`. Supports date filters (year-resolution on
+  `yearPublished`) and date sort. Native + Get supported. Maps 401/403
+  to `ErrCredentialInvalid`, 429 to `ErrRateLimitExceeded`.
+- **`SourceOpenAIRE` plugin** (`internal/rtv.plugin.openaire.go`):
+  `https://api.openaire.eu/graph/v1/researchProducts` (Graph API v1).
+  Free; optional public-data token via per-call credential
+  `openaire`. EU-funded research aggregator. Returns papers + datasets
+  with DOIs for cross-source dedup. Supports `fromPublicationDate` /
+  `toPublicationDate` filters and `sortBy` (`publicationDate
+  ASC/DESC`, `relevance DESC`). Pagination via page+pageSize. Choice
+  of the Graph API over the legacy `/search/publications` endpoint is
+  documented inline: same data, JSON-native, no OAI-XML wrapper.
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `zenodo` → `{Region: EU, DPAStatus: n/a}`; `core` →
+  `{Region: UK-adequacy, DPAStatus: n/a}`; `openaire` →
+  `{Region: EU, DPAStatus: n/a}`. All three admissible under
+  `eu_preferred`; CORE is UK-adequacy so admissible under `eu_strict`
+  only with `IncludePublicResearch`.
+- **Config blocks** for the three new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default).
+- **Unit tests** with httptest fixtures
+  (`internal/rtv.plugin.{zenodo,core,openaire}_test.go`): identity,
+  capabilities, residency, happy-path search, date/category filters,
+  sort routing, 429 → `ErrRateLimitExceeded`, 401 → `ErrCredentialInvalid`,
+  Get path (Zenodo), Get-not-wired (OpenAIRE), date normalization,
+  query-string builders.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 30 → 33; `validSourceIDs`
+  registers `zenodo`, `core`, `openaire`; registry factory map +
+  test-expected count updated. Config / E2E / registry fixtures
+  extended with the three new source blocks.
+
+### Notes
+
+- No new `ContentType` or `ResultKind` introduced in this cycle —
+  Zenodo and OpenAIRE both emit `paper`/`dataset` already in the type
+  model; cross-source dedup happens on DOI (existing key family).
+- `SourceCount` is now 33 and the registry test invariant
+  `testRegistryExpectedFactoryCount` was bumped to match.
+
 ## [2.8.0] - 2026-05-15
 
 Minor release. **KnowledgeCommons cycle 1 — QAndA**

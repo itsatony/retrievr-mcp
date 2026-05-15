@@ -416,6 +416,15 @@ sources:
   hackernews:
     enabled: false
     timeout: "10s"
+  zenodo:
+    enabled: false
+    timeout: "10s"
+  core:
+    enabled: false
+    timeout: "10s"
+  openaire:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

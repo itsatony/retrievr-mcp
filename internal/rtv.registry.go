@@ -72,6 +72,11 @@ func PluginFactories() map[string]PluginFactory {
 		// v5 cycle 1 / v2.8.0 — Q&A.
 		SourceStackExchange: func() SourcePlugin { return &StackExchangePlugin{} },
 		SourceHackerNews:    func() SourcePlugin { return &HackerNewsPlugin{} },
+
+		// v5 cycle 2 / v2.9.0 — OpenScience aggregators.
+		SourceZenodo:   func() SourcePlugin { return &ZenodoPlugin{} },
+		SourceCORE:     func() SourcePlugin { return &COREPlugin{} },
+		SourceOpenAIRE: func() SourcePlugin { return &OpenAIREPlugin{} },
 	}
 }
 

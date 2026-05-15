@@ -143,3 +143,35 @@ func (*HackerNewsPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Zenodo's data-residency posture (EU — CERN, Geneva).
+// Zenodo is operated by CERN under EU research-infrastructure governance;
+// content is OA / CC licensed.
+func (*ZenodoPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports CORE's data-residency posture (UK adequacy — Open
+// University). UK adequacy decision keeps it admissible eu_preferred;
+// blocked eu_strict unless IncludePublicResearch is set.
+func (*COREPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUKAdequacy,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports OpenAIRE's data-residency posture (EU — Athena RIC,
+// Greece). EU-funded research aggregator.
+func (*OpenAIREPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionEU,
+		DPAStatus:      DPANotApplicable,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

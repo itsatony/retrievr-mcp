@@ -205,6 +205,21 @@ sources:
     timeout: "10s"
     rate_limit: 5.0
     rate_limit_burst: 5
+  zenodo:
+    enabled: false
+    timeout: "10s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
+  core:
+    enabled: false
+    timeout: "15s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
+  openaire:
+    enabled: false
+    timeout: "15s"
+    rate_limit: 2.0
+    rate_limit_burst: 2
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

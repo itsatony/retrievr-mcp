@@ -354,3 +354,25 @@ func (*HEREPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports Listen Notes' data-residency posture (US — Listen
+// Notes Inc.). SCC applies for any account-linked podcast subscriptions
+// the API surfaces.
+func (*ListenNotesPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports iTunes / Apple Podcasts' data-residency posture
+// (US — Apple Inc., Cupertino). Public catalog search; no account
+// binding for the unauthenticated path.
+func (*ITunesPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

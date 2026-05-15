@@ -972,6 +972,7 @@ const (
 	dedupFamilyPackage   = "package_id"
 	dedupFamilyPatent    = "patent_number"
 	dedupFamilyLaw       = "citation_code"
+	dedupFamilyAudio     = "audio_id"
 
 	// dedupCoordPrecisionFmt rounds lat/lon to 5 decimal places (~1 m),
 	// applied to place results lacking osm_id. Two places within ~1 m of
@@ -1053,6 +1054,8 @@ func dedup(results []Publication) []Publication {
 			tryDedup(dedupFamilyPackage, stringFromMeta(results[i].SourceMetadata, MetaKeyPackageID), i)
 		case ContentTypePatent:
 			tryDedup(dedupFamilyPatent, stringFromMeta(results[i].SourceMetadata, MetaKeyPatentNumber), i)
+		case ContentTypeAudio:
+			tryDedup(dedupFamilyAudio, stringFromMeta(results[i].SourceMetadata, MetaKeyAudioID), i)
 		default:
 			// paper / model / dataset / "" / any — DOI + ArXiv ID family.
 			// DOI hit short-circuits ArXivID indexing (matches v2 behavior:

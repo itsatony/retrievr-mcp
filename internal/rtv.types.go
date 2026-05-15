@@ -39,6 +39,13 @@ const (
 	// regulations stay on ContentTypePaper with Result.Kind = KindLaw and
 	// dedup on SourceMetadata["citation_code"].
 	ContentTypePatent ContentType = "patent"
+
+	// v6 cycle 2 / v2.15.0 — audio (podcast episodes, podcast shows).
+	// Dedup keyed by SourceMetadata["audio_id"] formatted as
+	// "<provider>:<external_id>" (e.g. "listennotes:abc123",
+	// "itunes:1234567890") so same-id episodes across providers never
+	// collide by construction.
+	ContentTypeAudio ContentType = "audio"
 )
 
 // IsValidContentType returns true if the given string maps to a known
@@ -49,7 +56,7 @@ func IsValidContentType(ct string) bool {
 	switch ContentType(ct) {
 	case ContentTypePaper, ContentTypeModel, ContentTypeDataset, ContentTypeAny,
 		ContentTypeVideo, ContentTypePlace, ContentTypeImage, ContentTypePost,
-		ContentTypePackage, ContentTypePatent:
+		ContentTypePackage, ContentTypePatent, ContentTypeAudio:
 		return true
 	}
 	return false
@@ -182,6 +189,10 @@ const (
 	SourceGooglePlaces = "googleplaces"
 	SourceOSMOverpass  = "osmoverpass"
 	SourceHERE         = "here"
+
+	// v6 cycle 2 / v2.15.0 — audio / podcast.
+	SourceListenNotes = "listennotes"
+	SourceITunes      = "itunes"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -252,6 +263,9 @@ var validSourceIDs = map[string]bool{
 	SourceGooglePlaces: true,
 	SourceOSMOverpass:  true,
 	SourceHERE:         true,
+	// v6 cycle 2 — audio / podcast.
+	SourceListenNotes: true,
+	SourceITunes:      true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -281,8 +295,9 @@ func AllSourceIDs() []string {
 // v5 cycle 5 / v2.12.0 added Google Patents + EPO OPS + CourtListener +
 // EUR-Lex → 44. v5 cycle 6 / v2.13.0 added GDELT + IA Scholar +
 // Wayback → 47. v6 cycle 1 / v2.14.0 added Google Places + OSM
-// Overpass + HERE → 50.
-const SourceCount = 50
+// Overpass + HERE → 50. v6 cycle 2 / v2.15.0 added Listen Notes +
+// iTunes → 52.
+const SourceCount = 52
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can
@@ -345,6 +360,22 @@ const (
 	smetaLawDecisionDate = "law_decision_date"
 	smetaLawDocketNumber = "law_docket_number"
 	smetaLawCelex        = "law_celex"
+
+	// v6 cycle 2 / v2.15.0 — audio dedup key. The value is
+	// "<provider>:<external_id>" (e.g. "listennotes:abc123",
+	// "itunes:1234567890"). Cross-provider matching happens only when
+	// providers expose a shared RSS GUID; otherwise the namespace
+	// keeps each plugin's hits distinct by construction.
+	MetaKeyAudioID = "audio_id"
+
+	// Per-component audio metadata keys.
+	smetaAudioShowTitle       = "audio_show_title"
+	smetaAudioEpisodeNumber   = "audio_episode_number"
+	smetaAudioDurationSeconds = "audio_duration_seconds"
+	smetaAudioPublisher       = "audio_publisher"
+	smetaAudioExplicit        = "audio_explicit"
+	smetaAudioAudioURL        = "audio_audio_url"
+	smetaAudioImageURL        = "audio_image_url"
 )
 
 // ---------------------------------------------------------------------------

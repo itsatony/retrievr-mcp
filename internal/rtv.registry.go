@@ -104,6 +104,10 @@ func PluginFactories() map[string]PluginFactory {
 		SourceGooglePlaces: func() SourcePlugin { return &GooglePlacesPlugin{} },
 		SourceOSMOverpass:  func() SourcePlugin { return &OSMOverpassPlugin{} },
 		SourceHERE:         func() SourcePlugin { return &HEREPlugin{} },
+
+		// v6 cycle 2 / v2.15.0 — audio / podcast.
+		SourceListenNotes: func() SourcePlugin { return &ListenNotesPlugin{} },
+		SourceITunes:      func() SourcePlugin { return &ITunesPlugin{} },
 	}
 }
 

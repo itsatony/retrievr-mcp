@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 50 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0) + 2 v5-cycle-1 Q&A (v2.8.0) + 3 v5-cycle-2 OpenScience (v2.9.0) + 3 v5-cycle-3 Structured (v2.10.0) + 4 v5-cycle-4 Packages (v2.11.0) + 4 v5-cycle-5 PatentsAndLaw (v2.12.0) + 3 v5-cycle-6 TemporalArchives (v2.13.0) + 3 v6-cycle-1 GeoExpansion (v2.14.0)
+	testRegistryExpectedFactoryCount = 52 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0) + 2 v5-cycle-1 Q&A (v2.8.0) + 3 v5-cycle-2 OpenScience (v2.9.0) + 3 v5-cycle-3 Structured (v2.10.0) + 4 v5-cycle-4 Packages (v2.11.0) + 4 v5-cycle-5 PatentsAndLaw (v2.12.0) + 3 v5-cycle-6 TemporalArchives (v2.13.0) + 3 v6-cycle-1 GeoExpansion (v2.14.0) + 2 v6-cycle-2 AudioPodcast (v2.15.0)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -163,6 +163,8 @@ func TestInitializePlugins(t *testing.T) {
 				SourceGooglePlaces:       {Enabled: true}, // v6 cycle 1 / v2.14.0
 				SourceOSMOverpass:        {Enabled: true}, // v6 cycle 1 / v2.14.0
 				SourceHERE:               {Enabled: true}, // v6 cycle 1 / v2.14.0
+				SourceListenNotes:        {Enabled: true}, // v6 cycle 2 / v2.15.0
+				SourceITunes:             {Enabled: true}, // v6 cycle 2 / v2.15.0
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

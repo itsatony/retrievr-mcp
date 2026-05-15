@@ -47,13 +47,17 @@ const (
 	// v5 cycle 5 / v2.12.0 — patents + law.
 	KindPatent ResultKind = "patent"
 	KindLaw    ResultKind = "law"
+
+	// v6 cycle 2 / v2.15.0 — audio (podcast episodes + shows).
+	KindAudio ResultKind = "audio"
 )
 
 // IsValidResultKind returns true if the given string is a known kind.
 func IsValidResultKind(k string) bool {
 	switch ResultKind(k) {
 	case KindPaper, KindModel, KindDataset, KindWeb, KindNews, KindCode, KindEncyclopedia,
-		KindVideo, KindPlace, KindImage, KindPost, KindQA, KindFact, KindPatent, KindLaw:
+		KindVideo, KindPlace, KindImage, KindPost, KindQA, KindFact, KindPatent, KindLaw,
+		KindAudio:
 		return true
 	}
 	return false

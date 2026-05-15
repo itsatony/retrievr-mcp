@@ -476,6 +476,12 @@ sources:
   here:
     enabled: false
     timeout: "10s"
+  listennotes:
+    enabled: false
+    timeout: "10s"
+  itunes:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

@@ -404,3 +404,16 @@ sources:
     timeout: "15s"
     rate_limit: 5.0
     rate_limit_burst: 5
+
+  listennotes:
+    enabled: false               # v6 cycle 2 (v2.15.0). Free 300/mo dev tier; paid above. REQUIRES api_key.
+    api_key: ""                  # Listen Notes API key; or RETRIEVR_LISTENNOTES_API_KEY env. Per-call override: credentials.listennotes.
+    timeout: "15s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+
+  itunes:
+    enabled: false               # v6 cycle 2 (v2.15.0). Free, no auth required.
+    timeout: "15s"
+    rate_limit: 5.0
+    rate_limit_burst: 5

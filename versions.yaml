@@ -1,9 +1,9 @@
 manifest_version: "1"
 project:
   name: retrievr-mcp
-  version: "2.14.0"
+  version: "2.15.0"
 # vaik8s integration (ADR-050 canonical block) — `project.{name,version}`
 # is the authoritative shape `vaik8s render` reads. The flat `version:`
 # alias below is preserved for upstream tooling that already consumes
 # the simpler shape.
-version: "2.14.0"
+version: "2.15.0"

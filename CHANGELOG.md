@@ -5,6 +5,74 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.15.0] - 2026-05-15
+
+Minor release. **AudioPodcast — v6 cycle 2**
+(`project_plan/retrievr-mcp/retrievr_v6.md` §6). Adds podcast / audio
+as a first-class content class via Listen Notes (paid 300/mo dev
+tier) and iTunes Search (free, no auth). Introduces
+`ContentTypeAudio` + `KindAudio` + audio dedup family.
+
+### Added
+
+- **`ContentType` `ContentTypeAudio`** (`internal/rtv.types.go`) for
+  podcast episodes / shows. Dedup keyed on
+  `SourceMetadata["audio_id"]` = `"<provider>:<external_id>"`.
+- **`ResultKind` `KindAudio`** (`internal/rtv.result.go`).
+- **Per-component audio metadata keys**: `audio_show_title`,
+  `audio_episode_number`, `audio_duration_seconds`, `audio_publisher`,
+  `audio_explicit`, `audio_audio_url`, `audio_image_url`.
+- **`SourceListenNotes` plugin**
+  (`internal/rtv.plugin.listennotes.go`):
+  `https://listen-api.listennotes.com/api/v2/search?type=episode`.
+  Free 300/mo dev tier; refuses to start without a key
+  (`ErrCredentialRequired`). `X-ListenAPI-Key` header auth.
+  BCP-47 → English language name mapping for the `language=` param
+  (en→English, de→German, etc.; unknown codes round-trip). Sort:
+  relevance (default) and date_desc → `sort_by_date=1`. Maps to
+  `Publication.MediaURL` + `MediaMime="audio/mpeg"` +
+  `DurationSeconds` for the v2 audio block.
+- **`SourceITunes` plugin** (`internal/rtv.plugin.itunes.go`):
+  `https://itunes.apple.com/search?media=podcast&entity=podcastEpisode`.
+  Free, no auth. `filters.categories[0]` → ISO-3166 `country=` param
+  (us, de, gb, etc.). Returns track_view_url, preview audio URL,
+  600px artwork, `trackTimeMillis` → seconds.
+- **`dedupFamilyAudio`** in router (`internal/rtv.router.go`).
+  `ContentTypeAudio` routes through `MetaKeyAudioID`; cross-class
+  collision impossible by construction.
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `listennotes` → US/SCC (account-linked subscriptions); `itunes`
+  → US/SCC (public catalog).
+- **Config blocks** for both new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default; Listen Notes
+  documents the API-key + per-call override path).
+- **Unit tests** with httptest fixtures for both plugins: identity,
+  capabilities (including `RequiresCredential`), residency,
+  missing-credential → `ErrCredentialRequired` (Listen Notes),
+  happy-path search (full episode + show shape including
+  `pub_date_ms` → YYYY-MM-DD conversion and `trackTimeMillis` →
+  duration seconds), language-code mapping (Listen Notes
+  de→German), country filter routing (iTunes DE→de), 401/429 error
+  mapping, Get-not-wired path.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 50 → 52; `validSourceIDs`
+  registers `listennotes`, `itunes`; registry factory map +
+  test-expected count updated. `IsValidContentType` accepts
+  `ContentTypeAudio`. `IsValidResultKind` accepts `KindAudio`.
+  Config / E2E / registry fixtures extended with the two new
+  source blocks.
+
+### Notes
+
+- Cross-provider audio dedup is enabled when an RSS GUID happens to
+  match across Listen Notes and iTunes; in practice the namespaced
+  `<provider>:<external_id>` key keeps each plugin's hits distinct.
+- Episode duration on Listen Notes comes from `audio_length_sec` in
+  seconds; iTunes returns `trackTimeMillis` in milliseconds and the
+  plugin normalizes to seconds at mapping time.
+
 ## [2.14.0] - 2026-05-15
 
 Minor release. **GeoExpansion — v6 cycle 1**

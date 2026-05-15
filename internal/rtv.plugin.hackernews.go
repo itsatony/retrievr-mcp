@@ -48,7 +48,7 @@ import (
 const (
 	hackerNewsPluginID          = SourceHackerNews
 	hackerNewsPluginName        = "Hacker News"
-	hackerNewsPluginDescription = "Search Hacker News via the public Algolia-hosted mirror (hn.algolia.com). Free, no auth required, covers the full HN history. Returns stories by default; filters.date_from/date_to honoured via numericFilters created_at_i. Date-sort is supported."
+	hackerNewsPluginDescription = "Search Hacker News via the public Algolia-hosted mirror (hn.algolia.com). Free, no auth required, covers the full HN history. Returns stories by default; filters.date_from/date_to honoured via numericFilters created_at_i. Sort: relevance (default) or date — note Algolia's search_by_date endpoint is descending-only, so SortDateAsc resolves to the same descending order as SortDateDesc."
 
 	hackerNewsDefaultBaseURL    = "https://hn.algolia.com"
 	hackerNewsSearchPath        = "/api/v1/search"
@@ -60,7 +60,7 @@ const (
 	hackerNewsStoryTagDefault   = "story"
 	hackerNewsSiteForDedup      = "hackernews"
 	hackerNewsIDPrefix          = "hackernews:"
-	hackerNewsItemURLTemplate   = "https://news.ycombinator.com/item?id=%d"
+	hackerNewsItemURLTemplate   = "https://news.ycombinator.com/item?id=%s"
 	hackerNewsUserURLTemplate   = "https://news.ycombinator.com/user?id=%s"
 	hackerNewsAcceptHeader      = "Accept"
 	hackerNewsAcceptJSON        = "application/json"
@@ -72,6 +72,12 @@ const (
 	hackerNewsQueryParamTags           = "tags"
 	hackerNewsQueryParamHitsPerPage    = "hitsPerPage"
 	hackerNewsQueryParamNumericFilters = "numericFilters"
+
+	// numericFilters predicate field and operators. Algolia's grammar is
+	// "<field> <op> <number>" — we use ">=" / "<=" for inclusive ranges.
+	hackerNewsFilterFieldCreatedAtI = "created_at_i"
+	hackerNewsFilterOpGTE           = ">="
+	hackerNewsFilterOpLTE           = "<="
 )
 
 // ---------------------------------------------------------------------------
@@ -243,11 +249,11 @@ func (p *HackerNewsPlugin) doSearch(ctx context.Context, params SearchParams, li
 	q.Set(hackerNewsQueryParamHitsPerPage, strconv.Itoa(limit))
 
 	var filters []string
-	if from, ok := stackExchangeUnixFromDate(params.Filters.DateFrom); ok {
-		filters = append(filters, "created_at_i>="+strconv.FormatInt(from, 10))
+	if from, ok := parseFilterDateUnix(params.Filters.DateFrom); ok {
+		filters = append(filters, hackerNewsFilterFieldCreatedAtI+hackerNewsFilterOpGTE+strconv.FormatInt(from, 10))
 	}
-	if to, ok := stackExchangeUnixFromDate(params.Filters.DateTo); ok {
-		filters = append(filters, "created_at_i<="+strconv.FormatInt(to, 10))
+	if to, ok := parseFilterDateUnix(params.Filters.DateTo); ok {
+		filters = append(filters, hackerNewsFilterFieldCreatedAtI+hackerNewsFilterOpLTE+strconv.FormatInt(to, 10))
 	}
 	if len(filters) > 0 {
 		q.Set(hackerNewsQueryParamNumericFilters, strings.Join(filters, hackerNewsNumericFilterJoin))
@@ -309,8 +315,10 @@ func hackerNewsHitToPublication(hit hackerNewsHit) Publication {
 
 	// External URL (the story's outbound link) lives on hit.URL when
 	// present; otherwise the canonical HN item page is the URL.
-	itemID, _ := strconv.ParseInt(rawID, 10, 64)
-	platformURL := fmt.Sprintf(hackerNewsItemURLTemplate, itemID)
+	// hit.ObjectID is numeric by API contract — but never trust an
+	// upstream: on parse failure we interpolate the raw string instead
+	// of silently producing "?id=0".
+	platformURL := hackerNewsItemURL(rawID)
 	displayURL := hit.URL
 	if displayURL == "" {
 		displayURL = platformURL
@@ -364,6 +372,14 @@ func hackerNewsHitToPublication(hit hackerNewsHit) Publication {
 		Categories:     tags,
 		SourceMetadata: meta,
 	}
+}
+
+// hackerNewsItemURL builds the canonical HN item-page URL from a raw
+// objectID string. The objectID is numeric by API contract; the
+// template uses %s so a malformed value round-trips visibly rather
+// than silently becoming "?id=0".
+func hackerNewsItemURL(rawID string) string {
+	return fmt.Sprintf(hackerNewsItemURLTemplate, rawID)
 }
 
 // filterAuthorTags strips Algolia's bookkeeping tags. The _tags array

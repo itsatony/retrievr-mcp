@@ -204,6 +204,22 @@ func TestHackerNews_ShortDate_PrefersUnix(t *testing.T) {
 	assert.Equal(t, "", hackerNewsShortDate(0, "garbage"))
 }
 
+// TestHackerNews_SortDateAscFallsThroughToDesc pins the documented
+// limitation that Algolia's search_by_date endpoint is descending-only
+// — SortDateAsc still routes there and returns desc order.
+func TestHackerNews_SortDateAscFallsThroughToDesc(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, hackerNewsSearchByDatePath, r.URL.Path)
+		_, _ = io.WriteString(w, buildHackerNewsTestResponse(nil, 0))
+	}))
+	defer srv.Close()
+
+	p := newHackerNewsTestPlugin(t, srv.URL)
+	_, err := p.Search(context.Background(), SearchParams{Query: "x", Sort: SortDateAsc})
+	require.NoError(t, err)
+}
+
 func TestHackerNews_DedupAcrossSitesIsImpossible(t *testing.T) {
 	t.Parallel()
 	// Stack Overflow #1 and HN #1 share a raw question ID but the

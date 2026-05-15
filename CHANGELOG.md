@@ -5,6 +5,70 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.8.0] - 2026-05-15
+
+Minor release. **KnowledgeCommons cycle 1 — QAndA**
+(`project_plan/retrievr_v5.md` §5). Adds Q&A as a first-class result
+kind via two free, no-paid-tier providers: Stack Exchange (170+ sites
+including Stack Overflow) and Hacker News (Algolia mirror).
+
+### Added
+
+- **`ResultKind` `KindQA`** (`internal/rtv.result.go`) + `Result.QA`
+  block (`QAData`: `Site`, `QuestionID`, `Tags`, `AnswerCount`,
+  `AcceptedAnswerID`, `Score`, `IsAnswered`, `AuthorHandle`).
+- **`SourceStackExchange` plugin** (`internal/rtv.plugin.stackexchange.go`):
+  `https://api.stackexchange.com/2.3/search/advanced`. Free anonymous
+  tier 300/day/IP; optional `api_key` (per-call: `credentials.stackexchange`)
+  lifts the cap to 10k/day. Supports `filters.categories` (→ `tagged`),
+  `filters.date_from`/`date_to` (→ `fromdate`/`todate` unix seconds),
+  and date-sort. Per-deployment site selection via `extra.default_site`
+  (default `stackoverflow`). Content licensed CC-BY-SA.
+- **`SourceHackerNews` plugin** (`internal/rtv.plugin.hackernews.go`):
+  `https://hn.algolia.com/api/v1/search` (and `search_by_date` for
+  date-sort, which is descending-only). Free, no auth. Date filters via
+  `numericFilters=created_at_i>=…,…<=…`.
+- **Dedup family `qa_question_id`** (`internal/rtv.router.go`). Key
+  format: `"<site>:<question_id>"` — Stack Overflow #1 and Server Fault
+  #1 are intentionally distinct. Cross-class merging remains impossible
+  by construction.
+- **`MetaKeyQAQuestionID`** SourceMetadata key constant for the
+  composite dedup value. Per-component fields live alongside in
+  `smetaQA*` keys.
+- **Shared Q&A helpers** (`internal/rtv.qa_shared.go`):
+  `unixSecondsToShortDate` and `parseFilterDateUnix` — single home for
+  YYYY-MM-DD/YYYY → unix-epoch conversion used by both plugins.
+- **Residency tags** (`internal/rtv.plugin_residency.go`):
+  `stackexchange` → `{Region: US, DPAStatus: covered-by-scc}` (CC-BY-SA
+  content, admissible eu_preferred with attribution, blocked
+  eu_strict); `hackernews` → `{Region: US, DPAStatus: unknown}`
+  (blocked eu_strict).
+- **Live integration tests** (`internal/rtv_integration_test.go`):
+  "kubernetes ingress" must return ≥3 Stack Overflow results with QA
+  metadata populated; "rust async" must return ≥5 HN results with
+  non-zero score and tags. Both passed at v2.8.0 release.
+
+### Changed
+
+- **`SourceCount`** bumped 28 → 30 (`internal/rtv.types.go`). Tool
+  description (`ToolDescSearch`) corrected from the stale "17 sources"
+  literal to "30 sources" — closes the v5 OQ-7 reconciliation item.
+- **`validSourceIDs`** map and `AllSourceIDs()` extended with the two
+  new Q&A sources.
+- **`configs/retrievr-mcp.yaml`**: `stackexchange` and `hackernews`
+  source blocks, both disabled by default per the project's opt-in
+  convention.
+
+### Wired-up safety
+
+- StackExchange: in-band throttle envelopes (200-OK + `error_name`
+  containing "throttle" or non-zero `backoff`) surface as typed
+  `ErrRateLimitExceeded` so the middleware backs off instead of
+  spinning.
+- HackerNews: malformed `objectID` no longer produces `?id=0` URLs —
+  the platform-URL template now accepts a raw string round-trip and
+  fails visibly on bad input.
+
 ## [2.7.1] - 2026-05-15
 
 Patch release. Live integration testing against the Brave Search Web API

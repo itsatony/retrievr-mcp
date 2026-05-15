@@ -30,6 +30,8 @@ To discover at runtime which provider honors which filter, call
 | `mastodon`              | —             | —               | —          | ⚠️ post-filter on `Status.language` | deferred |
 | `bluesky`               | —             | —               | —          | ✅ `lang` param   | —            |
 | `europeana`             | —             | —               | —          | ✅ `lang` param   | —            |
+| `stackexchange`         | —             | —               | —          | —                 | ✅ `fromdate`/`todate` (unix seconds); `filters.categories` → `tagged` |
+| `hackernews`            | —             | —               | —          | —                 | ✅ `numericFilters=created_at_i…` |
 | All other 20 providers  | —             | —               | —          | —                 | varies (academic providers wire dates natively) |
 
 Legend:

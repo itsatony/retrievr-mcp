@@ -97,6 +97,12 @@ const (
 	stackExchangeExtraDefaultSite = "default_site"
 
 	stackExchangeCategoriesHint = "Stack Exchange Q&A across 170+ sites; filters.categories map to SE tags (joined with ';'). filters.date_from/date_to honoured via fromdate/todate (unix seconds). Default site is configured per-deployment via extra.default_site (defaults to stackoverflow)."
+
+	// stackExchangeErrorNameThrottleSubstr is the case-insensitive
+	// substring that flags an in-band 200-OK throttle envelope (e.g.
+	// error_name="throttle_violation"). We surface it as a typed rate-
+	// limit error so the middleware backs off rather than re-firing.
+	stackExchangeErrorNameThrottleSubstr = "throttle"
 )
 
 // ---------------------------------------------------------------------------
@@ -128,17 +134,12 @@ type stackExchangeQuestion struct {
 	LastActivityDate int64               `json:"last_activity_date,omitempty"`
 	Owner            stackExchangeOwner  `json:"owner"`
 	ContentLicense   string              `json:"content_license,omitempty"`
-	MigratedTo       *stackExchangeMigrationInfo `json:"migrated_to,omitempty"`
 }
 
 type stackExchangeOwner struct {
 	UserID      int64  `json:"user_id,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
 	Link        string `json:"link,omitempty"`
-}
-
-type stackExchangeMigrationInfo struct {
-	OnDate int64 `json:"on_date,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +256,7 @@ func (p *StackExchangePlugin) Search(ctx context.Context, params SearchParams) (
 		limit = stackExchangeMaxLimitCap
 	}
 
-	site := p.resolveSite(params)
+	site := p.defaultSite
 	apiKey := CredentialFor(ctx, SourceStackExchange, p.apiKey)
 
 	resp, err := p.doSearch(ctx, params, site, limit, apiKey)
@@ -296,10 +297,10 @@ func (p *StackExchangePlugin) doSearch(ctx context.Context, params SearchParams,
 	if len(params.Filters.Categories) > 0 {
 		q.Set(stackExchangeQueryParamTagged, strings.Join(params.Filters.Categories, stackExchangeTagJoinSep))
 	}
-	if from, ok := stackExchangeUnixFromDate(params.Filters.DateFrom); ok {
+	if from, ok := parseFilterDateUnix(params.Filters.DateFrom); ok {
 		q.Set(stackExchangeQueryParamFromDate, strconv.FormatInt(from, 10))
 	}
-	if to, ok := stackExchangeUnixFromDate(params.Filters.DateTo); ok {
+	if to, ok := parseFilterDateUnix(params.Filters.DateTo); ok {
 		q.Set(stackExchangeQueryParamToDate, strconv.FormatInt(to, 10))
 	}
 	switch params.Sort {
@@ -345,7 +346,7 @@ func (p *StackExchangePlugin) doSearch(ctx context.Context, params SearchParams,
 	// The API returns 200 + an error envelope in some throttle paths;
 	// surface that as a typed rate-limit error so the middleware backs off.
 	if resp.ErrorID != 0 {
-		if resp.Backoff > 0 || strings.Contains(strings.ToLower(resp.ErrorName), "throttle") {
+		if resp.Backoff > 0 || strings.Contains(strings.ToLower(resp.ErrorName), stackExchangeErrorNameThrottleSubstr) {
 			return nil, fmt.Errorf("%w: stackexchange: %s", ErrRateLimitExceeded, resp.ErrorName)
 		}
 		return nil, fmt.Errorf("stackexchange: api error: id=%d name=%s msg=%s", resp.ErrorID, resp.ErrorName, resp.ErrorMessage)
@@ -353,15 +354,6 @@ func (p *StackExchangePlugin) doSearch(ctx context.Context, params SearchParams,
 	return &resp, nil
 }
 
-// resolveSite returns the Stack Exchange site to query. Cycle 1 wires
-// the configured default only; per-call site overrides are deferred —
-// SearchFilters has no Extra map and adding one for a single provider
-// would be premature. Operators run a per-site deployment by setting
-// extra.default_site (and optionally a second source instance via a
-// custom PluginFactory if dual-site fan-out becomes a real ask).
-func (p *StackExchangePlugin) resolveSite(_ SearchParams) string {
-	return p.defaultSite
-}
 
 // ---------------------------------------------------------------------------
 // Wire → Publication mapping
@@ -373,8 +365,8 @@ func stackExchangeQuestionToPublication(q stackExchangeQuestion, site string) Pu
 
 	abstract := stackExchangeStripHTML(q.Body)
 	title := html.UnescapeString(q.Title)
-	published := stackExchangeShortDate(q.CreationDate)
-	updated := stackExchangeShortDate(q.LastActivityDate)
+	published := unixSecondsToShortDate(q.CreationDate)
+	updated := unixSecondsToShortDate(q.LastActivityDate)
 
 	author := q.Owner.DisplayName
 	authors := []Author{}
@@ -416,46 +408,37 @@ func stackExchangeQuestionToPublication(q stackExchangeQuestion, site string) Pu
 	return pub
 }
 
+// License-label constants. Stack Exchange has shipped four content_license
+// codes over the years; the active one for new posts since 2018 is
+// CC BY-SA 4.0. Keys (lower-cased + alt underscored form) map to a
+// canonical human-readable label.
+const (
+	licenseLabelCCBYSA40 = "CC BY-SA 4.0"
+	licenseLabelCCBYSA30 = "CC BY-SA 3.0"
+	licenseLabelCCBYSA25 = "CC BY-SA 2.5"
+
+	licenseRawCCBYSA40    = "cc by-sa 4.0"
+	licenseRawCCBYSA40Alt = "cc_by_sa_4_0"
+	licenseRawCCBYSA30    = "cc by-sa 3.0"
+	licenseRawCCBYSA30Alt = "cc_by_sa_3_0"
+	licenseRawCCBYSA25    = "cc by-sa 2.5"
+	licenseRawCCBYSA25Alt = "cc_by_sa_2_5"
+)
+
 // stackExchangeNormalizeLicense maps the raw content_license code to a
-// human-readable label. Stack Exchange has shipped four codes over the
-// years; the active one for new posts since 2018 is CC BY-SA 4.0.
+// human-readable label.
 func stackExchangeNormalizeLicense(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "cc by-sa 4.0", "cc_by_sa_4_0":
-		return "CC BY-SA 4.0"
-	case "cc by-sa 3.0", "cc_by_sa_3_0":
-		return "CC BY-SA 3.0"
-	case "cc by-sa 2.5", "cc_by_sa_2_5":
-		return "CC BY-SA 2.5"
+	case licenseRawCCBYSA40, licenseRawCCBYSA40Alt:
+		return licenseLabelCCBYSA40
+	case licenseRawCCBYSA30, licenseRawCCBYSA30Alt:
+		return licenseLabelCCBYSA30
+	case licenseRawCCBYSA25, licenseRawCCBYSA25Alt:
+		return licenseLabelCCBYSA25
 	case "":
 		return ""
 	}
 	return raw
-}
-
-// stackExchangeShortDate converts a unix epoch (seconds) to YYYY-MM-DD.
-// Returns "" for zero input.
-func stackExchangeShortDate(unix int64) string {
-	if unix == 0 {
-		return ""
-	}
-	return time.Unix(unix, 0).UTC().Format("2006-01-02")
-}
-
-// stackExchangeUnixFromDate parses a YYYY-MM-DD or YYYY filter date into
-// a unix epoch suitable for the fromdate/todate query params. Returns
-// (0, false) when the input is empty or unparseable.
-func stackExchangeUnixFromDate(s string) (int64, bool) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, false
-	}
-	for _, layout := range []string{"2006-01-02", "2006"} {
-		if t, err := time.Parse(layout, s); err == nil {
-			return t.UTC().Unix(), true
-		}
-	}
-	return 0, false
 }
 
 // stackExchangeStripHTML removes HTML tags from a body and unescapes

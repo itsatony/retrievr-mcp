@@ -247,17 +247,17 @@ func TestStackExchange_StripHTML_CollapsesWhitespace(t *testing.T) {
 
 func TestStackExchange_UnixFromDate(t *testing.T) {
 	t.Parallel()
-	v, ok := stackExchangeUnixFromDate("2024-01-01")
+	v, ok := parseFilterDateUnix("2024-01-01")
 	assert.True(t, ok)
 	assert.Equal(t, int64(1704067200), v)
 
-	v, ok = stackExchangeUnixFromDate("2024")
+	v, ok = parseFilterDateUnix("2024")
 	assert.True(t, ok)
 	assert.Equal(t, int64(1704067200), v)
 
-	_, ok = stackExchangeUnixFromDate("")
+	_, ok = parseFilterDateUnix("")
 	assert.False(t, ok)
-	_, ok = stackExchangeUnixFromDate("not-a-date")
+	_, ok = parseFilterDateUnix("not-a-date")
 	assert.False(t, ok)
 }
 
@@ -306,6 +306,22 @@ func TestStackExchange_QAResultConversion(t *testing.T) {
 func newRouterForTest(t *testing.T) *Router {
 	t.Helper()
 	return &Router{plugins: map[string]SourcePlugin{}}
+}
+
+// TestStackExchange_DedupWithinSiteMerges asserts the positive side of the
+// QA dedup family: two SE results sharing site+question_id merge into one.
+// Complements TestHackerNews_DedupAcrossSitesIsImpossible (negative case).
+func TestStackExchange_DedupWithinSiteMerges(t *testing.T) {
+	t.Parallel()
+	q := stackExchangeQuestion{
+		QuestionID: 99,
+		Title:      "same Q from two SE fan-out workers",
+		Owner:      stackExchangeOwner{DisplayName: "x"},
+	}
+	a := stackExchangeQuestionToPublication(q, stackExchangeTestSite)
+	b := stackExchangeQuestionToPublication(q, stackExchangeTestSite)
+	merged := dedup([]Publication{a, b})
+	require.Len(t, merged, 1, "two SE results with the same namespaced qa_question_id must merge into one")
 }
 
 // TestStackExchange_LicenseDocumentsCCBYSA ensures the plugin description

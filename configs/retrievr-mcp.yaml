@@ -364,3 +364,21 @@ sources:
     timeout: "20s"
     rate_limit: 2.0
     rate_limit_burst: 2
+
+  gdelt:
+    enabled: false               # v5 cycle 6 (v2.13.0). Free, no auth. Real-time news; documented 100 QPM cap.
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+
+  iascholar:
+    enabled: false               # v5 cycle 6 (v2.13.0). Free, no auth. OA scholarly aggregator.
+    timeout: "20s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+
+  wayback:
+    enabled: false               # v5 cycle 6 (v2.13.0). Free, no auth. GET-only resolver — id format: wayback:<url>:<YYYYMMDD>.
+    timeout: "15s"
+    rate_limit: 5.0
+    rate_limit_burst: 5

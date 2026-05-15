@@ -458,6 +458,15 @@ sources:
   eurlex:
     enabled: false
     timeout: "10s"
+  gdelt:
+    enabled: false
+    timeout: "10s"
+  iascholar:
+    enabled: false
+    timeout: "10s"
+  wayback:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

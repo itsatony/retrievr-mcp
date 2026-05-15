@@ -275,6 +275,21 @@ sources:
     timeout: "20s"
     rate_limit: 2.0
     rate_limit_burst: 2
+  gdelt:
+    enabled: false
+    timeout: "20s"
+    rate_limit: 1.0
+    rate_limit_burst: 1
+  iascholar:
+    enabled: false
+    timeout: "20s"
+    rate_limit: 3.0
+    rate_limit_burst: 3
+  wayback:
+    enabled: false
+    timeout: "15s"
+    rate_limit: 5.0
+    rate_limit_burst: 5
 `
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")

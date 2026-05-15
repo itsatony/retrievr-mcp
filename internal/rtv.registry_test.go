@@ -16,7 +16,7 @@ import (
 // ---------------------------------------------------------------------------
 
 const (
-	testRegistryExpectedFactoryCount = 44 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0) + 2 v5-cycle-1 Q&A (v2.8.0) + 3 v5-cycle-2 OpenScience (v2.9.0) + 3 v5-cycle-3 Structured (v2.10.0) + 4 v5-cycle-4 Packages (v2.11.0) + 4 v5-cycle-5 PatentsAndLaw (v2.12.0)
+	testRegistryExpectedFactoryCount = 47 // 10 cycle-1 + 7 Wave-1 + Perplexity (cycle-3) + 2 v3-cycle-2 video (v2.3.0) + 3 v3-cycle-3 place (v2.4.0) + 2 v3-cycle-4 image (v2.5.0) + 3 v3-cycle-5 social (v2.6.0) + 2 v5-cycle-1 Q&A (v2.8.0) + 3 v5-cycle-2 OpenScience (v2.9.0) + 3 v5-cycle-3 Structured (v2.10.0) + 4 v5-cycle-4 Packages (v2.11.0) + 4 v5-cycle-5 PatentsAndLaw (v2.12.0) + 3 v5-cycle-6 TemporalArchives (v2.13.0)
 	testRegistryUnknownSourceID      = "unknown_source"
 	testRegistryFailingSourceID      = "failing_source"
 	testRegistryFailingErrMsg        = "intentional init failure"
@@ -157,6 +157,9 @@ func TestInitializePlugins(t *testing.T) {
 				SourceEPOOPS:             {Enabled: true}, // v5 cycle 5 / v2.12.0
 				SourceCourtListener:      {Enabled: true}, // v5 cycle 5 / v2.12.0
 				SourceEURLex:             {Enabled: true}, // v5 cycle 5 / v2.12.0
+				SourceGDELT:              {Enabled: true}, // v5 cycle 6 / v2.13.0
+				SourceIAScholar:          {Enabled: true}, // v5 cycle 6 / v2.13.0
+				SourceWayback:            {Enabled: true}, // v5 cycle 6 / v2.13.0
 			},
 		}
 		plugins, err := InitializePlugins(cfg, logger)

@@ -172,6 +172,11 @@ const (
 	SourceEPOOPS        = "epoops"
 	SourceCourtListener = "courtlistener"
 	SourceEURLex        = "eurlex"
+
+	// v5 cycle 6 / v2.13.0 — temporal archives.
+	SourceGDELT     = "gdelt"
+	SourceIAScholar = "iascholar"
+	SourceWayback   = "wayback"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -234,6 +239,10 @@ var validSourceIDs = map[string]bool{
 	SourceEPOOPS:        true,
 	SourceCourtListener: true,
 	SourceEURLex:        true,
+	// v5 cycle 6 — temporal archives.
+	SourceGDELT:     true,
+	SourceIAScholar: true,
+	SourceWayback:   true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -261,8 +270,9 @@ func AllSourceIDs() []string {
 // v5 cycle 3 / v2.10.0 added Wikidata + DataCite + ORCID → 36.
 // v5 cycle 4 / v2.11.0 added npm + PyPI + crates + pkg.go.dev → 40.
 // v5 cycle 5 / v2.12.0 added Google Patents + EPO OPS + CourtListener +
-// EUR-Lex → 44.
-const SourceCount = 44
+// EUR-Lex → 44. v5 cycle 6 / v2.13.0 added GDELT + IA Scholar +
+// Wayback → 47.
+const SourceCount = 47
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.13.0] - 2026-05-15
+
+Minor release. **KnowledgeCommons cycle 6 — TemporalArchives**
+(`project_plan/retrievr_v5.md` §10). Closes the v5 masterplan with
+three temporal/archival sources: GDELT 2.0 (real-time global news),
+Internet Archive Scholar (OA aggregator with Wayback fallbacks), and
+the Wayback Machine itself as a GET-only URL→snapshot resolver.
+
+### Added
+
+- **`SourceGDELT` plugin** (`internal/rtv.plugin.gdelt.go`):
+  `https://api.gdeltproject.org/api/v2/doc/doc?mode=ArtList&format=json`.
+  Free, no auth. Real-time news with 15-minute update cycle, 60+
+  languages. Supports `filters.language` (mapped to `sourcelang:`),
+  `filters.categories[*]` (mapped to `theme:`), `filters.include_domains`
+  (mapped to `domain:`), and full date-range filters (expands to
+  GDELT's 14-digit `startdatetime`/`enddatetime`). Sort: HybridRel
+  (default), DateDesc, DateAsc. Emits paper-typed results with
+  `KindNews` at the v2 layer.
+- **`SourceIAScholar` plugin** (`internal/rtv.plugin.iascholar.go`):
+  `https://scholar.archive.org/search?format=json`. Free, no auth. OA
+  scholarly aggregator with Wayback fallback PDF URLs surfaced into
+  `Publication.PDFURL`. Returns DOI + ArXivID so cross-source dedup
+  absorbs hits against arXiv / CrossRef / OpenAlex transparently.
+  `filter_year` range filter, `release_type` category filter, offset
+  pagination.
+- **`SourceWayback` plugin** (`internal/rtv.plugin.wayback.go`):
+  `https://archive.org/wayback/available?url=...&timestamp=...`. **GET-only
+  resolver** — Search returns a single usage-hint result explaining
+  how to invoke Get; the real work lives in
+  `Get("<url>" | "<url>:<YYYYMMDD>")`. Smart id parsing keeps embedded
+  `https://` colons intact while detecting timestamp suffixes (8+
+  digits, no slash). Returns the closest archived snapshot URL,
+  timestamp (formatted YYYY-MM-DD), and HTTP status.
+- **Residency tags** (`internal/rtv.plugin_residency.go`): all three
+  US/SCC. GDELT = Georgetown/Google partnership; IA Scholar +
+  Wayback = Internet Archive non-profit (San Francisco).
+- **Config blocks** for the three new sources in
+  `configs/retrievr-mcp.yaml` (disabled by default).
+- **Unit tests** with httptest fixtures for all three plugins:
+  identity, capabilities, residency, happy-path (GDELT article,
+  IA Scholar release with Wayback fallback PDF, Wayback snapshot
+  resolution), filter routing (GDELT lang+category+domain, IA Scholar
+  year range), id-parsing edge cases (Wayback split for `https://...:ts`
+  vs bare URL vs middle-colon URL), 429 → `ErrRateLimitExceeded`,
+  Get-not-wired (GDELT, IA Scholar), Wayback empty-id →
+  `ErrInvalidID`, Wayback no-snapshot → `ErrGetFailed`.
+
+### Changed
+
+- **Plugin count bump**: `SourceCount` 44 → 47; `validSourceIDs`
+  registers `gdelt`, `iascholar`, `wayback`; registry factory map +
+  test-expected count updated. Config / E2E / registry fixtures
+  extended with the three new source blocks.
+
+### Notes
+
+- This release closes the v5 KnowledgeCommons masterplan. Plugin
+  total at v2.13.0: **47** (up from 28 at v2.7).
+- No new `ContentType` or `ResultKind` introduced — GDELT, IA Scholar
+  and Wayback all map to existing paper-family kinds (`KindNews`,
+  `KindPaper`, `KindWeb`).
+- IA Scholar's Wayback fallback URLs surface into
+  `Publication.PDFURL`, so callers that follow paper hits to PDFs
+  automatically benefit from the archival fallback without writing
+  any per-plugin code.
+
 ## [2.12.0] - 2026-05-15
 
 Minor release. **KnowledgeCommons cycle 5 — PatentsAndLaw**

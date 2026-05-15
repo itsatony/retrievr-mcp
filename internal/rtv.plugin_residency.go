@@ -290,3 +290,34 @@ func (*EURLexPlugin) Residency() ResidencyTag {
 		LastVerifiedAt: residencyVerifiedAt,
 	}
 }
+
+// Residency reports GDELT's data-residency posture (US — Georgetown /
+// Google partnership; data hosted in US).
+func (*GDELTPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports Internet Archive Scholar's data-residency posture
+// (US — Internet Archive non-profit, San Francisco).
+func (*IAScholarPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}
+
+// Residency reports the Wayback Machine's data-residency posture (US —
+// Internet Archive non-profit, San Francisco). Resolver-only; no user
+// account binding for snapshot lookups.
+func (*WaybackPlugin) Residency() ResidencyTag {
+	return ResidencyTag{
+		Region:         RegionUS,
+		DPAStatus:      DPACoveredBySCC,
+		LastVerifiedAt: residencyVerifiedAt,
+	}
+}

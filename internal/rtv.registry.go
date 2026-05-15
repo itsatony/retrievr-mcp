@@ -94,6 +94,11 @@ func PluginFactories() map[string]PluginFactory {
 		SourceEPOOPS:        func() SourcePlugin { return &EPOOPSPlugin{} },
 		SourceCourtListener: func() SourcePlugin { return &CourtListenerPlugin{} },
 		SourceEURLex:        func() SourcePlugin { return &EURLexPlugin{} },
+
+		// v5 cycle 6 / v2.13.0 — temporal archives.
+		SourceGDELT:     func() SourcePlugin { return &GDELTPlugin{} },
+		SourceIAScholar: func() SourcePlugin { return &IAScholarPlugin{} },
+		SourceWayback:   func() SourcePlugin { return &WaybackPlugin{} },
 	}
 }
 

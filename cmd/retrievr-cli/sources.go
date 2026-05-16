@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/itsatony/retrievr-mcp/pkg/retrievr"
+	"github.com/itsatony/retrievr-mcp/v2/pkg/retrievr"
 )
 
 const usageSources = `retrievr-cli sources — list available source plugins.

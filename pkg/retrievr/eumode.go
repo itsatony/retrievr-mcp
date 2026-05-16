@@ -1,6 +1,6 @@
 package retrievr
 
-import "github.com/itsatony/retrievr-mcp/internal"
+import "github.com/itsatony/retrievr-mcp/v2/internal"
 
 // EUMode controls how retrievr filters provider eligibility on data residency
 // and GDPR grounds.

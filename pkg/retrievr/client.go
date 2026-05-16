@@ -5,7 +5,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/itsatony/retrievr-mcp/internal"
+	"github.com/itsatony/retrievr-mcp/v2/internal"
 )
 
 // Client is the public entry-point for direct in-process consumers (liz,

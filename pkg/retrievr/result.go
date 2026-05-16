@@ -1,6 +1,6 @@
 package retrievr
 
-import "github.com/itsatony/retrievr-mcp/internal"
+import "github.com/itsatony/retrievr-mcp/v2/internal"
 
 // ---------------------------------------------------------------------------
 // Result fat-struct re-exports — Cycle 2 (v1.6.0).

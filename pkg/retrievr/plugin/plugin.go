@@ -9,7 +9,7 @@
 package plugin
 
 import (
-	"github.com/itsatony/retrievr-mcp/internal"
+	"github.com/itsatony/retrievr-mcp/v2/internal"
 )
 
 // SourcePlugin is the contract every provider implements. See

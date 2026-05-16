@@ -3,7 +3,7 @@ package retrievr
 import (
 	"context"
 
-	"github.com/itsatony/retrievr-mcp/internal"
+	"github.com/itsatony/retrievr-mcp/v2/internal"
 )
 
 // CallCredentials carries per-call auth that overrides server config.

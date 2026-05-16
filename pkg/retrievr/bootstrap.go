@@ -5,7 +5,7 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/itsatony/retrievr-mcp/internal"
+	"github.com/itsatony/retrievr-mcp/v2/internal"
 )
 
 // NewClientFromConfig is the cycle-1 public bootstrap helper: load a

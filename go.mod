@@ -1,4 +1,4 @@
-module github.com/itsatony/retrievr-mcp
+module github.com/itsatony/retrievr-mcp/v2
 
 go 1.25.5
 

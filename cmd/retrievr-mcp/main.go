@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	internal "github.com/itsatony/retrievr-mcp/internal"
+	internal "github.com/itsatony/retrievr-mcp/v2/internal"
 )
 
 const (

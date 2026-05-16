@@ -1,6 +1,6 @@
 package retrievr
 
-import "github.com/itsatony/retrievr-mcp/internal"
+import "github.com/itsatony/retrievr-mcp/v2/internal"
 
 // Intent declares what the caller is trying to accomplish, letting retrievr
 // pick the right primary source set + fallback chain instead of forcing the

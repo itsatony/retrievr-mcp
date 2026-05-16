@@ -26,8 +26,8 @@ import (
 	"os"
 	"strings"
 
-	internal "github.com/itsatony/retrievr-mcp/internal"
-	"github.com/itsatony/retrievr-mcp/pkg/retrievr"
+	internal "github.com/itsatony/retrievr-mcp/v2/internal"
+	"github.com/itsatony/retrievr-mcp/v2/pkg/retrievr"
 )
 
 const (

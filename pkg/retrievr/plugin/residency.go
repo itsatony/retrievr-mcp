@@ -1,6 +1,6 @@
 package plugin
 
-import "github.com/itsatony/retrievr-mcp/internal"
+import "github.com/itsatony/retrievr-mcp/v2/internal"
 
 // ResidencyTag re-exports internal.ResidencyTag — the canonical residency
 // posture record. Cycle 2 (v1.6.0) added a Residency() method to

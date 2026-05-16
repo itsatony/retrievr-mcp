@@ -3,7 +3,7 @@ package plugin
 import (
 	"context"
 
-	"github.com/itsatony/retrievr-mcp/internal"
+	"github.com/itsatony/retrievr-mcp/v2/internal"
 )
 
 // Handler is the plugin-call shape that middleware wraps. It carries the

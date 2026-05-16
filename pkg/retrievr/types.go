@@ -1,6 +1,6 @@
 package retrievr
 
-import "github.com/itsatony/retrievr-mcp/internal"
+import "github.com/itsatony/retrievr-mcp/v2/internal"
 
 // ---------------------------------------------------------------------------
 // Type aliases — re-exported from internal/ for the v1.5.0 skeleton.

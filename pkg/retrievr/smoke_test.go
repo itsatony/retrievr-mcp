@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/itsatony/retrievr-mcp/pkg/retrievr"
-	"github.com/itsatony/retrievr-mcp/pkg/retrievr/plugin"
+	"github.com/itsatony/retrievr-mcp/v2/pkg/retrievr"
+	"github.com/itsatony/retrievr-mcp/v2/pkg/retrievr/plugin"
 )
 
 // TestPublicSurfaceCompiles is a deliberately tiny test whose only purpose is

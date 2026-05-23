@@ -130,6 +130,87 @@ func TestGDELT_Search_HTTP429MapsToRateLimit(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrRateLimitExceeded))
 }
 
+// v2.22.1 — GDELT's free-tier limiter returns an HTML "exceeded" page
+// with HTTP 200 OK instead of a 429. The JSON decoder MUST NOT see it;
+// the plugin maps it to ErrRateLimitExceeded so the standard
+// retry/backoff path applies uniformly with a real 429.
+func TestGDELT_Search_HTML200MapsToRateLimit(t *testing.T) {
+	t.Parallel()
+	const throttleHTML = `<html><head><title>GDELT Service</title></head><body>` +
+		`<h1>You have exceeded the rate limit. Please try again later.</h1></body></html>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, throttleHTML)
+	}))
+	defer srv.Close()
+	p := newGDELTTestPlugin(t, srv.URL)
+	_, err := p.Search(context.Background(), SearchParams{Query: "x"})
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrRateLimitExceeded),
+		"HTML body with 200 OK must map to ErrRateLimitExceeded (got %v)", err)
+}
+
+// v2.22.1 — empty body on 200 OK is GDELT's no-results shape; treat as
+// an empty result envelope, not a decode failure.
+func TestGDELT_Search_EmptyBodyTreatedAsNoResults(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		// No body written → empty.
+	}))
+	defer srv.Close()
+	p := newGDELTTestPlugin(t, srv.URL)
+	res, err := p.Search(context.Background(), SearchParams{Query: "x"})
+	require.NoError(t, err)
+	assert.Empty(t, res.Results)
+	assert.Equal(t, 0, res.Total)
+}
+
+// v2.22.1 — whitespace-only body is the same shape as the empty-body
+// case; harden against subtle upstream variations.
+func TestGDELT_Search_WhitespaceBodyTreatedAsNoResults(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, "\n\n  \t\n")
+	}))
+	defer srv.Close()
+	p := newGDELTTestPlugin(t, srv.URL)
+	res, err := p.Search(context.Background(), SearchParams{Query: "x"})
+	require.NoError(t, err)
+	assert.Empty(t, res.Results)
+}
+
+// v2.22.1 — actual malformed JSON should surface as a decode error with
+// the body excerpt embedded for diagnostics (and must not be silently
+// reclassified as a rate-limit).
+func TestGDELT_Search_MalformedJSONReportsDecodeError(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = io.WriteString(w, `{"articles":[`)
+	}))
+	defer srv.Close()
+	p := newGDELTTestPlugin(t, srv.URL)
+	_, err := p.Search(context.Background(), SearchParams{Query: "x"})
+	require.Error(t, err)
+	assert.False(t, errors.Is(err, ErrRateLimitExceeded),
+		"malformed JSON must not be misclassified as a rate-limit")
+	assert.Contains(t, err.Error(), "decode response")
+}
+
+// v2.22.1 — default rate-limit floor lowered to 0.2 RPS (1 req / 5 s)
+// to align with the observed free-tier ceiling. Operators with paid
+// arrangements override via PluginConfig.RateLimit.
+func TestGDELT_DefaultRateLimitMatchesFreeTierCeiling(t *testing.T) {
+	t.Parallel()
+	p := &GDELTPlugin{}
+	require.NoError(t, p.Initialize(context.Background(),
+		PluginConfig{Enabled: true, BaseURL: "http://unused"}))
+	h := p.Health(context.Background())
+	assert.InDelta(t, 0.2, h.RateLimit, 1e-9,
+		"GDELT free-tier default should be 0.2 RPS, not the legacy 1.0")
+}
+
 func TestGDELT_Get_NotWired(t *testing.T) {
 	t.Parallel()
 	p := &GDELTPlugin{}

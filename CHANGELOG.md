@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.22.1] - 2026-05-23
+
+Patch release. **GDELT robustness fixes** — two issues reported by the
+argus team against v2.22.0:
+
+### Fixed
+
+- **GDELT decode crash on non-JSON response shapes.** GDELT's DOC API
+  has two non-JSON shapes that the v2.22.0 decoder did not anticipate:
+  (a) HTML-formatted "you have exceeded the rate limit" pages returned
+  with HTTP **200 OK** when the upstream limiter is triggered, and
+  (b) empty / whitespace-only bodies on zero-result queries. Both
+  surfaced as `gdelt: decode response: invalid character '<' …` errors
+  instead of being handled gracefully. The response pipeline now reads
+  the body once, sniffs for HTML (`<!doctype`, `<html`, `<head`,
+  `<body`, `<title`, `<meta` prefixes after BOM/whitespace strip),
+  maps that case to `ErrRateLimitExceeded`, treats blank bodies as an
+  empty result envelope, and embeds the body excerpt in genuine decode
+  errors for diagnostics (`internal/rtv.plugin.gdelt.go`).
+
+### Changed
+
+- **GDELT default rate-limit lowered from 1.0 RPS to 0.2 RPS** (1 req
+  per 5 s). GDELT's documented free-tier is "1 query/sec" but the
+  upstream limiter is bursty/aggregated and starts throttling well
+  before sustained 1 RPS — observed by the argus team running against
+  v2.22.0. The new default aligns with the empirical safe ceiling.
+  Operators with paid arrangements override via
+  `PluginConfig.RateLimit`. No code change required for callers.
+
 ## [2.22.0] - 2026-05-23
 
 Minor release. **ISO-8601 freshness window.** New `published_after` /

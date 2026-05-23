@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -48,7 +49,13 @@ const (
 	gdeltSearchPath     = "/api/v2/doc/doc"
 	gdeltDefaultLimit   = 25
 	gdeltMaxLimitCap    = 250
-	gdeltDefaultRPS     = 1.0
+	// gdeltDefaultRPS — GDELT's documented free-tier is ~1 query/sec, but
+	// the upstream limiter is bursty/aggregated and starts throttling well
+	// before sustained 1 RPS. Field observation (argus, v2.22.0): 1 RPS
+	// triggers HTML-formatted 200-OK throttle pages within seconds.
+	// Default lowered to 0.2 RPS (1 req / 5 s). Operators with paid
+	// arrangements override via PluginConfig.RateLimit.
+	gdeltDefaultRPS     = 0.2
 	gdeltDefaultTimeout = 20 * time.Second
 
 	gdeltIDPrefix = "gdelt:"
@@ -276,19 +283,82 @@ func (p *GDELTPlugin) doSearch(ctx context.Context, params SearchParams, limit i
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
-	switch {
-	case httpResp.StatusCode == http.StatusTooManyRequests:
+	if httpResp.StatusCode == http.StatusTooManyRequests {
 		return nil, fmt.Errorf("%w: gdelt", ErrRateLimitExceeded)
-	case httpResp.StatusCode >= 400:
-		buf, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("gdelt: status=%d body=%s", httpResp.StatusCode, truncateForError(string(buf)))
+	}
+
+	// Read the body once so we can classify both by status and by shape.
+	// GDELT's DOC API has two non-JSON shapes that the decoder must NOT
+	// see: (a) HTML-formatted throttle pages returned with HTTP 200 OK
+	// when the upstream limiter is triggered, and (b) empty bodies on
+	// no-result queries.
+	body, readErr := io.ReadAll(httpResp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("gdelt: read body: %w", readErr)
+	}
+
+	if httpResp.StatusCode >= 400 {
+		return nil, fmt.Errorf("gdelt: status=%d body=%s",
+			httpResp.StatusCode, truncateForError(string(body)))
+	}
+
+	// Empty body → treat as "no results", not a decode failure. GDELT
+	// returns this on zero-hit queries instead of a `{"articles": []}`
+	// envelope.
+	if isBlankBody(body) {
+		return &gdeltSearchResponse{}, nil
+	}
+
+	// HTML body with 200 OK → GDELT's hidden throttle path. Translate to
+	// the documented rate-limit sentinel so the router's standard
+	// retry/backoff machinery handles it uniformly with a real 429.
+	if looksLikeHTMLBody(body) {
+		return nil, fmt.Errorf("%w: gdelt (html throttle page on 200 OK)",
+			ErrRateLimitExceeded)
 	}
 
 	var resp gdeltSearchResponse
-	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("gdelt: decode response: %w", err)
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("gdelt: decode response: %w (body=%s)",
+			err, truncateForError(string(body)))
 	}
 	return &resp, nil
+}
+
+// isBlankBody reports whether the response body is empty or whitespace-only.
+// GDELT returns this on zero-result queries instead of an envelope.
+func isBlankBody(b []byte) bool {
+	return len(bytes.TrimSpace(b)) == 0
+}
+
+// looksLikeHTMLBody reports whether a body that arrived with a 2xx status
+// is actually an HTML page rather than JSON. GDELT's free-tier limiter
+// returns an HTML "you have exceeded …" page with HTTP 200 OK; the
+// decoder must not see it.
+func looksLikeHTMLBody(b []byte) bool {
+	// Strip whitespace plus a leading UTF-8 BOM (EF BB BF) before sniffing.
+	trimmed := bytes.TrimLeft(b, " \t\r\n")
+	trimmed = bytes.TrimPrefix(trimmed, []byte{0xEF, 0xBB, 0xBF})
+	trimmed = bytes.TrimLeft(trimmed, " \t\r\n")
+	if len(trimmed) == 0 {
+		return false
+	}
+	if trimmed[0] != '<' {
+		return false
+	}
+	// Common HTML/XML preambles; conservative match to avoid colliding
+	// with hypothetical XML-formatted JSON envelopes.
+	lower := bytes.ToLower(trimmed)
+	switch {
+	case bytes.HasPrefix(lower, []byte("<!doctype")),
+		bytes.HasPrefix(lower, []byte("<html")),
+		bytes.HasPrefix(lower, []byte("<head")),
+		bytes.HasPrefix(lower, []byte("<body")),
+		bytes.HasPrefix(lower, []byte("<title")),
+		bytes.HasPrefix(lower, []byte("<meta")):
+		return true
+	}
+	return false
 }
 
 // gdeltBuildQuery folds the free-text query plus language/category/domain

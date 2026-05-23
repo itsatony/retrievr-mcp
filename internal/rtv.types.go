@@ -548,18 +548,32 @@ type SearchParams struct {
 // its capability is flagged via SourceCapabilities.SupportsLanguageFilter
 // with the post-fetch policy documented in docs/filter-reference.md.
 type SearchFilters struct {
-	Title          string   `json:"title,omitempty"`
-	Authors        []string `json:"authors,omitempty"`
-	DateFrom       string   `json:"date_from,omitempty"` // YYYY-MM-DD or YYYY
-	DateTo         string   `json:"date_to,omitempty"`   // YYYY-MM-DD or YYYY
-	Categories     []string `json:"categories,omitempty"`
-	OpenAccess     *bool    `json:"open_access,omitempty"`   // Pointer: nil = not set
-	MinCitations   *int     `json:"min_citations,omitempty"` // Pointer: nil = not set
-	IncludeDomains []string `json:"include_domains,omitempty"`
-	ExcludeDomains []string `json:"exclude_domains,omitempty"`
-	Channels       []string `json:"channels,omitempty"`
-	Subreddits     []string `json:"subreddits,omitempty"`
-	Language       string   `json:"language,omitempty"` // BCP-47, e.g. "en", "de", "fr-CA"
+	Title    string   `json:"title,omitempty"`
+	Authors  []string `json:"authors,omitempty"`
+	DateFrom string   `json:"date_from,omitempty"` // YYYY-MM-DD or YYYY
+	DateTo   string   `json:"date_to,omitempty"`   // YYYY-MM-DD or YYYY
+	// v2.22.0 — ISO-8601 (RFC3339) freshness window. Complements
+	// day-precision DateFrom/DateTo with sub-day cutoffs. When set:
+	//  - Plugins with PublishedAfterNative capability push the precise
+	//    timestamp into the upstream query (newsapi, gdelt, hackernews).
+	//  - Plugins with PublishedAfterCoarsePostFilter capability downcast
+	//    to YYYY-MM-DD floor for the upstream query; the router applies
+	//    an exact-window post-filter on merged results using each hit's
+	//    SourceMetadata["published_at"]. Boundaries are exclusive.
+	// Hits with missing/unparseable published_at are kept by default; set
+	// StrictPublishedAt to drop them. Validated as time.RFC3339 at the
+	// router boundary — malformed input returns ErrInvalidPublishedAt.
+	PublishedAfter    string   `json:"published_after,omitempty"`
+	PublishedBefore   string   `json:"published_before,omitempty"`
+	StrictPublishedAt bool     `json:"strict_published_at,omitempty"`
+	Categories        []string `json:"categories,omitempty"`
+	OpenAccess        *bool    `json:"open_access,omitempty"`   // Pointer: nil = not set
+	MinCitations      *int     `json:"min_citations,omitempty"` // Pointer: nil = not set
+	IncludeDomains    []string `json:"include_domains,omitempty"`
+	ExcludeDomains    []string `json:"exclude_domains,omitempty"`
+	Channels          []string `json:"channels,omitempty"`
+	Subreddits        []string `json:"subreddits,omitempty"`
+	Language          string   `json:"language,omitempty"` // BCP-47, e.g. "en", "de", "fr-CA"
 }
 
 // SearchResult is the per-plugin search return type.
@@ -643,6 +657,31 @@ func (c *CallCredentials) ResolveForSource(sourceID string, serverDefault string
 // Source capabilities and health
 // ---------------------------------------------------------------------------
 
+// PublishedAfterSupport reports how a source honors the v2.22.0
+// PublishedAfter/PublishedBefore (RFC3339) freshness window:
+//   - PublishedAfterNative: upstream API accepts sub-day precision and
+//     the plugin pushes the precise timestamp through (newsapi, gdelt,
+//     hackernews).
+//   - PublishedAfterCoarsePostFilter: upstream only honors day-precision;
+//     the plugin downcasts to the day floor and the router post-filters
+//     merged results using SourceMetadata["published_at"] (brave,
+//     serpapinews, scholarly + social sources that emit a timestamp).
+//   - PublishedAfterNone: source emits no usable timestamp; the filter
+//     is unenforceable for its hits. They are kept by default and dropped
+//     only when SearchFilters.StrictPublishedAt is true.
+//
+// Zero value is PublishedAfterNone — plugins must opt in.
+type PublishedAfterSupport string
+
+const (
+	// PublishedAfterNone is the zero value: the source has no usable
+	// per-hit timestamp, so the filter is unenforceable. Hits pass through
+	// unless SearchFilters.StrictPublishedAt is true.
+	PublishedAfterNone             PublishedAfterSupport = ""
+	PublishedAfterCoarsePostFilter PublishedAfterSupport = "coarse+postfilter"
+	PublishedAfterNative           PublishedAfterSupport = "native"
+)
+
 // SourceCapabilities reports what filtering, sorting, and features a source supports.
 type SourceCapabilities struct {
 	SupportsFullText         bool            `json:"supports_full_text"`
@@ -680,6 +719,12 @@ type SourceCapabilities struct {
 	// reachable in their tenant. Added in v6 cycle 1 / v2.14.0 alongside
 	// the first paid-provider tier; free plugins keep the zero value.
 	RequiresCredential bool `json:"requires_credential,omitempty"`
+
+	// SupportsPublishedAfterFilter reports the source's handling of the
+	// v2.22.0 PublishedAfter/PublishedBefore (RFC3339) window. See the
+	// PublishedAfterSupport tri-state docs. Zero value ("none") means the
+	// filter is unenforceable for this source.
+	SupportsPublishedAfterFilter PublishedAfterSupport `json:"supports_published_after_filter,omitempty"`
 }
 
 // SourceHealth represents the current health and rate-limit status of a source.
@@ -764,6 +809,10 @@ type SourceInfo struct {
 	SubprocessorURL string       `json:"subprocessor_url,omitempty"`
 	FreeTier        bool         `json:"free_tier,omitempty"`    // works without a paid key (incl. anon-tier providers)
 	RequiresKey     bool         `json:"requires_key,omitempty"` // mirror of AcceptsCredentials but renamed for clarity
+
+	// v2.22.0 — mirror of SourceCapabilities.SupportsPublishedAfterFilter.
+	// Tri-state: "native" | "coarse+postfilter" | "none". Empty == "none".
+	SupportsPublishedAfterFilter PublishedAfterSupport `json:"supports_published_after_filter,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

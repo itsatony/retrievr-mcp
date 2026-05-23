@@ -151,6 +151,8 @@ func (p *BlueskyPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
 		Kinds:                    []ResultKind{KindPost},
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 

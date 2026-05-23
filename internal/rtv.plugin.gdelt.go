@@ -153,6 +153,8 @@ func (p *GDELTPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentNews, IntentQuickLookup},
 		Kinds:                    []ResultKind{KindNews},
+
+		SupportsPublishedAfterFilter: PublishedAfterNative,
 	}
 }
 
@@ -246,10 +248,18 @@ func (p *GDELTPlugin) doSearch(ctx context.Context, params SearchParams, limit i
 		q.Set(gdeltParamSort, gdeltSortHybridRel)
 	}
 
-	if from := strings.TrimSpace(params.Filters.DateFrom); from != "" {
+	// v2.22.0 — GDELT's STARTDATETIME/ENDDATETIME are 14-digit
+	// YYYYMMDDHHMMSS in UTC; the format natively supports sub-day
+	// precision, so prefer PublishedAfter / PublishedBefore over the day
+	// bound when set.
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedAfter); ok {
+		q.Set(gdeltParamStartDateTm, t.Format("20060102150405"))
+	} else if from := strings.TrimSpace(params.Filters.DateFrom); from != "" {
 		q.Set(gdeltParamStartDateTm, gdeltDatetimeBound(from, true))
 	}
-	if to := strings.TrimSpace(params.Filters.DateTo); to != "" {
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedBefore); ok {
+		q.Set(gdeltParamEndDateTm, t.Format("20060102150405"))
+	} else if to := strings.TrimSpace(params.Filters.DateTo); to != "" {
 		q.Set(gdeltParamEndDateTm, gdeltDatetimeBound(to, false))
 	}
 

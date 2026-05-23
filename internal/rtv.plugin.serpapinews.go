@@ -95,6 +95,8 @@ func (p *SerpAPINewsPlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentNews, IntentQuickLookup},
 		Kinds:                    []ResultKind{KindNews},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 

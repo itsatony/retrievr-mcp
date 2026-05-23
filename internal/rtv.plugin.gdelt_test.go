@@ -145,3 +145,35 @@ func TestGDELT_DatetimeBound(t *testing.T) {
 	assert.Equal(t, "20240615000000", gdeltDatetimeBound("2024-06-15", true))
 	assert.Equal(t, "20240615235959", gdeltDatetimeBound("2024-06-15", false))
 }
+
+// v2.22.0 — PublishedAfter / PublishedBefore push-through: GDELT
+// STARTDATETIME/ENDDATETIME accept 14-digit sub-day precision, so the
+// precise RFC3339 timestamp lands in the URL verbatim (in YYYYMMDDHHMMSS
+// form), not a day-floor expansion.
+func TestGDELT_Search_PublishedAfterPushDown(t *testing.T) {
+	t.Parallel()
+	resp := gdeltSearchResponse{Articles: []gdeltArticle{}}
+	body, _ := json.Marshal(resp)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assert.Equal(t, "20260523080000", q.Get(gdeltParamStartDateTm))
+		assert.Equal(t, "20260523180000", q.Get(gdeltParamEndDateTm))
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+	p := newGDELTTestPlugin(t, srv.URL)
+	_, err := p.Search(context.Background(), SearchParams{
+		Query: "x",
+		Filters: SearchFilters{
+			PublishedAfter:  "2026-05-23T08:00:00Z",
+			PublishedBefore: "2026-05-23T18:00:00Z",
+		},
+	})
+	require.NoError(t, err)
+}
+
+func TestGDELT_Capabilities_PublishedAfterIsNative(t *testing.T) {
+	t.Parallel()
+	p := &GDELTPlugin{}
+	assert.Equal(t, PublishedAfterNative, p.Capabilities().SupportsPublishedAfterFilter)
+}

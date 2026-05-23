@@ -209,6 +209,8 @@ func (p *RedditPlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
 		Kinds:                    []ResultKind{KindPost},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 

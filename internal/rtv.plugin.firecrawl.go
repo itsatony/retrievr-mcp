@@ -143,6 +143,8 @@ func (p *FirecrawlPlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentDeepResearch, IntentQuickLookup},
 		Kinds:                    []ResultKind{KindWeb},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 

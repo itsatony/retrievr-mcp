@@ -89,7 +89,31 @@ if errors.Is(err, rtv.ErrEUModeProviderConflict) {
 // result.AuditRef correlates this call to the audit log
 ```
 
-### 3. Intent-driven fallback
+### 3. Exact-window news query (v2.22.0)
+
+```go
+// Sub-day freshness window. PublishedAfter / PublishedBefore are RFC3339
+// and have exclusive boundaries. The router pushes the precise timestamp
+// into NewsAPI / GDELT / HackerNews / YouTube; for Brave, Exa, and other
+// coarse-precision sources it downcasts to a day floor upstream and
+// post-filters merged results against each hit's published_at.
+result, err := client.SearchV2(ctx, rtv.SearchParams{
+    Query:  "AI Act enforcement",
+    Intent: rtv.IntentNews,
+    Filters: rtv.SearchFilters{
+        PublishedAfter:  "2026-05-23T08:00:00Z",
+        PublishedBefore: "2026-05-23T18:00:00Z",
+    },
+}, nil)
+if err != nil { panic(err) }
+
+// Discover per-source handling: rtv_list_sources surfaces a tri-state
+// supports_published_after_filter ("native" | "coarse+postfilter" | "none").
+// Sources with "none" emit no usable per-hit timestamp; their results
+// pass through unfiltered unless filters.StrictPublishedAt is true.
+```
+
+### 4. Intent-driven fallback
 
 ```go
 // quick_lookup tries the web chain (brave + exa) and falls through to
@@ -104,7 +128,7 @@ if result.FallbackWalked {
 }
 ```
 
-### 4. Streaming search
+### 5. Streaming search
 
 `Client.Stream` is useful for slow providers (Perplexity Sonar median
 5-13s) where progressive rendering beats waiting for a full merge.
@@ -129,7 +153,7 @@ for ev := range ch {
 Streaming trade-offs: no cross-source dedup, no fallback walk. Use
 `Search`/`SearchV2` when you need either.
 
-### 5. Per-call credential injection
+### 6. Per-call credential injection
 
 ```go
 ctx := rtv.WithCredentials(context.Background(), map[string]string{
@@ -144,7 +168,7 @@ Per-call credentials override server-default keys for that call only.
 Different tenants get independent rate-limit buckets keyed on
 `(sourceID, sha256(credential))`.
 
-### 6. Auditing every call
+### 7. Auditing every call
 
 By default, every Search emits an `AuditEvent` to slog with:
 - `audit_ref` (also returned in `result.AuditRef`)

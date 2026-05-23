@@ -203,6 +203,31 @@ func TestBrave_Search_DateAppliesFreshnessBucket(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// v2.22.0 — PublishedAfter (RFC3339) alone must downcast to a day floor
+// so Brave's freshness mapping still applies, instead of being silently
+// ignored. The router post-filter (Step 7.7) handles sub-day precision.
+func TestBrave_Search_PublishedAfterDowncastsToFreshnessBucket(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := r.URL.Query().Get(braveParamFreshness)
+		assert.Contains(t, []string{braveFreshnessDay, braveFreshnessWeek, braveFreshnessMonth, braveFreshnessYear},
+			got, "PublishedAfter alone must still produce a freshness bucket")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, buildBraveTestResponse(nil, nil))
+	}))
+	defer srv.Close()
+
+	// ~10 days ago at a sub-day timestamp.
+	cutoff := time.Now().Add(-10 * 24 * time.Hour).UTC().Format(time.RFC3339)
+	p := newBraveTestPlugin(t, srv.URL, braveTestServerKey)
+	_, err := p.Search(context.Background(), SearchParams{
+		Query:   "x",
+		Limit:   1,
+		Filters: SearchFilters{PublishedAfter: cutoff},
+	})
+	require.NoError(t, err)
+}
+
 func TestBrave_Search_AbsentFiltersOmitParams(t *testing.T) {
 	t.Parallel()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -738,4 +763,41 @@ func capsFor(t *testing.T, p interface{ Capabilities() SourceCapabilities }) str
 	t.Helper()
 	c := p.Capabilities()
 	return struct{ Domain, Channel, Language bool }{c.SupportsDomainFilter, c.SupportsChannelFilter, c.SupportsLanguageFilter}
+}
+
+// v2.22.0 — capability tri-state matrix. Locks the declared per-source
+// PublishedAfter handling so future plugin tweaks can't silently flip a
+// "native" provider to "none" (or vice versa) without breaking a test.
+func TestSupportsPublishedAfterFilterMatrix(t *testing.T) {
+	t.Parallel()
+	type capProbe interface {
+		Capabilities() SourceCapabilities
+	}
+	cases := []struct {
+		id   string
+		p    capProbe
+		want PublishedAfterSupport
+	}{
+		// native — upstream API accepts sub-day precision.
+		{SourceNewsAPI, &NewsAPIPlugin{}, PublishedAfterNative},
+		{SourceGDELT, &GDELTPlugin{}, PublishedAfterNative},
+		{SourceHackerNews, &HackerNewsPlugin{}, PublishedAfterNative},
+		{SourceYouTube, &YouTubePlugin{}, PublishedAfterNative},
+		// coarse+postfilter — day-precision push-down + router trim.
+		{SourceBrave, &BravePlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceExa, &ExaPlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceFirecrawl, &FirecrawlPlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceSerpAPINews, &SerpAPINewsPlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceBluesky, &BlueskyPlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceMastodon, &MastodonPlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceReddit, &RedditPlugin{}, PublishedAfterCoarsePostFilter},
+		{SourceScrapingdogYouTube, &ScrapingdogYouTubePlugin{}, PublishedAfterCoarsePostFilter},
+		// none (zero value) — sources without per-hit timestamps.
+		{SourceArXiv, &ArXivPlugin{}, PublishedAfterNone},
+		{SourceWikipedia, &WikipediaPlugin{}, PublishedAfterNone},
+	}
+	for _, c := range cases {
+		assert.Equal(t, c.want, c.p.Capabilities().SupportsPublishedAfterFilter,
+			"supports_published_after_filter mismatch for %s", c.id)
+	}
 }

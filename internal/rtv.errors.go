@@ -32,6 +32,9 @@ const (
 	ErrMsgTooManySubreddits  = "subreddits filter exceeds maximum allowed"
 	ErrMsgInvalidLanguageTag = "language filter is not a valid BCP-47 tag"
 	ErrMsgInvalidDomainList  = "domain list contains invalid entries (use bare registered-domain form, no scheme or path)"
+
+	// v2.22.0 — RFC3339 freshness window validation.
+	ErrMsgInvalidPublishedAt = "published_after/published_before must be a valid RFC3339 timestamp (e.g. 2026-05-23T08:00:00Z)"
 )
 
 // ---------------------------------------------------------------------------
@@ -117,6 +120,9 @@ var (
 	ErrTooManySubreddits  = errors.New(ErrMsgTooManySubreddits)
 	ErrInvalidLanguageTag = errors.New(ErrMsgInvalidLanguageTag)
 	ErrInvalidDomainList  = errors.New(ErrMsgInvalidDomainList)
+
+	// v2.22.0 published-window sentinel.
+	ErrInvalidPublishedAt = errors.New(ErrMsgInvalidPublishedAt)
 
 	// EU-mode sentinels (Cycle 2).
 	ErrEUModeProviderConflict = errors.New(ErrMsgEUModeProviderConflict)

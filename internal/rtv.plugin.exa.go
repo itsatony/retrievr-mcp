@@ -184,6 +184,8 @@ func (p *ExaPlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentQuickLookup, IntentDeepResearch},
 		Kinds:                    []ResultKind{KindWeb, KindNews},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 
@@ -262,13 +264,18 @@ func (p *ExaPlugin) Search(ctx context.Context, params SearchParams) (*SearchRes
 		return nil, fmt.Errorf("exa: language: %w", err)
 	}
 
+	// v2.22.0 — when only PublishedAfter / PublishedBefore is set, downcast
+	// to a YYYY-MM-DD floor so Exa's upstream window is at least as
+	// inclusive as the client window. The router post-filter (Step 7.7)
+	// then trims sub-day precision against SourceMetadata["published_at"].
+	dateFrom, dateTo := effectiveDateBounds(params.Filters)
 	body := exaSearchRequest{
 		Query:          params.Query,
 		NumResults:     num,
 		Type:           p.defaultType,
 		Category:       p.defaultCategory,
-		StartDate:      params.Filters.DateFrom,
-		EndDate:        params.Filters.DateTo,
+		StartDate:      dateFrom,
+		EndDate:        dateTo,
 		IncludeDomains: params.Filters.IncludeDomains,
 		ExcludeDomains: params.Filters.ExcludeDomains,
 	}

@@ -233,3 +233,36 @@ func TestHackerNews_DedupAcrossSitesIsImpossible(t *testing.T) {
 	merged := dedup([]Publication{se, hn})
 	require.Len(t, merged, 2, "two distinct sites with same numeric ID must not dedup")
 }
+
+// v2.22.0 — PublishedAfter / PublishedBefore push-through. The Algolia
+// numericFilters operator is strict ('>') matching the exclusive
+// "after T" semantics, and the request routes through search_by_date so
+// the numericFilters are honoured by the indexed-date endpoint.
+func TestHackerNews_Search_PublishedAfterPushDown(t *testing.T) {
+	t.Parallel()
+	// 2026-05-23T08:00:00Z = 1779523200; 2026-05-23T18:00:00Z = 1779559200.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, hackerNewsSearchByDatePath, r.URL.Path)
+		nf := r.URL.Query().Get(hackerNewsQueryParamNumericFilters)
+		assert.Contains(t, nf, "created_at_i>1779523200")
+		assert.Contains(t, nf, "created_at_i<1779559200")
+		_, _ = io.WriteString(w, buildHackerNewsTestResponse(nil, 0))
+	}))
+	defer srv.Close()
+	p := newHackerNewsTestPlugin(t, srv.URL)
+	_, err := p.Search(context.Background(), SearchParams{
+		Query: "x",
+		// Sort intentionally not date — push-down must still force search_by_date.
+		Filters: SearchFilters{
+			PublishedAfter:  "2026-05-23T08:00:00Z",
+			PublishedBefore: "2026-05-23T18:00:00Z",
+		},
+	})
+	require.NoError(t, err)
+}
+
+func TestHackerNews_Capabilities_PublishedAfterIsNative(t *testing.T) {
+	t.Parallel()
+	p := &HackerNewsPlugin{}
+	assert.Equal(t, PublishedAfterNative, p.Capabilities().SupportsPublishedAfterFilter)
+}

@@ -401,6 +401,14 @@ func (r *Router) Search(
 ) (*MergedSearchResult, error) {
 	start := time.Now()
 
+	// Step 0a: Filter-shape validation. RFC3339 PublishedAfter / PublishedBefore
+	// must parse; if both are set, after must be <= before. Reject malformed
+	// input here so plugins downstream can trust the field shape (and avoid
+	// silent downcast / silent zero-time bugs).
+	if err := validatePublishedWindow(params.Filters); err != nil {
+		return nil, err
+	}
+
 	// Step 0: EU-mode refusal path (Hook #5). Reject eu_strict + explicit
 	// non-EU sources up-front rather than silently dropping them.
 	if err := validateEUModeSources(sources, r.plugins, r.euMode, r.euIncludePublicResearch); err != nil {
@@ -577,6 +585,13 @@ func (r *Router) Search(
 	// the OA PDF link + license + open_access flag. Errors are swallowed —
 	// enrichment failures must never fail the search.
 	r.enrichWithUnpaywall(ctx, allResults)
+
+	// Step 7.7: PublishedAfter / PublishedBefore exact-window trim (v2.22.0).
+	// No-op when neither bound is set. Hits with missing/unparseable
+	// published_at are kept by default and dropped only when
+	// Filters.StrictPublishedAt is true. Runs before sort so the truncate
+	// pages over the post-filtered set.
+	allResults = filterByPublishedWindow(allResults, params.Filters)
 
 	// Step 8: Sort.
 	allResults = sortResults(allResults, params.Sort)
@@ -1029,6 +1044,8 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 			// without one (paid / strictly-keyed).
 			FreeTier:    !requiresKey,
 			RequiresKey: requiresKey,
+
+			SupportsPublishedAfterFilter: caps.SupportsPublishedAfterFilter,
 		})
 	}
 

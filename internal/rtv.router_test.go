@@ -1303,3 +1303,75 @@ func TestRouterSearchConcurrent(t *testing.T) {
 		assert.NoError(t, err, "goroutine %d failed", i)
 	}
 }
+
+// v2.22.0 — Router validates RFC3339 PublishedAfter/Before at Step 0 and
+// rejects malformed values before any fan-out occurs.
+func TestRouterSearchInvalidPublishedAfterRejected(t *testing.T) {
+	t.Parallel()
+	plugins := map[string]SourcePlugin{
+		mockSourceA: newMockPlugin(mockSourceA, nil),
+	}
+	r := testRouter(plugins)
+
+	_, err := r.Search(context.Background(), SearchParams{
+		Query: "x", Limit: 5,
+		Filters: SearchFilters{PublishedAfter: "not-a-date"},
+	}, []string{mockSourceA}, nil)
+	assert.ErrorIs(t, err, ErrInvalidPublishedAt)
+}
+
+// v2.22.0 — Step 7.7 post-filter trims merged results to the
+// PublishedAfter/PublishedBefore window using each hit's
+// SourceMetadata["published_at"]. Hits without a published_at are kept
+// by default; the strict flag drops them.
+func TestRouterSearchPublishedWindowPostFilter(t *testing.T) {
+	t.Parallel()
+
+	withPublishedAt := func(id, when string) Publication {
+		p := testPub(mockSourceA, id, "", nil)
+		if when != "" {
+			p.SourceMetadata = map[string]any{"published_at": when}
+		}
+		return p
+	}
+
+	pubs := []Publication{
+		withPublishedAt("hn:1", "2026-05-23T07:00:00Z"), // before
+		withPublishedAt("hn:2", "2026-05-23T09:00:00Z"), // inside
+		withPublishedAt("hn:3", "2026-05-23T13:00:00Z"), // after
+		withPublishedAt("hn:4", ""),                     // missing — keep by default
+	}
+	plugins := map[string]SourcePlugin{
+		mockSourceA: newMockPlugin(mockSourceA, pubs),
+	}
+	r := testRouter(plugins)
+
+	result, err := r.Search(context.Background(), SearchParams{
+		Query: "x", Limit: 10, Sort: SortRelevance,
+		Filters: SearchFilters{
+			PublishedAfter:  "2026-05-23T08:00:00Z",
+			PublishedBefore: "2026-05-23T12:00:00Z",
+		},
+	}, []string{mockSourceA}, nil)
+	require.NoError(t, err)
+
+	ids := make([]string, 0, len(result.Results))
+	for _, p := range result.Results {
+		ids = append(ids, p.ID)
+	}
+	assert.ElementsMatch(t, []string{"hn:2", "hn:4"}, ids,
+		"in-window hits + missing-timestamp hits survive by default")
+
+	// Strict mode drops the missing-timestamp hit.
+	strict, err := r.Search(context.Background(), SearchParams{
+		Query: "x", Limit: 10, Sort: SortRelevance,
+		Filters: SearchFilters{
+			PublishedAfter:    "2026-05-23T08:00:00Z",
+			PublishedBefore:   "2026-05-23T12:00:00Z",
+			StrictPublishedAt: true,
+		},
+	}, []string{mockSourceA}, nil)
+	require.NoError(t, err)
+	require.Len(t, strict.Results, 1)
+	assert.Equal(t, "hn:2", strict.Results[0].ID)
+}

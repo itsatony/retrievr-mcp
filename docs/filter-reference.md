@@ -6,9 +6,14 @@ provider**: each plugin decides whether to apply a filter natively
 (server-side), via a sanctioned post-fetch step (Mastodon `language`
 only), or ignore it entirely when the upstream API has no analogue.
 
-Plugins MUST NOT post-filter silently. The single sanctioned post-filter
-is Mastodon `language`, flagged at runtime by
-`SourceCapabilities.SupportsLanguageFilter`.
+Plugins MUST NOT post-filter silently. The sanctioned post-filters are:
+
+- Mastodon `language` (flagged by `SupportsLanguageFilter`).
+- The v2.22.0 router-level `published_after` / `published_before` window:
+  applied to merged results when the per-source
+  `supports_published_after_filter` is `"coarse+postfilter"`. Native
+  push-down sources are also subject to the window for safety but the
+  upstream filter has already done most of the trimming.
 
 ## Runtime discovery
 
@@ -24,6 +29,8 @@ learn what each provider honors:
 - `supports_language_filter`
 - `supports_sort_relevance` / `supports_sort_date` / `supports_sort_citations`
 - `supports_pagination`
+- `supports_published_after_filter` (tri-state): `"native"` |
+  `"coarse+postfilter"` | `"none"` — see `published_after` below.
 
 `max_results_per_query` and `categories_hint` complete the picture.
 
@@ -59,6 +66,33 @@ Restrict by publication date. Semantics vary per provider:
 | `youtube`, `exa` | Native date range. |
 | `wayback` | Snapshot timestamp range. |
 | All other providers | Filter is silently ignored. |
+
+### `published_after` / `published_before` (string, RFC3339)  *(v2.22.0)*
+
+Sub-day freshness window. Complements `date_from` / `date_to` — when both
+are set, `published_after` / `published_before` win.
+
+**Boundaries are exclusive.** "After T" means strictly later than T; "before
+T" means strictly earlier. Validated as `time.RFC3339` at the router
+boundary; malformed input returns `ErrInvalidPublishedAt` before any
+fan-out.
+
+Per-source handling, surfaced at runtime via
+`supports_published_after_filter`:
+
+| Tri-state | Providers | Behavior |
+|---|---|---|
+| `"native"` | `newsapi`, `gdelt`, `hackernews`, `youtube` | Upstream API accepts sub-day precision; the plugin pushes the precise timestamp through. |
+| `"coarse+postfilter"` | `brave`, `exa`, `firecrawl`, `serpapinews`, `bluesky`, `mastodon`, `reddit`, `scrapingdog_youtube` | Plugin downcasts to a `YYYY-MM-DD` floor (UTC) so the upstream query is at least as inclusive as the client window; the router then trims merged results using each hit's `SourceMetadata["published_at"]`. |
+| `"none"` (the zero / unset value, omitted from JSON) | All scholarly + structured + places + packages providers | Source emits no usable timestamp. Hits pass through unfiltered by default and are dropped only under `strict_published_at`. |
+
+### `strict_published_at` (bool)  *(v2.22.0)*
+
+When `true`, merged hits with missing or unparseable
+`SourceMetadata["published_at"]` are **dropped** by the router post-filter.
+Default is `false` — unknown timestamps are kept so providers without
+timestamp metadata (encyclopedias, packages, scholarly identifiers,
+places) are not silently excluded from a news-window query.
 
 ### `categories` (`[]string`)
 

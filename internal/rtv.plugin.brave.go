@@ -227,6 +227,8 @@ func (p *BravePlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews},
 		Kinds:                    []ResultKind{KindWeb, KindNews, KindImage},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 
@@ -637,7 +639,16 @@ func braveComposeQuery(query string, includeDomains, excludeDomains []string) st
 }
 
 func (p *BravePlugin) doSearch(ctx context.Context, params SearchParams, count int, apiKey string) (*braveSearchResponse, error) {
-	freshness := braveFreshnessFromDate(params.Filters, time.Now())
+	// v2.22.0 — downcast PublishedAfter / PublishedBefore to a day floor so
+	// the Brave bucket / custom-range mapping benefits from the precise
+	// freshness window when the caller only sets the sub-day filter. The
+	// router post-filter (Step 7.7) then trims to the exact timestamp.
+	dateFrom, dateTo := effectiveDateBounds(params.Filters)
+	effective := params.Filters
+	effective.DateFrom = dateFrom
+	effective.DateTo = dateTo
+
+	freshness := braveFreshnessFromDate(effective, time.Now())
 	resp, status, err := p.executeSearch(ctx, p.buildSearchQuery(params, count, freshness), apiKey)
 	if err == nil {
 		return resp, nil
@@ -648,8 +659,8 @@ func (p *BravePlugin) doSearch(ctx context.Context, params SearchParams, count i
 	// (retrievr_v4.md OQ-4). All three predicates must hold: a plain bucket
 	// failure or a 422 from a different cause (bad q, bad lang) must not
 	// rewrite the freshness param and resubmit.
-	if isBraveRangeRetryable(status, freshness, params.Filters) {
-		bucket := braveFreshnessFromDate(SearchFilters{DateFrom: params.Filters.DateFrom}, time.Now())
+	if isBraveRangeRetryable(status, freshness, effective) {
+		bucket := braveFreshnessFromDate(SearchFilters{DateFrom: effective.DateFrom}, time.Now())
 		if bucket != "" && bucket != freshness {
 			resp, _, err = p.executeSearch(ctx, p.buildSearchQuery(params, count, bucket), apiKey)
 			if err == nil {

@@ -172,6 +172,8 @@ func (p *ScrapingdogYouTubePlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentQuickLookup},
 		Kinds:                    []ResultKind{KindVideo},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterCoarsePostFilter,
 	}
 }
 

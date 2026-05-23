@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -264,6 +265,8 @@ func (p *YouTubePlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentQuickLookup, IntentReference},
 		Kinds:                    []ResultKind{KindVideo},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterNative,
 	}
 }
 
@@ -460,12 +463,18 @@ func (p *YouTubePlugin) doSearch(ctx context.Context, params SearchParams, chann
 	if channelID != "" {
 		q.Set(youtubeParamChannelID, channelID)
 	}
-	if params.Filters.DateFrom != "" {
+	// v2.22.0 — YouTube Data API publishedAfter/publishedBefore accept full
+	// RFC3339, so prefer the sub-day filters over the legacy date bounds.
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedAfter); ok {
+		q.Set(youtubeParamPublishedAfter, t.Format(time.RFC3339))
+	} else if params.Filters.DateFrom != "" {
 		if rfc := dateToRFC3339Start(params.Filters.DateFrom); rfc != "" {
 			q.Set(youtubeParamPublishedAfter, rfc)
 		}
 	}
-	if params.Filters.DateTo != "" {
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedBefore); ok {
+		q.Set(youtubeParamPublishedBefore, t.Format(time.RFC3339))
+	} else if params.Filters.DateTo != "" {
 		if rfc := dateToRFC3339End(params.Filters.DateTo); rfc != "" {
 			q.Set(youtubeParamPublishedBefore, rfc)
 		}

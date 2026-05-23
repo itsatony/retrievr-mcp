@@ -178,3 +178,52 @@ func TestNewsAPI_Get_NotWired(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrFormatUnsupported))
 }
+
+// v2.22.0 — PublishedAfter / PublishedBefore push-through: NewsAPI's
+// from/to accept full RFC3339 so we pass the precise timestamp verbatim
+// rather than downcasting to a day boundary.
+func TestNewsAPI_Search_PublishedAfterPushDown(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		assert.Equal(t, "2026-05-23T08:00:00Z", q.Get(newsapiParamFrom))
+		assert.Equal(t, "2026-05-23T18:00:00Z", q.Get(newsapiParamTo))
+		_, _ = io.WriteString(w, `{"status":"ok","totalResults":0,"articles":[]}`)
+	}))
+	defer srv.Close()
+	p := newNewsAPITestPlugin(t, srv.URL, "test-key")
+	_, err := p.Search(context.Background(), SearchParams{
+		Query: "x",
+		Filters: SearchFilters{
+			PublishedAfter:  "2026-05-23T08:00:00Z",
+			PublishedBefore: "2026-05-23T18:00:00Z",
+		},
+	})
+	require.NoError(t, err)
+}
+
+// PublishedAfter wins over DateFrom; the legacy day bound is dropped so
+// the upstream only sees the precise cutoff.
+func TestNewsAPI_Search_PublishedAfterOverridesDateFrom(t *testing.T) {
+	t.Parallel()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "2026-05-23T08:00:00Z", r.URL.Query().Get(newsapiParamFrom))
+		_, _ = io.WriteString(w, `{"status":"ok","totalResults":0,"articles":[]}`)
+	}))
+	defer srv.Close()
+	p := newNewsAPITestPlugin(t, srv.URL, "test-key")
+	_, err := p.Search(context.Background(), SearchParams{
+		Query: "x",
+		Filters: SearchFilters{
+			DateFrom:       "2024-01-01",
+			PublishedAfter: "2026-05-23T08:00:00Z",
+		},
+	})
+	require.NoError(t, err)
+}
+
+func TestNewsAPI_Capabilities_PublishedAfterIsNative(t *testing.T) {
+	t.Parallel()
+	p := &NewsAPIPlugin{}
+	assert.Equal(t, PublishedAfterNative, p.Capabilities().SupportsPublishedAfterFilter)
+}

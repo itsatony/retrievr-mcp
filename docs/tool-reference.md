@@ -173,6 +173,8 @@ primary source fails. The walk stops at the first fallback source returning
 | `title` | string | Title-only match. Honored by `arxiv`, `pubmed`, `europmc`; others fold into the main query. |
 | `authors` | []string | Author-only filter. Honored by `arxiv`, `pubmed`, `europmc`. |
 | `date_from` / `date_to` | string | `YYYY-MM-DD` or `YYYY`. Brave maps to freshness buckets (`pd`/`pw`/`pm`/`py`); StackExchange / HackerNews convert to unix seconds; Dimensions / Lens floor to year; **bioRxiv REQUIRES `date_from`**. |
+| `published_after` / `published_before` | string | **v2.22.0.** RFC3339 (e.g. `2026-05-23T08:00:00Z`). Sub-day freshness window with **exclusive** boundaries. Wins over `date_from`/`date_to`. Native push-down: `newsapi`, `gdelt`, `hackernews`, `youtube`. Coarse-precision push-down + router post-filter against `SourceMetadata["published_at"]`: `brave`, `exa`, `firecrawl`, `serpapinews`, `bluesky`, `mastodon`, `reddit`, `scrapingdog_youtube`. Surfaced at runtime via `rtv_list_sources.supports_published_after_filter`. Malformed input rejected before fan-out. |
+| `strict_published_at` | bool | **v2.22.0.** When `true`, router drops merged hits whose `published_at` is missing or unparseable. Default `false`. |
 | `categories` | []string | Semantics vary by source — see filter-reference.md. |
 | `open_access` | bool | Native only on `zenodo`. Use `intent=primary_source` for OA-biased scholarly retrieval. |
 | `min_citations` | int | **Reserved for a future release.** Not wired by any provider today. |
@@ -181,9 +183,12 @@ primary source fails. The walk stops at the first fallback source returning
 | `subreddits` | []string | Subreddit names (≤5). Honored by `reddit`. |
 | `language` | string | BCP-47 (`en`, `de`, `fr-CA`). Honored by `brave`, `youtube`, `scrapingdog_youtube`, `bluesky`, `europeana`, `mastodon` (post-fetch), `serpapi`, `serpapinews`, `kagi`, `mojeek`, `newsapi`, `gdelt`, `eurlex`, `kgapi`, `wikidata`, `here`, `googleplaces`, `listennotes`. |
 
-Plugins that do not natively support a filter MUST ignore it (the only
-sanctioned post-filter is Mastodon `language`). For the runtime matrix
-query `rtv_list_sources` and read the `supports_*` booleans.
+Plugins that do not natively support a filter MUST ignore it. Sanctioned
+post-filters: Mastodon `language`, and the v2.22.0 router-level
+`published_after` / `published_before` window (applied after dedup +
+enrichment, before sort + truncate). For the runtime matrix query
+`rtv_list_sources` and read the `supports_*` booleans, including the
+tri-state `supports_published_after_filter`.
 
 ### 3.3 credentials sub-fields
 

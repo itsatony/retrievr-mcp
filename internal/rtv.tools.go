@@ -108,6 +108,8 @@ const (
 		"  title (string) — title-only match: arxiv, pubmed, europmc.\n" +
 		"  authors ([]string) — author-only filter: arxiv, pubmed, europmc. Other scholarly sources fold author terms into the main query.\n" +
 		"  date_from / date_to (YYYY-MM-DD or YYYY) — honored by every source that exposes a date field. Brave maps to freshness buckets (pd/pw/pm/py); StackExchange/HackerNews convert to unix seconds; Dimensions/Lens floor to year; bioRxiv REQUIRES date_from.\n" +
+		"  published_after / published_before (RFC3339, e.g. \"2026-05-23T08:00:00Z\") — v2.22.0 sub-day freshness window with exclusive boundaries. Wins over date_from/date_to when both are set. Push-down: newsapi, gdelt, hackernews, youtube. Coarse-precision push-down + router post-filter on SourceMetadata[\"published_at\"]: brave, exa, firecrawl, serpapinews, bluesky, mastodon, reddit, scrapingdog_youtube. Other sources keep their hits unfiltered unless strict_published_at is set. See rtv_list_sources.supports_published_after_filter (\"native\" | \"coarse+postfilter\" | \"none\").\n" +
+		"  strict_published_at (bool) — when true, the router drops merged hits whose published_at is missing or unparseable. Default false.\n" +
 		"  categories ([]string) — semantics vary by source: arxiv/ads/europmc/dimensions/lens = subject taxonomy; stackexchange = tags; npm = keywords; zenodo/datacite/openaire = resource_type; googleplaces/here/itunes/listennotes/osmoverpass = POI/podcast category (first entry only); serpapi/serpapinews = country (gl/cr code, first entry). Read SourceInfo.categories_hint for each source's accepted vocabulary.\n" +
 		"  open_access (bool) — currently honored natively by zenodo only. Other providers ignore it; use intent=primary_source for OA-biased scholarly retrieval.\n" +
 		"  min_citations (int) — currently NOT wired by any provider. Will be honored by s2/openalex/europmc in a future release.\n" +
@@ -143,6 +145,12 @@ const (
 	FilterChannels       = "channels"
 	FilterSubreddits     = "subreddits"
 	FilterLanguage       = "language"
+
+	// v2.22.0 ISO-8601 freshness window. Surfaced at runtime via
+	// SourceCapabilities.SupportsPublishedAfterFilter (tri-state).
+	FilterPublishedAfter    = "published_after"
+	FilterPublishedBefore   = "published_before"
+	FilterStrictPublishedAt = "strict_published_at"
 )
 
 // ---------------------------------------------------------------------------

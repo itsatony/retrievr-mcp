@@ -170,6 +170,8 @@ func (p *NewsAPIPlugin) Capabilities() SourceCapabilities {
 		QueryIntents:             []Intent{IntentNews, IntentQuickLookup},
 		Kinds:                    []ResultKind{KindNews},
 		RequiresCredential:       true,
+
+		SupportsPublishedAfterFilter: PublishedAfterNative,
 	}
 }
 
@@ -277,10 +279,17 @@ func (p *NewsAPIPlugin) doSearch(ctx context.Context, params SearchParams, limit
 		}
 		q.Set(newsapiParamLanguage, strings.ToLower(lang))
 	}
-	if d := strings.TrimSpace(params.Filters.DateFrom); d != "" {
+	// v2.22.0 — NewsAPI's `from`/`to` accept full RFC3339 with time. Prefer
+	// PublishedAfter / PublishedBefore (sub-day precision) over the legacy
+	// DateFrom / DateTo when set.
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedAfter); ok {
+		q.Set(newsapiParamFrom, t.Format(time.RFC3339))
+	} else if d := strings.TrimSpace(params.Filters.DateFrom); d != "" {
 		q.Set(newsapiParamFrom, normalizeDateYYYYMMDDHyphen(d, true))
 	}
-	if d := strings.TrimSpace(params.Filters.DateTo); d != "" {
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedBefore); ok {
+		q.Set(newsapiParamTo, t.Format(time.RFC3339))
+	} else if d := strings.TrimSpace(params.Filters.DateTo); d != "" {
 		q.Set(newsapiParamTo, normalizeDateYYYYMMDDHyphen(d, false))
 	}
 	if len(params.Filters.IncludeDomains) > 0 {

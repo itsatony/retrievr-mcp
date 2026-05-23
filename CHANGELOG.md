@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.22.0] - 2026-05-23
+
+Minor release. **ISO-8601 freshness window.** New `published_after` /
+`published_before` (RFC3339) filters on `SearchFilters`, complementing the
+existing day-precision `date_from` / `date_to`. Backward-compatible: a
+request that sets only the legacy bounds behaves identically to v2.21.0.
+
+### Added
+
+- `SearchFilters.PublishedAfter`, `SearchFilters.PublishedBefore`
+  (RFC3339), and `SearchFilters.StrictPublishedAt` (bool). Validated as
+  strict `time.RFC3339` at the router boundary; malformed input is
+  rejected with `ErrInvalidPublishedAt` before any fan-out occurs.
+- `SourceCapabilities.SupportsPublishedAfterFilter` (tri-state enum
+  `native` | `coarse+postfilter` | `none`) and mirrored field on
+  `SourceInfo`. Lets clients predict per-source behavior before issuing
+  a query.
+- Router Step 7.7 (between Unpaywall enrichment and sort): post-filter
+  pass over merged results that trims to the precise RFC3339 window
+  using each hit's `SourceMetadata["published_at"]`. Boundaries are
+  exclusive. Hits with missing/unparseable timestamps are kept by
+  default; the `strict_published_at` flag drops them.
+- `docs/filter-reference.md` — `published_after` / `published_before`
+  section with the per-provider tri-state table.
+
+### Changed
+
+- **NewsAPI** (`SupportsPublishedAfterFilter: "native"`) — passes
+  RFC3339 through to `from` / `to` verbatim when `PublishedAfter` /
+  `PublishedBefore` is set, instead of downcasting to day boundaries.
+- **GDELT** (`"native"`) — formats `PublishedAfter` directly into the
+  14-digit `STARTDATETIME` / `ENDDATETIME` form, no longer expanding a
+  day bound to `…000000` / `…235959`.
+- **HackerNews** (`"native"`) — uses Algolia's strict `numericFilters`
+  (`created_at_i>` / `<`) for the precise unix cutoff and routes the
+  request through `/search_by_date` regardless of `Sort`, so the
+  indexed-date endpoint honours the filter reliably.
+- **YouTube** (`"native"`) — passes `PublishedAfter` straight through
+  to the YouTube Data API's `publishedAfter` / `publishedBefore`
+  RFC3339 params.
+- **Brave**, **Exa**, **Firecrawl**, **SerpAPI News**, **Bluesky**,
+  **Mastodon**, **Reddit**, **Scrapingdog YouTube**
+  (`"coarse+postfilter"`) — declare the capability and rely on the
+  router-level Step 7.7 trim. The upstream query receives the existing
+  day-precision bound when only the precise filter is set.
+
 ## [2.20.0] - 2026-05-15
 
 Minor release. **Interface alignment + documentation pass.** No new

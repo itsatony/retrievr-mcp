@@ -167,6 +167,8 @@ func (p *HackerNewsPlugin) Capabilities() SourceCapabilities {
 		AvailableFormats:         []ContentFormat{FormatJSON},
 		QueryIntents:             []Intent{IntentQuickLookup, IntentNews, IntentCodeProvenance},
 		Kinds:                    []ResultKind{KindQA},
+
+		SupportsPublishedAfterFilter: PublishedAfterNative,
 	}
 }
 
@@ -248,11 +250,22 @@ func (p *HackerNewsPlugin) doSearch(ctx context.Context, params SearchParams, li
 	q.Set(hackerNewsQueryParamTags, hackerNewsStoryTagDefault)
 	q.Set(hackerNewsQueryParamHitsPerPage, strconv.Itoa(limit))
 
+	// v2.22.0 — PublishedAfter / PublishedBefore (RFC3339) take precedence
+	// over DateFrom / DateTo for sub-day precision. The Algolia numeric
+	// filter operator is strict ('>'), matching the documented exclusive
+	// "after T" semantics of PublishedAfter.
 	var filters []string
-	if from, ok := parseFilterDateUnix(params.Filters.DateFrom); ok {
+	hasPublishedWindow := false
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedAfter); ok {
+		filters = append(filters, hackerNewsFilterFieldCreatedAtI+">"+strconv.FormatInt(t.Unix(), 10))
+		hasPublishedWindow = true
+	} else if from, ok := parseFilterDateUnix(params.Filters.DateFrom); ok {
 		filters = append(filters, hackerNewsFilterFieldCreatedAtI+hackerNewsFilterOpGTE+strconv.FormatInt(from, 10))
 	}
-	if to, ok := parseFilterDateUnix(params.Filters.DateTo); ok {
+	if t, ok, _ := parsePublishedAt(params.Filters.PublishedBefore); ok {
+		filters = append(filters, hackerNewsFilterFieldCreatedAtI+"<"+strconv.FormatInt(t.Unix(), 10))
+		hasPublishedWindow = true
+	} else if to, ok := parseFilterDateUnix(params.Filters.DateTo); ok {
 		filters = append(filters, hackerNewsFilterFieldCreatedAtI+hackerNewsFilterOpLTE+strconv.FormatInt(to, 10))
 	}
 	if len(filters) > 0 {
@@ -266,6 +279,12 @@ func (p *HackerNewsPlugin) doSearch(ctx context.Context, params SearchParams, li
 		// has no ascending-date endpoint. We use search_by_date for both
 		// directions and rely on the upstream desc order — SortDateAsc
 		// would require client-side reversal, which is out of scope here.
+		path = hackerNewsSearchByDatePath
+	}
+	if hasPublishedWindow {
+		// search_by_date applies the numericFilters against indexed
+		// `created_at_i` reliably; the relevance endpoint occasionally
+		// ignores them, so route precise windows through the date index.
 		path = hackerNewsSearchByDatePath
 	}
 

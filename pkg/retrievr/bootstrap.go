@@ -24,20 +24,47 @@ import (
 // NewClient(opts ...ClientOption) that takes the config struct directly
 // and exposes middleware / EU-mode / reranker / fallback hooks via options.
 func NewClientFromConfig(configPath string, logger *slog.Logger) (*Client, func(), error) {
-	if logger == nil {
-		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
-	}
-
-	if err := internal.LoadVersion(bootstrapVersionPath); err != nil {
-		// Non-fatal: callers can run without a baked-in version.
-		logger.Debug(bootstrapLogVersionFail, slog.String(internal.LogKeyError, err.Error()))
-	}
+	logger = bootstrapLogger(logger)
 
 	cfg, err := internal.LoadConfig(configPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("retrievr: load config %q: %w", configPath, err)
 	}
+	return newClientFromConfig(cfg, logger)
+}
 
+// NewClientFromConfigBytes is the in-memory counterpart to NewClientFromConfig:
+// it parses a retrievr-mcp YAML config from a byte slice (rather than a file on
+// disk), then initializes plugins and returns a Client + Close function exactly
+// like NewClientFromConfig. This lets embedding consumers (e.g. an nx2 service
+// that //go:embeds its retrievr config) bootstrap a Client without shipping a
+// config file alongside the binary.
+func NewClientFromConfigBytes(data []byte, logger *slog.Logger) (*Client, func(), error) {
+	logger = bootstrapLogger(logger)
+
+	cfg, err := internal.LoadConfigFromBytes(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("retrievr: load config bytes: %w", err)
+	}
+	return newClientFromConfig(cfg, logger)
+}
+
+// bootstrapLogger returns a non-nil logger, defaulting to a discard handler, and
+// best-effort loads the baked-in version (non-fatal).
+func bootstrapLogger(logger *slog.Logger) *slog.Logger {
+	if logger == nil {
+		logger = slog.New(slog.NewJSONHandler(io.Discard, nil))
+	}
+	if err := internal.LoadVersion(bootstrapVersionPath); err != nil {
+		// Non-fatal: callers can run without a baked-in version.
+		logger.Debug(bootstrapLogVersionFail, slog.String(internal.LogKeyError, err.Error()))
+	}
+	return logger
+}
+
+// newClientFromConfig performs the shared plugin-init → rate-limiter → router →
+// Client assembly for both NewClientFromConfig and NewClientFromConfigBytes.
+func newClientFromConfig(cfg *internal.Config, logger *slog.Logger) (*Client, func(), error) {
 	plugins, err := internal.InitializePlugins(cfg, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("retrievr: initialize plugins: %w", err)

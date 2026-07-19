@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.23.0] - 2026-07-19
+
+Minor release. **In-memory bootstrap for embedding consumers.** Adds a
+byte-slice config path so in-process consumers (nx2 / atlas) can build a
+`Client` from a config they `//go:embed` into their binary, with no config
+file on disk.
+
+### Added
+
+- **`pkg/retrievr.NewClientFromConfigBytes(data []byte, logger *slog.Logger)`** —
+  the in-memory counterpart to `NewClientFromConfig`. Parses the YAML config
+  from a byte slice, then runs the identical plugin-init → rate-limiter →
+  router → `Client` assembly and returns the same `(*Client, func(), error)`.
+- **`internal.LoadConfigFromBytes(data []byte)`** — parse + validate + auth-mode
+  credential handling for an in-memory config. `LoadConfig(path)` now reads the
+  file and delegates to it (no behavior change for the file path).
+
+### Notes
+
+- No API breaks. The shared assembly logic behind both constructors was
+  extracted into a private `newClientFromConfig` helper — the file-based
+  `NewClientFromConfig` is unchanged in behavior.
+
 ## [2.22.1] - 2026-05-23
 
 Patch release. **GDELT robustness fixes** — two issues reported by the

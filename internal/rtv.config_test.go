@@ -77,6 +77,42 @@ func TestLoadConfigValid(t *testing.T) {
 	assert.Equal(t, "test-key", cfg.Sources["s2"].APIKey)
 }
 
+func TestLoadConfigFromBytes(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		cfg, err := LoadConfigFromBytes([]byte(validConfigYAML))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Equal(t, []string{"arxiv", "s2"}, cfg.Router.DefaultSources)
+		assert.Len(t, cfg.Sources, 2)
+		assert.True(t, cfg.Sources["arxiv"].Enabled)
+	})
+
+	t.Run("invalid yaml", func(t *testing.T) {
+		cfg, err := LoadConfigFromBytes([]byte("{{not valid yaml"))
+		assert.Nil(t, cfg)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrConfigParse)
+	})
+
+	t.Run("empty fails validation", func(t *testing.T) {
+		// Empty config has no enabled sources — validateConfig must reject it,
+		// matching LoadConfig's file-path behavior.
+		cfg, err := LoadConfigFromBytes([]byte(""))
+		assert.Nil(t, cfg)
+		require.Error(t, err)
+	})
+
+	t.Run("per_request mode clears server credentials", func(t *testing.T) {
+		yml := validConfigYAML + "\nauth:\n  mode: \"per_request\"\n"
+		cfg, err := LoadConfigFromBytes([]byte(yml))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		// s2 carried api_key: "test-key" in the YAML; per_request must wipe it
+		// so a shared client never absorbs a server-side secret.
+		assert.Empty(t, cfg.Sources["s2"].APIKey)
+	})
+}
+
 func TestLoadConfigMissingFile(t *testing.T) {
 	cfg, err := LoadConfig("/nonexistent/path/config.yaml")
 	assert.Nil(t, cfg)

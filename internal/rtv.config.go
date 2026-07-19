@@ -338,7 +338,15 @@ func LoadConfig(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrConfigLoad, err)
 	}
+	return LoadConfigFromBytes(data)
+}
 
+// LoadConfigFromBytes parses and validates a retrievr-mcp YAML config from an
+// in-memory byte slice, applying the same validation and auth-mode credential
+// handling as LoadConfig. It exists so in-process consumers that embed their
+// config (e.g. via //go:embed) can build a client without a config file on
+// disk — see pkg/retrievr.NewClientFromConfigBytes.
+func LoadConfigFromBytes(data []byte) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrConfigParse, err)

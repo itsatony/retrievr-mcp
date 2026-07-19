@@ -198,6 +198,7 @@ v2.1.0 will expose `Router.WithAuditSink` directly via `Client` options.)
 ```go
 // Construction
 func NewClientFromConfig(configPath string, logger *slog.Logger) (*Client, cleanup func(), err error)
+func NewClientFromConfigBytes(data []byte, logger *slog.Logger) (*Client, cleanup func(), err error)  // in-memory (e.g. //go:embed'd config)
 func NewClientFromRouter(router *internal.Router, opts ...ClientOption) *Client  // escape hatch
 
 // Search

@@ -18,9 +18,11 @@ import (
 // Trade-offs vs. Search:
 //   - No cross-source dedup (would require buffering the full set).
 //   - No final-pass sort (results stream in arrival order).
-//   - No fallback walk (the cycle-2 fallback semantics rely on knowing
+//   - No fallback WALK after fan-out (the cycle-2 fallback semantics rely on knowing
 //     primary fan-out's full result set; streaming can't make that
-//     decision incrementally without lookahead).
+//     decision incrementally without lookahead). ⚠ It DOES promote the
+//     fallback rung when the primary rung resolves to empty — that
+//     decision needs no lookahead at all (see the promotion note in Stream).
 //   - EU-mode gate IS applied (Hook #2 still runs pre-fanout).
 //   - Refusal path IS applied (Hook #5 still runs).
 //   - Audit event IS emitted (Hook #3 — final event after channel close).
@@ -61,16 +63,29 @@ func (r *Router) Stream(
 		return nil, err
 	}
 
-	// Resolve sources — same precedence as Search but without intent-based
-	// fallback (streaming can't fall back without buffering).
-	var resolved []string
+	// Resolve sources — same precedence as Search. Streaming still does not WALK a
+	// fallback chain after the fan-out (that needs the primary set's full result set,
+	// which streaming cannot know incrementally), but it does PROMOTE the fallback rung
+	// when the primary rung is empty. See the promotion note below.
+	var resolved, fallbackList []string
 	switch {
 	case len(sources) > 0:
 		resolved = r.resolveSources(sources)
 	case params.Intent != "":
-		resolved, _ = r.resolveByIntent(params.Intent)
+		resolved, fallbackList = r.resolveByIntent(params.Intent)
 	default:
 		resolved = r.resolveSources(nil)
+	}
+	// ⚠ THE STATED BLOCKER DOES NOT COVER THIS CASE, WHICH IS WHY THE TWIN IS FIXABLE.
+	// The file header explains that streaming cannot walk a fallback because it "can't
+	// make that decision incrementally without lookahead" — true, and irrelevant here.
+	// When the primary rung filters to EMPTY, nothing about the decision is incremental:
+	// it is fully determined at resolve time, before a single request is made, by which
+	// plugins this tenant registered. Substituting the fallback rung as the fan-out set is
+	// strictly smaller than walking one, and without it `intent="quick_lookup"` is a
+	// guaranteed error on the streaming surface exactly as it was on Search.
+	if len(resolved) == 0 && len(fallbackList) > 0 {
+		resolved = fallbackList
 	}
 	if len(resolved) == 0 {
 		return nil, fmt.Errorf("%w: %s", ErrSearchFailed, errDetailNoValidSources)

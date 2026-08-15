@@ -272,3 +272,156 @@ func TestResolveFallbackConfig_NonZeroPassThrough(t *testing.T) {
 	_, ok := got.Chains["x"]
 	assert.True(t, ok)
 }
+
+// ---------------------------------------------------------------------------
+// v2.24.0 — the primary rung is UNREGISTERED (atlas DC-nx2-168 / atlas#205).
+//
+// ⛔ THIS IS THE GAP THAT LET THE DEFECT SHIP FOR THE WHOLE LIFE OF THE FEATURE.
+// Every fallback test above registers fbSourcePrimary in `plugins`, so
+// filterRegistered never returns empty on the intent path and the guard that
+// errored before consulting the fallback list was never reached. The suite could
+// not tell "the primary source is registered and FAILED" (covered, 3 tests) from
+// "the primary source was NEVER REGISTERED" (the bug). The tests below omit the
+// primary ids from `plugins` entirely, which is what a deployment that disabled
+// those plugins actually looks like.
+// ---------------------------------------------------------------------------
+
+// TestSearch_PrimaryRungUnregisteredPromotesFallback is the subject. On atlas this is
+// `quick_lookup`: kagi/mojeek/serpapi are disabled, so the primary set filters to nothing
+// and linkup/wikipedia sit unreachable in the fallback — every call a hard error.
+func TestSearch_PrimaryRungUnregisteredPromotesFallback(t *testing.T) {
+	t.Parallel()
+
+	fallback1 := newMockPlugin(fbSourceFB1, []Publication{testPub(fbSourceFB1, "cr:1", testDOI1, nil)})
+	// ⚠ THE PRIMARY IS DELIBERATELY ABSENT FROM plugins. That absence IS the test.
+	plugins := map[string]SourcePlugin{fbSourceFB1: fallback1}
+	r := fbTestRouter(t, plugins, FallbackChain{
+		Primary:  []string{fbSourcePrimary, fbSourceAlt},
+		Fallback: []string{fbSourceFB1},
+	})
+
+	result, err := r.Search(context.Background(), SearchParams{
+		Query:  "x",
+		Limit:  10,
+		Intent: fbIntentTest,
+	}, nil, nil)
+
+	require.NoError(t, err, "an unregistered primary rung must not be a hard error when a fallback exists")
+	assert.Contains(t, result.SourcesQueried, fbSourceFB1, "the fallback rung IS the search now")
+	assert.Len(t, result.Results, 1)
+	assert.True(t, result.FallbackWalked,
+		"a promoted rung must report itself; deducing it by set-difference would report false, "+
+			"telling the caller their intent's own primary providers answered when none are installed")
+	// The unregistered primaries are not reported as FAILED — nothing was attempted, and
+	// claiming a failure would send an operator hunting a provider outage that never happened.
+	assert.NotContains(t, result.SourcesFailed, fbSourcePrimary)
+	assert.NotContains(t, result.SourcesFailed, fbSourceAlt)
+}
+
+// TestSearch_PromotedRungIsNotQueriedTwice pins why the promotion CLEARS fallbackList.
+// Without that, the post-fan-out walk would re-query the very sources it just fanned out —
+// a second, billed round trip to the same provider for one call.
+func TestSearch_PromotedRungIsNotQueriedTwice(t *testing.T) {
+	t.Parallel()
+
+	var calls int
+	fallback1 := newMockPlugin(fbSourceFB1, nil)
+	fallback1.searchFunc = func(_ context.Context, _ SearchParams) (*SearchResult, error) {
+		calls++
+		// Zero hits is the case that would otherwise TRIGGER the walk.
+		return &SearchResult{Total: 0, Results: nil}, nil
+	}
+	plugins := map[string]SourcePlugin{fbSourceFB1: fallback1}
+	r := fbTestRouter(t, plugins, FallbackChain{
+		Primary:  []string{fbSourcePrimary},
+		Fallback: []string{fbSourceFB1},
+	})
+
+	_, err := r.Search(context.Background(), SearchParams{
+		Query:  "x",
+		Limit:  10,
+		Intent: fbIntentTest,
+	}, nil, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, calls, "the promoted rung is fanned out ONCE, never fanned out and then walked")
+}
+
+// TestSearch_UnregisteredPrimaryWithNoFallbackStillErrors is the control for the subject
+// test. Without it, "promotion works" would be equally satisfied by a build that had
+// simply deleted the guard — which would turn a genuine misconfiguration into a silent
+// empty answer, the failure mode this library's EU gate is careful to avoid elsewhere.
+func TestSearch_UnregisteredPrimaryWithNoFallbackStillErrors(t *testing.T) {
+	t.Parallel()
+
+	plugins := map[string]SourcePlugin{fbSourceFB1: newMockPlugin(fbSourceFB1, nil)}
+	r := fbTestRouter(t, plugins, FallbackChain{
+		Primary:  []string{fbSourcePrimary},
+		Fallback: nil, // nothing to fall back to
+	})
+
+	_, err := r.Search(context.Background(), SearchParams{
+		Query:  "x",
+		Limit:  10,
+		Intent: fbIntentTest,
+	}, nil, nil)
+
+	require.Error(t, err, "an unregistered primary with NO fallback is still a hard error")
+	assert.ErrorIs(t, err, ErrSearchFailed)
+	assert.Contains(t, err.Error(), errDetailNoValidSources)
+}
+
+// TestSearch_ExplicitUnregisteredSourcesStillError is the second control, and it guards
+// the arm that must NOT change. When the CALLER named the sources, they asked for a
+// specific set; every member being unavailable is a refusal, not an invitation to search
+// something else and present it as what they asked for.
+func TestSearch_ExplicitUnregisteredSourcesStillError(t *testing.T) {
+	t.Parallel()
+
+	plugins := map[string]SourcePlugin{fbSourceFB1: newMockPlugin(fbSourceFB1, nil)}
+	r := fbTestRouter(t, plugins, FallbackChain{
+		Primary:  []string{fbSourcePrimary},
+		Fallback: []string{fbSourceFB1}, // a fallback EXISTS and must still not be used
+	})
+
+	_, err := r.Search(context.Background(), SearchParams{
+		Query:  "x",
+		Limit:  10,
+		Intent: fbIntentTest,
+	}, []string{fbSourcePrimary}, nil)
+
+	require.Error(t, err, "an explicit source list is never laundered into a fallback search")
+	assert.ErrorIs(t, err, ErrSearchFailed)
+}
+
+// TestStream_PrimaryRungUnregisteredPromotesFallback is the twin. Stream still does not
+// WALK a chain after fan-out — that needs the primary's full result set — but the promotion
+// decision is made before any request, so the stated blocker does not cover it.
+func TestStream_PrimaryRungUnregisteredPromotesFallback(t *testing.T) {
+	t.Parallel()
+
+	fallback1 := newMockPlugin(fbSourceFB1, []Publication{testPub(fbSourceFB1, "cr:1", testDOI1, nil)})
+	plugins := map[string]SourcePlugin{fbSourceFB1: fallback1}
+	r := fbTestRouter(t, plugins, FallbackChain{
+		Primary:  []string{fbSourcePrimary},
+		Fallback: []string{fbSourceFB1},
+	})
+
+	ch, err := r.Stream(context.Background(), SearchParams{
+		Query:  "x",
+		Limit:  10,
+		Intent: fbIntentTest,
+	}, nil, nil)
+
+	require.NoError(t, err, "the streaming surface must not hard-error where Search now succeeds")
+	var got int
+	var srcs []string
+	for ev := range ch {
+		if ev.Result != nil {
+			got += len(ev.Result.Results)
+		}
+		srcs = append(srcs, ev.Source)
+	}
+	assert.Positive(t, got, "the promoted rung actually streamed its hits")
+	assert.Contains(t, srcs, fbSourceFB1)
+}

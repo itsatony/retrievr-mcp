@@ -144,6 +144,14 @@ type Router struct {
 // silently dropped by Router.filterRegistered — chains gracefully degrade
 // to whatever subset is actually enabled in the running tenant.
 //
+// ⚠ THAT SENTENCE WAS FALSE FROM THE DAY IT WAS WRITTEN UNTIL v2.24.0, AND IT IS WHY
+// NOBODY LOOKED. Search errored the moment filterRegistered emptied the PRIMARY set,
+// before the fallback rung was consulted, so a chain whose primary sources this tenant
+// had not enabled did not degrade — it failed, every time. A doc comment promising the
+// behaviour the code prevented is the most expensive kind: it makes the defect
+// unsearchable. Search/Stream now promote the fallback rung in that case (see Step 1a),
+// which is what finally makes this paragraph describe the code.
+//
 // Operators wanting custom routing supply a complete RouterFallbackConfig
 // via cfg.Fallback; resolveFallbackConfig refuses to merge partial overrides
 // to avoid surprising defaults surviving when an intent is intentionally
@@ -428,6 +436,42 @@ func (r *Router) Search(
 	default:
 		resolved = r.resolveSources(nil)
 	}
+	// Step 1a: PROMOTE THE FALLBACK RUNG WHEN THE PRIMARY RUNG IS EMPTY.
+	//
+	// ⛔ THIS GUARD USED TO ERROR HERE, AND IT MADE FOUR OF THE SIX ADVERTISED INTENTS
+	// IMPOSSIBLE ON ANY DEPLOYMENT THAT HAD NOT REGISTERED THEIR PRIMARY SOURCES. An
+	// intent resolves to (primary, fallback) and filterRegistered drops whatever this
+	// tenant did not enable; when that emptied the PRIMARY set the call died right here,
+	// before the fallback list — already computed, already in scope on the line above —
+	// was ever consulted. On atlas, which disables 31 US-tagged plugins, `quick_lookup`,
+	// `news`, `code_provenance` and `reference` therefore returned "no valid sources in
+	// request" on EVERY call, with `linkup` and `wikipedia` sitting unreachable in
+	// quick_lookup's own fallback. DefaultFallbackConfig's doc comment has promised the
+	// opposite behaviour the whole time — "chains gracefully degrade to whatever subset is
+	// actually enabled" — so this makes that sentence true rather than needing it rewritten.
+	//
+	// ⚠ PROMOTION, NOT FALL-THROUGH, AND THE DIFFERENCE IS LOAD-BEARING. Letting an empty
+	// `resolved` flow onward would meet the EU gate below, which answers an empty admitted
+	// set with a SUCCESSFUL empty result — turning "your intent's sources are not installed
+	// here" into "we searched and found nothing", two conditions demanding opposite
+	// actions. Promoting instead keeps every downstream step (gate, cache key, fan-out,
+	// audit) operating on a real source set.
+	//
+	// ⚠ fallbackList IS CLEARED ON PROMOTION so the post-fan-out walk cannot re-query the
+	// very sources it just fanned out — a second, billed round trip to the same providers.
+	fallbackPromoted := false
+	if len(resolved) == 0 && len(fallbackList) > 0 {
+		resolved, fallbackList = fallbackList, nil
+		fallbackPromoted = true
+	}
+	// ⚠ ERRORING IS STILL CORRECT FOR THE OTHER TWO ARMS, and the switch above already
+	// distinguishes them structurally — no new state is needed. When the CALLER named
+	// `sources` explicitly, fallbackList was never assigned: they asked for a specific set,
+	// every member is unavailable, and quietly searching something else would be a wrong
+	// answer presented as a right one. Same for an all-unregistered `default_sources`,
+	// which is an operator misconfiguration worth surfacing loudly and has nothing to fall
+	// back to anyway. An unmapped/typo'd intent also lands here, via resolveByIntent's
+	// nil-fallback degrade, so a bad intent cannot be laundered into a fallback search.
 	if len(resolved) == 0 {
 		return nil, fmt.Errorf("%w: %s", ErrSearchFailed, errDetailNoValidSources)
 	}
@@ -606,7 +650,12 @@ func (r *Router) Search(
 	// Track fallback-walked status for audit. The fallback block above mutates
 	// `sourcesQueried` so we deduce the flag by checking whether any non-
 	// originally-resolved source ID appeared.
-	fallbackWalked := false
+	// ⚠ A PROMOTED RUNG COUNTS AS WALKED, AND IT CANNOT BE DEDUCED THE WAY THE BLOCK BELOW
+	// DEDUCES IT. After promotion the fallback ids ARE `resolved`, so the set-difference
+	// finds nothing foreign and would report false — telling a caller their intent's own
+	// primary providers answered when in fact none of them are installed here. That is the
+	// one thing this field exists to distinguish, so it is stated rather than inferred.
+	fallbackWalked := fallbackPromoted
 	if len(fallbackList) > 0 {
 		resolvedSet := make(map[string]struct{}, len(resolved))
 		for _, id := range resolved {

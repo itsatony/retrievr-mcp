@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.24.0] - 2026-08-15
+
+Minor release. **An intent whose primary sources this tenant never registered now
+searches its fallback rung instead of failing.** No config change, no API change, no
+new dependency. (atlas DC-nx2-168 / atlas#205.)
+
+### Fixed
+
+- ⛔ **`Router.Search` errored the moment an intent's PRIMARY rung filtered to empty,
+  before the fallback list — already computed and in scope one line above — was ever
+  consulted.** An intent resolves to `(primary, fallback)` and `filterRegistered` drops
+  whatever the tenant did not enable; when that emptied the primary set the call died with
+  `no valid sources in request`. On a deployment that disables the US-tagged plugins, that
+  made **four of the six advertised intents impossible**: `quick_lookup`, `news`,
+  `code_provenance` and `reference` returned a hard error on **every** call, with `linkup`
+  and `wikipedia` sitting unreachable inside `quick_lookup`'s own fallback.
+  ⚠ **`DefaultFallbackConfig`'s doc comment has promised the opposite the whole time** —
+  *"chains gracefully degrade to whatever subset is actually enabled"* — so this release
+  makes that sentence true rather than rewriting it. A comment describing behaviour the
+  code prevents is the most expensive kind: it makes the defect unsearchable.
+- **`Router.Stream` carried the twin, and it is fixable despite the file's stated
+  blocker.** The header explains that streaming cannot WALK a fallback because it "can't
+  make that decision incrementally without lookahead" — true, and irrelevant when the
+  primary rung is empty *before any request is made*. Stream now promotes the fallback
+  rung as its fan-out set; it still does not walk one after fan-out.
+
+### Notes on the shape of the fix
+
+- ⚠ **It is PROMOTION, not fall-through.** Letting an empty `resolved` flow onward would
+  meet the EU gate, which answers an empty admitted set with a **successful empty result** —
+  turning *"your intent's sources are not installed here"* into *"we searched and found
+  nothing"*, two conditions demanding opposite actions.
+- ⚠ **The fallback list is CLEARED on promotion**, so the post-fan-out walk cannot re-query
+  the sources it just fanned out — a second, billed round trip for one call.
+- ⚠ **`FallbackWalked` is STATED, not deduced, on a promoted rung.** The existing
+  set-difference deduction would report `false` after promotion (the fallback ids *are*
+  `resolved`), telling a caller their intent's primary providers answered when none of them
+  are installed — the one thing that field exists to distinguish.
+- ✅ **Erroring stays correct for the other arms and both are pinned by controls**: an
+  explicit caller-supplied `sources` list is never laundered into a fallback search, and an
+  all-unregistered primary with **no** fallback is still a hard error rather than a silent
+  empty answer. A typo'd intent also still errors, via `resolveByIntent`'s nil-fallback
+  degrade.
+- ⛔ **Every pre-existing fallback test stayed green against this bug, and that is why it
+  shipped.** All of them register the primary plugin, so `filterRegistered` never returned
+  empty on the intent path and the guard was never reached: the suite could not distinguish
+  *"the primary is registered and FAILED"* (covered, 3 tests) from *"the primary was NEVER
+  REGISTERED"*. The new tests omit the primary ids from `plugins` entirely, and the fix was
+  revert-checked — 3 of them go red against the old code while the existing suite stays
+  green.
+
 ## [2.23.0] - 2026-07-19
 
 Minor release. **In-memory bootstrap for embedding consumers.** Adds a

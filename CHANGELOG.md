@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.25.0] - 2026-08-16
+
+### Added — `SearchParams.PerSourceLimit`: a limit each source gets, not one they compete for
+
+`Limit` has always been a TOTAL, applied to a list that arrives grouped by source: the
+fan-out collects per source and step 5 concatenates in alphabetical source order, so a
+`Limit=8` search across `linkup` + `arxiv` + others returned **eight arxiv rows and
+nothing else**. The caller's general web search was fetched, paid for, and then dropped by
+the truncate. Reported downstream as atlas#210.
+
+⚠ **SORTING ALONE IS NOT THE FIX, AND THAT IS THE REUSABLE PART.** `SortRelevance` already
+round-robins across sources (`roundRobinInterleave`), so it repairs the ORDER — but the
+total is still eight, and no ordering can give a caller eight results from each of four
+sources out of an eight-result budget. Order and quota are different decisions.
+
+⚠ **AND THE DEFAULT ORDER MADE THE DEFECT INVISIBLE TO A READING OF THE SORT CODE.**
+`sortResults` falls through to `return results` for any unrecognised order, and the zero
+value of `SortOrder` is `""` — so a caller that never set `Sort` got the alphabetical
+concatenation with nothing in the sort layer to point at.
+
+With `PerSourceLimit: true`, step 9 keeps up to `Limit` publications **from each source
+that answered** (`truncatePerSource`). The result set therefore grows with the source
+count — that is the contract, not a leak, and a caller paying per result should size
+`Limit` accordingly. Pairing it with `Sort: SortRelevance` is recommended: the kept set
+stays interleaved, so a downstream consumer trimming from the tail trims fairly across
+sources rather than deleting the last source outright.
+
+- `HasMore` reports whether anything was actually dropped — it is **false** when no source
+  filled its quota. A flag that claimed an unread tail whenever it merely ran would make a
+  paging caller loop forever.
+- A non-positive `Limit` keeps everything. "No limit" must not collapse into "no results".
+- Default behaviour is **unchanged**: the flag is opt-in and absent from every existing
+  caller.
+
+✅ Revert-checked: ignoring the flag (shipping it inert — this repo's first-named failure
+pattern) reds `TestRouterSearch_PerSourceLimit_KeepsTheQuotaFromEverySource` alone. The
+paired **control**, `TestRouterSearch_TotalLimit_StarvesEverySourceButTheFirst`, pins the
+old behaviour as the documented default so the new assertion cannot pass vacuously.
+
 ## [2.24.0] - 2026-08-15
 
 Minor release. **An intent whose primary sources this tenant never registered now

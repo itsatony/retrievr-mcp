@@ -1375,3 +1375,99 @@ func TestRouterSearchPublishedWindowPostFilter(t *testing.T) {
 	require.Len(t, strict.Results, 1)
 	assert.Equal(t, "hn:2", strict.Results[0].ID)
 }
+
+// ---------------------------------------------------------------------------
+// PerSourceLimit (atlas#210)
+// ---------------------------------------------------------------------------
+
+// perSourcePlugins builds two mock sources that each return `n` publications, so
+// a total-limit truncate and a per-source truncate produce provably different
+// result sets. `arxiv` sorts first alphabetically, which is exactly why it used
+// to win the whole budget.
+func perSourcePlugins(n int) map[string]SourcePlugin {
+	mk := func(source string) []Publication {
+		pubs := make([]Publication, 0, n)
+		for i := range n {
+			pubs = append(pubs, testPub(source, fmt.Sprintf("%s:%d", source, i), "", nil))
+		}
+		return pubs
+	}
+	return map[string]SourcePlugin{
+		mockSourceA: newMockPlugin(mockSourceA, mk(mockSourceA)),
+		mockSourceC: newMockPlugin(mockSourceC, mk(mockSourceC)),
+	}
+}
+
+func sourceCounts(pubs []Publication) map[string]int {
+	counts := make(map[string]int, 4)
+	for _, p := range pubs {
+		counts[p.Source]++
+	}
+	return counts
+}
+
+// ⛔ THE CONTROL, AND IT IS THE WHOLE REASON THE FLAG EXISTS. It pins the DEFECT
+// as the documented default behaviour: with a total limit, the alphabetically
+// first source takes every slot and the caller's other sources are invisible.
+// Without this test, the per-source assertion below would also pass against a
+// build that simply returned more results for unrelated reasons.
+func TestRouterSearch_TotalLimit_StarvesEverySourceButTheFirst(t *testing.T) {
+	t.Parallel()
+
+	r := testRouter(perSourcePlugins(4))
+	res, err := r.Search(context.Background(), SearchParams{
+		Query: "test", Limit: 4, Sort: SortRelevance,
+	}, []string{mockSourceA, mockSourceC}, nil)
+
+	require.NoError(t, err)
+	require.Len(t, res.Results, 4)
+	counts := sourceCounts(res.Results)
+	// Round-robin ordering alone spreads the four slots — which is why "just sort
+	// it" was rejected as the fix: the TOTAL is still four, so asking for eight
+	// results across two sources cannot give eight from each.
+	assert.Equal(t, 4, counts[mockSourceA]+counts[mockSourceC])
+	assert.True(t, res.HasMore, "results were dropped, and the caller must be told")
+}
+
+func TestRouterSearch_PerSourceLimit_KeepsTheQuotaFromEverySource(t *testing.T) {
+	t.Parallel()
+
+	r := testRouter(perSourcePlugins(4))
+	res, err := r.Search(context.Background(), SearchParams{
+		Query: "test", Limit: 3, Sort: SortRelevance, PerSourceLimit: true,
+	}, []string{mockSourceA, mockSourceC}, nil)
+
+	require.NoError(t, err)
+	counts := sourceCounts(res.Results)
+	assert.Equal(t, 3, counts[mockSourceA], "arxiv keeps its own quota, not the whole budget")
+	assert.Equal(t, 3, counts[mockSourceC], "and the second source keeps an equal one")
+	assert.Len(t, res.Results, 6, "the result set grows with the source count — that is the contract")
+	assert.True(t, res.HasMore, "the fourth publication of each source was dropped")
+}
+
+func TestRouterSearch_PerSourceLimit_KeepsEverythingWhenNoSourceFillsItsQuota(t *testing.T) {
+	t.Parallel()
+
+	// ⚠ `HasMore` MUST BE FALSE HERE. A per-source truncate that reported "more
+	// available" whenever it ran at all would make the flag permanently claim an
+	// unread tail, and a caller paging on it would loop.
+	r := testRouter(perSourcePlugins(2))
+	res, err := r.Search(context.Background(), SearchParams{
+		Query: "test", Limit: 5, Sort: SortRelevance, PerSourceLimit: true,
+	}, []string{mockSourceA, mockSourceC}, nil)
+
+	require.NoError(t, err)
+	assert.Len(t, res.Results, 4)
+	assert.False(t, res.HasMore)
+}
+
+func TestTruncatePerSource_NonPositiveLimitKeepsEverything(t *testing.T) {
+	t.Parallel()
+
+	// A zero limit must not read as "keep nothing" — the silent-empty shape. The
+	// router's own callers already treat a zero limit as unset.
+	pubs := []Publication{testPub(mockSourceA, "a:1", "", nil), testPub(mockSourceC, "c:1", "", nil)}
+	got, dropped := truncatePerSource(pubs, 0)
+	assert.Len(t, got, 2)
+	assert.False(t, dropped)
+}

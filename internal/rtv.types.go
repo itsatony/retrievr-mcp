@@ -534,6 +534,23 @@ type SearchParams struct {
 	// DefaultSources (legacy behavior). When set, an explicit Sources
 	// argument to Router.Search still overrides intent-based resolution.
 	Intent Intent `json:"intent,omitempty"`
+	// PerSourceLimit reinterprets Limit as a per-source quota rather than a
+	// total: the merged result keeps up to Limit publications FROM EACH source
+	// that answered, instead of the first Limit publications overall.
+	//
+	// ⚠ IT EXISTS BECAUSE THE TOTAL-LIMIT DEFAULT SILENTLY HANDS THE WHOLE
+	// BUDGET TO ONE SOURCE. Fan-out results are concatenated in alphabetical
+	// source order before the truncate, so a multi-source search with Limit=8
+	// returned eight `arxiv` rows and nothing from `linkup` — the general web
+	// search the caller most likely wanted (atlas#210). Sorting alone does not
+	// fix it: any total limit under (sources x useful results) starves the tail
+	// of whatever order is chosen.
+	//
+	// ⚠ THE RESULT SET GROWS WITH THE SOURCE COUNT, WHICH IS THE POINT AND ALSO
+	// THE COST. A caller that pays per token for what it receives should size
+	// Limit accordingly; this flag makes the fan-out visible instead of hiding
+	// it behind a truncate.
+	PerSourceLimit bool `json:"per_source_limit,omitempty"`
 }
 
 // SearchFilters contains optional filters to narrow search results.

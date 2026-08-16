@@ -641,8 +641,17 @@ func (r *Router) Search(
 	allResults = sortResults(allResults, params.Sort)
 
 	// Step 9: Truncate.
+	//
+	// ⚠ TWO MEANINGS OF `Limit`, AND THE DEFAULT ONE STARVES EVERY SOURCE BUT THE
+	// FIRST. A total limit is applied to a list that arrives grouped by source (the
+	// fan-out above collects in alphabetical source order), so before
+	// PerSourceLimit a Limit=8 search across linkup+arxiv+... returned eight arxiv
+	// rows and nothing else — the caller's general web search never reached them
+	// (atlas#210). Sorting alone cannot repair it: the tail of ANY order is dropped.
 	hasMore := false
-	if len(allResults) > params.Limit {
+	if params.PerSourceLimit {
+		allResults, hasMore = truncatePerSource(allResults, params.Limit)
+	} else if len(allResults) > params.Limit {
 		allResults = allResults[:params.Limit]
 		hasMore = true
 	}
@@ -1381,6 +1390,32 @@ func sortResults(results []Publication, order SortOrder) []Publication {
 		})
 	}
 	return results
+}
+
+// truncatePerSource keeps at most `limit` publications from each source,
+// preserving the order of the list it is given — so when the caller has also
+// asked for a relevance (round-robin) sort, the kept set stays interleaved and a
+// downstream consumer that trims from the tail trims fairly across sources.
+//
+// Returns the kept slice and whether anything was dropped. A non-positive limit
+// keeps everything: "no limit" must not collapse to "no results", which is the
+// silent-empty shape this repo has been bitten by before.
+func truncatePerSource(results []Publication, limit int) ([]Publication, bool) {
+	if limit <= 0 {
+		return results, false
+	}
+	kept := make([]Publication, 0, len(results))
+	seen := make(map[string]int, 8)
+	dropped := false
+	for _, pub := range results {
+		if seen[pub.Source] >= limit {
+			dropped = true
+			continue
+		}
+		seen[pub.Source]++
+		kept = append(kept, pub)
+	}
+	return kept, dropped
 }
 
 // roundRobinInterleave reorders results by interleaving them round-robin

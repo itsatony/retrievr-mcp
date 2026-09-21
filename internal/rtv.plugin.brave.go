@@ -486,7 +486,7 @@ func braveImageFormatToMime(format string) string {
 
 // Get is not supported — Brave Search has no per-result-ID retrieval API.
 func (p *BravePlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: brave has no per-result Get API", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("brave has no per-result Get API")
 }
 
 // ---------------------------------------------------------------------------

@@ -235,7 +235,7 @@ func (p *GooglePatentsPlugin) Search(ctx context.Context, params SearchParams) (
 // add structured value beyond the search snippet. A future cycle could
 // route Get through the USPTO PEDS or PatentsView APIs.
 func (p *GooglePatentsPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: googlepatents Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("googlepatents Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

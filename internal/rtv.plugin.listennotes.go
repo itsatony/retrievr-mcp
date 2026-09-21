@@ -227,7 +227,7 @@ func (p *ListenNotesPlugin) Search(ctx context.Context, params SearchParams) (*S
 // Get is not wired in cycle 2 — single-episode lookup uses
 // /api/v2/episodes/<id> and isn't on the cycle's critical path.
 func (p *ListenNotesPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: listennotes Get is not wired in cycle 2", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("listennotes Get is not wired in cycle 2")
 }
 
 // ---------------------------------------------------------------------------

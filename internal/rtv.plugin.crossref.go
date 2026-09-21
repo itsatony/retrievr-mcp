@@ -255,6 +255,7 @@ func (p *CrossRefPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features CrossRef supports.
 func (p *CrossRefPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

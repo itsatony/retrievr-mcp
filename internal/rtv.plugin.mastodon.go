@@ -282,7 +282,7 @@ func (p *MastodonPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 // Get is not wired in cycle 5. Mastodon's /api/v1/statuses/:id covers it
 // but the ID-routing path is out of scope for v2.6.0.
 func (p *MastodonPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: mastodon Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("mastodon Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

@@ -236,7 +236,7 @@ func (p *HEREPlugin) Search(ctx context.Context, params SearchParams) (*SearchRe
 
 // Get is not wired in cycle 1.
 func (p *HEREPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: here Get is not wired in cycle 1", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("here Get is not wired in cycle 1")
 }
 
 // ---------------------------------------------------------------------------

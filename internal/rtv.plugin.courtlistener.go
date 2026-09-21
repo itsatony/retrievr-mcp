@@ -219,7 +219,7 @@ func (p *CourtListenerPlugin) Search(ctx context.Context, params SearchParams) (
 // Get is not wired in cycle 5 — individual opinion fetch via /opinions/{id}/
 // is reasonable but not on the cycle's critical path.
 func (p *CourtListenerPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: courtlistener Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("courtlistener Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

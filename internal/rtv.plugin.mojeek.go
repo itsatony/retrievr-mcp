@@ -222,7 +222,7 @@ func (p *MojeekPlugin) Search(ctx context.Context, params SearchParams) (*Search
 
 // Get is not wired in cycle 4.
 func (p *MojeekPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: mojeek Get is not wired in cycle 4", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("mojeek Get is not wired in cycle 4")
 }
 
 // ---------------------------------------------------------------------------

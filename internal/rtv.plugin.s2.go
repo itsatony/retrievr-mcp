@@ -219,6 +219,7 @@ func (p *S2Plugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features S2 supports.
 func (p *S2Plugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        true,
 		SupportsDateFilter:       true,

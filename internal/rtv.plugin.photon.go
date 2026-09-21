@@ -244,7 +244,7 @@ func (p *PhotonPlugin) Search(ctx context.Context, params SearchParams) (*Search
 // search endpoint covers the same surface for any known place name.
 // Callers wanting OSM-ID resolution should consult Nominatim's /lookup.
 func (p *PhotonPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: photon has no Get; use Search with the place name", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("photon has no Get; use Search with the place name")
 }
 
 // ---------------------------------------------------------------------------

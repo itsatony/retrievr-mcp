@@ -280,7 +280,7 @@ func (p *StackExchangePlugin) Search(ctx context.Context, params SearchParams) (
 // Get is not wired in cycle 1. The /questions/{ids} endpoint can fetch a
 // single question by ID; deferred to a follow-on cycle if signal warrants.
 func (p *StackExchangePlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: stackexchange Get is not wired in cycle 1", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("stackexchange Get is not wired in cycle 1")
 }
 
 // ---------------------------------------------------------------------------

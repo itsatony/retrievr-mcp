@@ -244,7 +244,7 @@ func (p *WolframAlphaPlugin) Search(ctx context.Context, params SearchParams) (*
 
 // Get is not wired in cycle 5.
 func (p *WolframAlphaPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: wolframalpha Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("wolframalpha Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

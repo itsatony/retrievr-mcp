@@ -200,7 +200,7 @@ func (p *PkgGoDevPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 // HTML-only and adds an additional fragility surface we don't need for
 // the cycle's gate. deps.dev would be the right Get backend; deferred.
 func (p *PkgGoDevPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: pkggodev Get is not wired in cycle 4", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("pkggodev Get is not wired in cycle 4")
 }
 
 // ---------------------------------------------------------------------------

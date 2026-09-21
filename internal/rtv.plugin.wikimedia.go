@@ -251,7 +251,7 @@ func (p *WikimediaPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 // (action=query&pageids=...) covers the same surface, but pre-fixed-ID
 // resolution would require a separate codepath; out of scope for v2.5.0.
 func (p *WikimediaPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: wikimedia Get is not wired in cycle 4 (use Search)", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("wikimedia Get is not wired in cycle 4 (use Search)")
 }
 
 // ---------------------------------------------------------------------------

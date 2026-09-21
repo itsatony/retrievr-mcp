@@ -282,7 +282,7 @@ func (p *OpenAIREPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 // identifiers (e.g. "openaire____::abc123") and DOI-based fetch lands
 // via Crossref/Zenodo on the same DOI.
 func (p *OpenAIREPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: openaire Get is not wired in cycle 2", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("openaire Get is not wired in cycle 2")
 }
 
 // ---------------------------------------------------------------------------

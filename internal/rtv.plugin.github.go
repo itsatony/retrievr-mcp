@@ -133,6 +133,7 @@ func (p *GitHubPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports GitHub's filtering + sorting support.
 func (p *GitHubPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

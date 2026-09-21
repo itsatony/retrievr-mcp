@@ -245,6 +245,7 @@ func (p *YouTubePlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports YouTube-specific filtering + sorting support.
 func (p *YouTubePlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true, // publishedAfter / publishedBefore

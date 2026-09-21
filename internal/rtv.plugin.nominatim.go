@@ -261,7 +261,7 @@ func (p *NominatimPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 // osm_type+osm_id pair, but the plumbing (pre-fixed ID parsing for
 // composite "type:id" rawIDs) is out of scope for v2.4.0.
 func (p *NominatimPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: nominatim Get is not wired in cycle 3 (use Search)", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("nominatim Get is not wired in cycle 3 (use Search)")
 }
 
 // ---------------------------------------------------------------------------

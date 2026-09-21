@@ -306,7 +306,7 @@ func (p *ExaPlugin) Search(ctx context.Context, params SearchParams) (*SearchRes
 // and rtv_get on a web result isn't a frequent caller pattern. Cycle-3
 // can add this via /contents?ids=<id>.
 func (p *ExaPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: exa does not support direct ID retrieval (cycle-2 limitation)", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("exa does not support direct ID retrieval (cycle-2 limitation)")
 }
 
 // ---------------------------------------------------------------------------

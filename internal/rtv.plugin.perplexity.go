@@ -249,7 +249,7 @@ func (p *PerplexityPlugin) Search(ctx context.Context, params SearchParams) (*Se
 
 // Get is not supported — Perplexity has no per-result-ID retrieval API.
 func (p *PerplexityPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: perplexity has no per-result Get API", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("perplexity has no per-result Get API")
 }
 
 // ---------------------------------------------------------------------------

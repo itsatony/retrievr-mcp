@@ -235,7 +235,7 @@ func (p *BlueskyPlugin) Search(ctx context.Context, params SearchParams) (*Searc
 // Get is not wired in cycle 5. Bluesky's app.bsky.feed.getPosts endpoint
 // accepts URIs but the ID-routing path is out of scope for v2.6.0.
 func (p *BlueskyPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: bluesky Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("bluesky Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

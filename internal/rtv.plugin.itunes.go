@@ -221,7 +221,7 @@ func (p *ITunesPlugin) Search(ctx context.Context, params SearchParams) (*Search
 
 // Get is not wired in cycle 2.
 func (p *ITunesPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: itunes Get is not wired in cycle 2", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("itunes Get is not wired in cycle 2")
 }
 
 // ---------------------------------------------------------------------------

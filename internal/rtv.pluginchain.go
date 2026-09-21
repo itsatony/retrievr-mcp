@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"math/rand/v2"
 	"time"
@@ -237,16 +236,19 @@ func computeBackoff(cfg RetryConfig, attempt int) time.Duration {
 }
 
 // isTransientError is the default retry predicate. A nil error is never
-// retried (caller already returned). ctx.Cancelled / DeadlineExceeded are
-// not retried — they reflect caller intent. Everything else is retried;
-// cycle 2 will narrow this once we wrap upstream HTTP errors with typed
-// RetryableError variants.
+// retried (caller already returned). Anything IsPermanentError classifies —
+// ctx.Canceled / DeadlineExceeded, which reflect caller intent, plus the
+// closed permanentSentinels set in rtv.errors.permanent.go — is refused
+// immediately. Everything else is retried, because an unrecognised error is
+// more likely transport than contract.
+//
+// Before v2.26.0 this returned true for every non-context error, so
+// ErrFormatUnsupported — a refusal that can never become a success — cost
+// three attempts and two backoff sleeps on every rtv_get against a web
+// source. See TestWithRetry_PermanentRefusalIsAttemptedExactlyOnce.
 func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return false
-	}
-	return true
+	return !IsPermanentError(err)
 }

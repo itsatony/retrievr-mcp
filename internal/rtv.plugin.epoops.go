@@ -275,7 +275,7 @@ func (p *EPOOPSPlugin) Search(ctx context.Context, params SearchParams) (*Search
 // /rest-services/published-data/publication/docdb/<id>/biblio is a
 // follow-on cycle.
 func (p *EPOOPSPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: epoops Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("epoops Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

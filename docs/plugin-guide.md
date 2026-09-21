@@ -240,6 +240,13 @@ func (p *MySourcePlugin) Capabilities() SourceCapabilities {
         SupportsSortCitations:    false,
         SupportsOpenAccessFilter: false,
         SupportsPagination:       true,
+        // SupportsGet is DERIVED, not a preference: set it true only if
+        // Get() really retrieves a record by id. If Get is a stub, leave it
+        // at the zero value (false) and refuse with
+        // NewGetUnsupportedError("<source> has no per-result Get API").
+        // TestSupportsGetMatchesEveryPluginsGetImplementation parses your
+        // Get body and fails on any disagreement, in either direction.
+        SupportsGet:              true,
         MaxResultsPerQuery:       mySourceMaxResultsPerPage,
         CategoriesHint:           mySourceCategoriesHint,
         NativeFormat:             FormatJSON,

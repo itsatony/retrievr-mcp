@@ -247,7 +247,7 @@ func (p *NewsAPIPlugin) Search(ctx context.Context, params SearchParams) (*Searc
 
 // Get is not wired in cycle 6.
 func (p *NewsAPIPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: newsapi Get is not wired in cycle 6", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("newsapi Get is not wired in cycle 6")
 }
 
 // ---------------------------------------------------------------------------

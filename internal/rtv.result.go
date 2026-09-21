@@ -75,8 +75,14 @@ type Result struct {
 	AlsoFoundIn []string `json:"also_found_in,omitempty"`
 
 	// Core content.
-	Title    string `json:"title"`
-	URL      string `json:"url,omitempty"`
+	Title string `json:"title"`
+	// URL is emitted unconditionally (v2.26.0, issue #1). For every source
+	// with SupportsGet=false — all web and news providers — the url IS the
+	// way to reach the content: the result id is a truncated sha256 of this
+	// very URL and cannot be turned back into it. A key that disappears when
+	// empty makes "this source gave us no link" indistinguishable from a
+	// schema mismatch on the caller's side.
+	URL      string `json:"url"`
 	Snippet  string `json:"snippet,omitempty"`
 	Abstract string `json:"abstract,omitempty"`
 	Domain   string `json:"domain,omitempty"`

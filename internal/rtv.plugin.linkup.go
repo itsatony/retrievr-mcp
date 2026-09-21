@@ -251,7 +251,7 @@ func (p *LinkupPlugin) Search(ctx context.Context, params SearchParams) (*Search
 
 // Get is not supported — Linkup has no per-result-ID retrieval API.
 func (p *LinkupPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: linkup has no per-result Get API", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("linkup has no per-result Get API")
 }
 
 // ---------------------------------------------------------------------------

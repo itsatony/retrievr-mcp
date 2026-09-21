@@ -223,7 +223,38 @@ type Region, DPAStatus, ResidencyTag, FallbackChain, ...
 
 // Sentinel errors
 var ErrEUModeProviderConflict, ErrCompatV1Sunset, ErrFallbackExhausted, ...
+var ErrGetUnsupported  // v2.26.0 — Get refused: this source has no get-by-id
 ```
+
+### `Get` is not available on every source (v2.26.0)
+
+**21 of the 61 plugins have a per-record retrieval API; 40 do not.** Every web
+and news provider is search-only — its result id is a truncated `sha256` of the
+page URL, so there is no record to address and nothing to reverse.
+
+```go
+pub, err := client.Get(ctx, "linkup:1f3a…", nil, retrievr.FormatNative)
+if errors.Is(err, retrievr.ErrGetUnsupported) {
+    // Refused BEFORE dispatch: no upstream call, no retry, no rate-limit
+    // token spent. Reach the content through the search result's URL with
+    // your own page-fetching tool — retrievr deliberately does not fetch
+    // pages.
+}
+```
+
+Ask up front instead of paying for the refusal:
+
+```go
+for _, s := range client.ListSources(ctx) {
+    if !s.SupportsGet {
+        // rtv_get can never succeed here; Result.URL is the route.
+    }
+}
+```
+
+`Result.URL` is emitted unconditionally on the v2 wire for exactly this reason.
+`errors.Is(err, ErrGetUnsupported)` also matches the historical internal
+`ErrFormatUnsupported`, so the addition is backward compatible.
 
 ## Versioning + stability
 

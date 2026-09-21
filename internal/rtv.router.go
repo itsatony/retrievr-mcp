@@ -32,7 +32,10 @@ const (
 	errDetailEmptyID          = "empty id in %q"
 	errDetailUnknownSource    = "unknown source %q"
 	errDetailAllSourcesFailed = "queried %d sources"
-	errDetailNoValidSources   = "no valid sources in request"
+	// errDetailGetUnsupported names the source AND the remedy: the caller
+	// already holds the url on the search result it got this id from.
+	errDetailGetUnsupported = "%s is search-only and has no per-record retrieval API — use the search result's `url` field to reach the content"
+	errDetailNoValidSources = "no valid sources in request"
 )
 
 // ---------------------------------------------------------------------------
@@ -971,6 +974,18 @@ func (r *Router) Get(
 		return nil, fmt.Errorf("%w: %q", ErrSourceNotFound, sourceID)
 	}
 
+	// Step 2.5: Refuse BEFORE dispatch when the source has no get-by-id
+	// (v2.26.0, issue #1). Every web and news provider mints its ids from a
+	// truncated sha256 of the result URL, so there is nothing to address —
+	// and letting the call reach the plugin spent a rate-limit token and,
+	// until this release, three retry attempts on a refusal that could never
+	// become a success. The caller reaches the content through the result's
+	// `url` field; SourceInfo.supports_get says so up front.
+	if !plugin.Capabilities().SupportsGet {
+		r.metrics.RecordGet(sourceID, metricStatusError)
+		return nil, NewGetUnsupportedError(fmt.Sprintf(errDetailGetUnsupported, sourceID))
+	}
+
 	// Step 3: Request ID + logging.
 	requestID := GenerateRequestID()
 	ctx = WithRequestID(ctx, requestID)
@@ -1104,6 +1119,9 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 			RequiresKey: requiresKey,
 
 			SupportsPublishedAfterFilter: caps.SupportsPublishedAfterFilter,
+
+			// v2.26.0 — whether rtv_get can ever succeed here.
+			SupportsGet: caps.SupportsGet,
 		})
 	}
 

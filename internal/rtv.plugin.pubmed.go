@@ -384,6 +384,7 @@ func (p *PubMedPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features PubMed supports.
 func (p *PubMedPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         true,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

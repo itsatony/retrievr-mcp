@@ -232,7 +232,7 @@ func (p *GDELTPlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 // URLs; full-text retrieval is the consumer's responsibility (use the
 // firecrawl enrichment hook or fetch the URL directly).
 func (p *GDELTPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: gdelt Get is not wired in cycle 6", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("gdelt Get is not wired in cycle 6")
 }
 
 // ---------------------------------------------------------------------------

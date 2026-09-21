@@ -286,6 +286,7 @@ func (p *EuropePMCPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features Europe PMC supports.
 func (p *EuropePMCPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         true,
 		SupportsCitations:        true,
 		SupportsDateFilter:       true,

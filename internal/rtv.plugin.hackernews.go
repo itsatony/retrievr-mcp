@@ -237,7 +237,7 @@ func (p *HackerNewsPlugin) Search(ctx context.Context, params SearchParams) (*Se
 
 // Get is not wired in cycle 1.
 func (p *HackerNewsPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: hackernews Get is not wired in cycle 1", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("hackernews Get is not wired in cycle 1")
 }
 
 // ---------------------------------------------------------------------------

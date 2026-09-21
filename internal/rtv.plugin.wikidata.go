@@ -250,7 +250,7 @@ func (p *WikidataPlugin) Search(ctx context.Context, params SearchParams) (*Sear
 // Get is not wired in cycle 3 — QIDs can be fetched via wbgetentities in
 // a future cycle when the SPARQL path lands.
 func (p *WikidataPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: wikidata Get is not wired in cycle 3", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("wikidata Get is not wired in cycle 3")
 }
 
 // ---------------------------------------------------------------------------

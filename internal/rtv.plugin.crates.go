@@ -140,6 +140,7 @@ func (p *CratesPlugin) AvailableFormats() []ContentFormat { return []ContentForm
 // Capabilities reports crates.io's filter/sort surface.
 func (p *CratesPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

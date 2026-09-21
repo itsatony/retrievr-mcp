@@ -5,6 +5,136 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.26.0] - 2026-09-22
+
+Minor release. **`rtv_get` could never succeed against 40 of the 61 sources, the
+catalog did not say so, and the refusal was retried three times before it
+surfaced.** Reported from atlas/nx2 as [#1](https://github.com/itsatony/retrievr-mcp/issues/1),
+where LinkUp is the only enabled web source and every `rtv_get` therefore failed
+— permanently, and only after ~1s of backoff.
+
+### Fixed — a permanent refusal is no longer retried
+
+⛔ **`isTransientError` returned `true` for every non-context error, and
+`Router.Get` passed `nil` for `shouldRetry`.** So `ErrFormatUnsupported` — an
+error whose entire meaning is *"this can never work"* — cost
+`retryDefaultMaxAttempts = 3` attempts and two 250 ms-base backoff sleeps
+before reaching the caller.
+
+The predicate now consults `IsPermanentError`, backed by a **closed, commented
+set** in `internal/rtv.errors.permanent.go`. The rule applied to build that set,
+which is the reusable part: **an error is permanent when it is a statement about
+the REQUEST or about the SOURCE'S CONTRACT; it stays transient when it is a
+statement about the upstream's ANSWER or about the TRANSPORT.**
+
+Classified **permanent**: `ErrGetUnsupported`, `ErrFormatUnsupported`,
+`ErrBibTeXUnsupported`, `ErrFullTextUnavailable` (contract) ·
+`ErrSourceNotFound`, `ErrSourceDisabled`, `ErrEUModeProviderConflict`,
+`ErrCompatV1Sunset` (routing/config) · `ErrCredentialRequired`,
+`ErrCredentialInvalid` (absent stays absent; a key rejected with 401/403 is
+re-sent byte-identically) · `ErrInvalidID`, `ErrInvalidInput`,
+`ErrInvalidDateFormat`, `ErrInvalidPublishedAt`, `ErrInvalidLanguageTag`,
+`ErrInvalidDomainList`, `ErrTooManyChannels`, `ErrTooManySubreddits`,
+`ErrBiorxivDateRequired`, and the nine per-plugin `Err*EmptyQuery` sentinels
+(request validation).
+
+⚠ **Deliberately left transient**, because each is an answer rather than a
+contract: every `Err*NotFound` (several are derived from an empty result list,
+which a degraded upstream also produces), every `Err*HTTPRequest`, every
+`Err*JSONParse` / `Err*XMLParse`, `ErrRateLimitExceeded` (429 is exactly what
+backoff is for) and `ErrUpstreamTimeout`. ⛔ **`ErrSearchFailed` and
+`ErrGetFailed` are absent on purpose** — they are *wrappers* plugins put around
+transport failures, so classifying either permanent would disable retry across
+the whole tree.
+
+✅ Reproduced before it was fixed:
+`TestWithRetry_PermanentRefusalIsAttemptedExactlyOnce` measured **3 attempts**
+for all nine permanent shapes on the unfixed tree. Its paired **control**,
+`TestWithRetry_TransientErrorStillBurnsEveryAttempt`, pins that a transient
+error still burns all three — without it the new assertion would also be
+satisfied by disabling retry altogether. The assertion is an **attempt
+counter**, not the returned error: a test reading only the error would have
+been green before and after.
+
+### Added — `SourceCapabilities.SupportsGet`, derived rather than hand-kept
+
+`SupportsGet bool` joins `SourceCapabilities` and is mirrored on `SourceInfo`
+(`"supports_get"`, emitted unconditionally — *absent* and *false* must not be
+the same thing on a flag a caller routes on). `Router.Get` now refuses
+**before dispatch** when it is false, so the call costs no upstream request, no
+rate-limit token and no retry.
+
+**Measured split: 21 of 61 plugins have a real `Get`; 40 are stubs.** (The
+issue estimated "roughly 50 of the 61" — the true figure is 40.) The 21:
+`ads`, `arxiv`, `biorxiv`, `core`, `crates`, `crossref`, `datacite`, `dblp`,
+`europmc`, `github`, `huggingface`, `npm`, `openalex`, `pubmed`, `pypi`, `s2`,
+`unpaywall`, `wayback`, `wikipedia`, `youtube`, `zenodo`.
+
+⛔ **A hand-maintained list of 61 booleans would be the same defect one level
+up**, so `TestSupportsGetMatchesEveryPluginsGetImplementation` **derives** the
+truth: it AST-parses every `internal/rtv.plugin.*.go`, classifies each `Get` as
+a stub (exactly one `return` handing back a get-unsupported refusal) or real,
+maps receiver type → registered plugin through `PluginFactories()` + reflection,
+and fails on any disagreement **in either direction**. It also carries a
+non-vacuity floor (a derived set that resolves to zero passes vacuously), a
+both-directions-non-degenerate check, and a gate that the number stated in
+`ToolDescGet` — the sentence the *model* reads — is the derived one.
+
+✅ Mutation-verified both ways: declaring `SupportsGet: true` on `linkup` (a
+stub) and deleting it from `arxiv` (a real `Get`) each red the test; the
+unmutated tree is green.
+
+⚠ The classifier is deliberately **narrow**: an unrecognised body shape is
+reported as *real*. That is the safe direction — a plugin declaring `false`
+with an unusual stub shape fails loudly instead of passing quietly.
+
+### Added — `ErrGetUnsupported`, exported
+
+`retrievr.ErrGetUnsupported` lets an embedding caller **classify** the refusal
+instead of matching a string. go-vaicap's retrievr provider currently appends
+*"If the search result carried a `url`, fetch that page with
+`getmd_convert_url` instead"* **unconditionally**, and its own comment says why:
+the sentinel lived in an internal package and was unreachable. It can now be
+conditional.
+
+The refusal is a typed `*GetUnsupportedError` whose `Is` answers to **both**
+`ErrGetUnsupported` and the historical `ErrFormatUnsupported`, so the change is
+purely additive for anything already matching the old one — including the ~49
+test files in this tree, none of which needed an edit.
+
+### Changed — `url` is a first-class field on every result
+
+`Result.URL` lost its `omitempty`. For the 40 search-only sources the URL **is**
+the route to the content: the result id is `<source>:sha256(url)[:16]`,
+one-way by construction, and nothing inside retrievr can turn it back into a
+page. A key that disappears when empty makes *"this source returned no link"*
+indistinguishable from a schema mismatch on the caller's side.
+
+⭐ **Verified the issue's premise before taking its option (b), and the premise
+did not hold.** The issue asked whether the hash exists for dedupe or audit
+hygiene. It does **not**: `dedup()` keys web/`any` results on DOI and ArXiv ID
+(never on `Result.ID`), and `hashURL`'s own comment says it reuses the audit
+helper *"for consistency"* — the full URL is emitted beside it anyway, so no
+privacy property rests on it. The hash is nothing but an id-minting
+convenience. Option (b) is still the right call: opaque ids are the smaller
+API change, and `base64url(url)` ids would have changed every web result id on
+the wire.
+
+⛔ **Page fetching is still NOT in retrievr, deliberately.** getMD owns
+URL→markdown; a second implementation is the two-copies-that-drift shape.
+
+### Consumer notes (atlas embeds this as a library)
+
+- **Additive only.** New struct fields and one new sentinel; nothing removed,
+  no signature changed. A bump to `v2.26.0` needs no code change.
+- To *use* it: gate on `SourceInfo.SupportsGet` from `ListSources`, and
+  classify failures with `errors.Is(err, retrievr.ErrGetUnsupported)`.
+- The `"supports_get"` key is new on the `rtv_list_sources` wire and `"url"` is
+  now always present on a v2 `Result`. A strict JSON decoder that rejects
+  unknown keys would need the first; nothing needs the second.
+- ⚠ The standalone `mcp-retrievr` pod pinned at 2.1.0 still carries the defect
+  for its own callers. Out of scope here.
+
 ## [2.25.0] - 2026-08-16
 
 ### Added — `SearchParams.PerSourceLimit`: a limit each source gets, not one they compete for

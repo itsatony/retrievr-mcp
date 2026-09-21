@@ -97,9 +97,13 @@ func newMockPlugin(sourceID string, results []Publication) *mockPlugin {
 			SupportsSortRelevance: true,
 			SupportsSortDate:      true,
 			SupportsPagination:    true,
-			MaxResultsPerQuery:    100,
-			NativeFormat:          FormatJSON,
-			AvailableFormats:      []ContentFormat{FormatJSON},
+			// The mock serves Get from its own result slice, so it is
+			// honestly get-capable. Without this the v2.26.0 router gate
+			// would refuse every mock-backed Get before dispatch.
+			SupportsGet:        true,
+			MaxResultsPerQuery: 100,
+			NativeFormat:       FormatJSON,
+			AvailableFormats:   []ContentFormat{FormatJSON},
 		},
 		nativeFormat:     FormatJSON,
 		availableFormats: []ContentFormat{FormatJSON},

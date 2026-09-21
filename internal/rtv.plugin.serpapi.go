@@ -224,7 +224,7 @@ func (p *SerpAPIPlugin) Search(ctx context.Context, params SearchParams) (*Searc
 
 // Get is not wired in cycle 4.
 func (p *SerpAPIPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: serpapi Get is not wired in cycle 4", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("serpapi Get is not wired in cycle 4")
 }
 
 // ---------------------------------------------------------------------------

@@ -258,7 +258,7 @@ func (p *OSMOverpassPlugin) Search(ctx context.Context, params SearchParams) (*S
 // most callers already use osmoverpass: results' lat/lon for downstream
 // lookups.
 func (p *OSMOverpassPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: osmoverpass Get is not wired in cycle 1", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("osmoverpass Get is not wired in cycle 1")
 }
 
 // ---------------------------------------------------------------------------

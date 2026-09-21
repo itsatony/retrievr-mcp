@@ -241,7 +241,7 @@ func (p *IAScholarPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 // Future cycle can route through the Fatcat REST API
 // (https://api.fatcat.wiki/v0/release/<ident>) for full JSON metadata.
 func (p *IAScholarPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: iascholar Get is not wired in cycle 6", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("iascholar Get is not wired in cycle 6")
 }
 
 // ---------------------------------------------------------------------------

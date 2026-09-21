@@ -267,7 +267,7 @@ func (p *DimensionsPlugin) Search(ctx context.Context, params SearchParams) (*Se
 // `search publications where id="pub.X" return publications` is a
 // trivial future-cycle addition.
 func (p *DimensionsPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: dimensions Get is not wired in cycle 3", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("dimensions Get is not wired in cycle 3")
 }
 
 // ---------------------------------------------------------------------------

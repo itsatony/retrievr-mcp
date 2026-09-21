@@ -234,7 +234,7 @@ func (p *ORCIDPlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 // records by ORCID iD. The expanded-search response already carries the
 // useful subset (display names + affiliations).
 func (p *ORCIDPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: orcid Get is not wired in cycle 3", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("orcid Get is not wired in cycle 3")
 }
 
 // ---------------------------------------------------------------------------

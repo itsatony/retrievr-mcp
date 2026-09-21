@@ -246,7 +246,7 @@ func (p *KGAPIPlugin) Search(ctx context.Context, params SearchParams) (*SearchR
 
 // Get is not wired in cycle 5.
 func (p *KGAPIPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: kgapi Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("kgapi Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

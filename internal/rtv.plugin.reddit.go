@@ -383,7 +383,7 @@ func redditPublicationsFromListing(listing *redditListing) []Publication {
 
 // Get is not wired in cycle 5. Reddit's /by_id/<fullname>.json covers it.
 func (p *RedditPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: reddit Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("reddit Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

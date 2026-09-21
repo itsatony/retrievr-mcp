@@ -277,6 +277,7 @@ func (p *HuggingFacePlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features HuggingFace supports.
 func (p *HuggingFacePlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         true,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

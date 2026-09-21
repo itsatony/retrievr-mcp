@@ -255,7 +255,7 @@ func (p *LensPlugin) Search(ctx context.Context, params SearchParams) (*SearchRe
 
 // Get is not wired in cycle 3.
 func (p *LensPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: lens Get is not wired in cycle 3", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("lens Get is not wired in cycle 3")
 }
 
 // ---------------------------------------------------------------------------

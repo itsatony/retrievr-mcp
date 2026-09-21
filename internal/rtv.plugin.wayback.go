@@ -120,6 +120,7 @@ func (p *WaybackPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports Wayback's surface (which is intentionally minimal).
 func (p *WaybackPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

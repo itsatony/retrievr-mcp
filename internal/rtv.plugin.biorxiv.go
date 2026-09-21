@@ -174,6 +174,7 @@ func (p *BioRxivPlugin) AvailableFormats() []ContentFormat {
 
 func (p *BioRxivPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

@@ -199,7 +199,7 @@ func (p *EURLexPlugin) Search(ctx context.Context, params SearchParams) (*Search
 // CELEX-keyed search result already carries the dedup identifier and a
 // stable URL.
 func (p *EURLexPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: eurlex Get is not wired in cycle 5", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("eurlex Get is not wired in cycle 5")
 }
 
 // ---------------------------------------------------------------------------

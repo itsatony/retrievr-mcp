@@ -108,6 +108,7 @@ func (p *UnpaywallPlugin) AvailableFormats() []ContentFormat {
 // Capabilities — Search-via-fan-out is unsupported; Get is the only path.
 func (p *UnpaywallPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

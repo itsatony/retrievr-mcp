@@ -225,7 +225,7 @@ func (p *KagiPlugin) Search(ctx context.Context, params SearchParams) (*SearchRe
 
 // Get is not wired in cycle 4.
 func (p *KagiPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: kagi Get is not wired in cycle 4", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("kagi Get is not wired in cycle 4")
 }
 
 // ---------------------------------------------------------------------------

@@ -150,6 +150,7 @@ func (p *NPMPlugin) AvailableFormats() []ContentFormat { return []ContentFormat{
 // Capabilities reports npm's filter/sort surface.
 func (p *NPMPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

@@ -172,6 +172,7 @@ func (p *COREPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports CORE's filter/sort surface.
 func (p *COREPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         true,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

@@ -233,6 +233,7 @@ func (p *ArXivPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features ArXiv supports.
 func (p *ArXivPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

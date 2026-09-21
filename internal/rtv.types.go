@@ -742,6 +742,23 @@ type SourceCapabilities struct {
 	// PublishedAfterSupport tri-state docs. Zero value ("none") means the
 	// filter is unenforceable for this source.
 	SupportsPublishedAfterFilter PublishedAfterSupport `json:"supports_published_after_filter,omitempty"`
+
+	// SupportsGet reports whether this source can retrieve a single record
+	// by id — i.e. whether rtv_get / Router.Get can ever succeed against it.
+	// It is FALSE for every source whose API is search-only: web, news, most
+	// place and social providers. Those mint their result ids from a
+	// truncated sha256 of the URL, so the id is opaque by construction and
+	// there is nothing for a Get to address.
+	//
+	// ⚠ When false, reach the content through the result's `url` field
+	// (always present on the v2 Result wire) with a page-fetching tool —
+	// retrievr deliberately does not fetch pages.
+	//
+	// Added in v2.26.0 (issue #1). The zero value is false, which is the
+	// safe direction: a new plugin that forgets the field is advertised as
+	// non-retrievable rather than falsely retrievable, and
+	// TestSupportsGetMatchesEveryPluginsGetImplementation fails either way.
+	SupportsGet bool `json:"supports_get"`
 }
 
 // SourceHealth represents the current health and rate-limit status of a source.
@@ -830,6 +847,12 @@ type SourceInfo struct {
 	// v2.22.0 — mirror of SourceCapabilities.SupportsPublishedAfterFilter.
 	// Tri-state: "native" | "coarse+postfilter" | "none". Empty == "none".
 	SupportsPublishedAfterFilter PublishedAfterSupport `json:"supports_published_after_filter,omitempty"`
+
+	// v2.26.0 — mirror of SourceCapabilities.SupportsGet. FALSE means
+	// rtv_get can never succeed for this source; use the result's `url`.
+	// Emitted unconditionally (no omitempty): "absent" and "false" must not
+	// be the same thing on a flag a caller routes on.
+	SupportsGet bool `json:"supports_get"`
 }
 
 // ---------------------------------------------------------------------------

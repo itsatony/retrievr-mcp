@@ -210,6 +210,7 @@ func (p *ADSPlugin) AvailableFormats() []ContentFormat {
 
 func (p *ADSPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

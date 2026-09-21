@@ -312,6 +312,7 @@ func (p *OpenAlexPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features OpenAlex supports.
 func (p *OpenAlexPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

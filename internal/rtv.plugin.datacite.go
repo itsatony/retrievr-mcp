@@ -199,6 +199,7 @@ func (p *DataCitePlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports DataCite's filter/sort surface.
 func (p *DataCitePlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

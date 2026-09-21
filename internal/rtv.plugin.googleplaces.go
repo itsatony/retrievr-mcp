@@ -249,7 +249,7 @@ func (p *GooglePlacesPlugin) Search(ctx context.Context, params SearchParams) (*
 // /v1/places/<place_id> and would add another billing tier. Future
 // cycle can wire it behind an opt-in flag.
 func (p *GooglePlacesPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: googleplaces Get is not wired in cycle 1", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("googleplaces Get is not wired in cycle 1")
 }
 
 // ---------------------------------------------------------------------------

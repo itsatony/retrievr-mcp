@@ -292,7 +292,7 @@ func (p *TomTomPlugin) Search(ctx context.Context, params SearchParams) (*Search
 // Get is not supported — TomTom's per-place detail endpoint is a separate
 // product (Place Details). Out of scope for cycle 3.
 func (p *TomTomPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: tomtom Place Details is not wired in cycle 3", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("tomtom Place Details is not wired in cycle 3")
 }
 
 // ---------------------------------------------------------------------------

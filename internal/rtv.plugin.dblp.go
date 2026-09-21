@@ -271,6 +271,7 @@ func (p *DBLPPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports what filtering, sorting, and features DBLP supports.
 func (p *DBLPPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

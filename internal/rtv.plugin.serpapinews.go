@@ -169,7 +169,7 @@ func (p *SerpAPINewsPlugin) Search(ctx context.Context, params SearchParams) (*S
 
 // Get is not wired in cycle 6.
 func (p *SerpAPINewsPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: serpapinews Get is not wired in cycle 6", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("serpapinews Get is not wired in cycle 6")
 }
 
 // wrapSerpAPINewsError prepends "serpapinews: " to inner SerpAPI plugin

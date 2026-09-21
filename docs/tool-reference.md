@@ -283,6 +283,32 @@ selects the plugin; the remainder is the source-native ID.
 | `format` | string | no | `native` | One of `native`, `json`, `xml`, `markdown`, `bibtex`. |
 | `credentials` | object | no | — | Same shape as `rtv_search` credentials. |
 
+### ⛔ Not every source can be fetched by id — check `supports_get` first
+
+**21 of the 61 plugins have a per-record retrieval API. The other 40 do not,
+and never will.** A search-only source (linkup, brave, exa, perplexity,
+firecrawl, kagi, mojeek, serpapi, newsapi, gdelt, …) mints its result id as
+`<source>:sha256(url)[:16]` — a **one-way** hash. There is no record behind it
+to fetch, and nothing inside retrievr can turn the id back into the page.
+
+Since v2.26.0 the router **refuses before dispatch**:
+
+```json
+{"error": "source does not support get-by-id",
+ "detail": "source does not support get-by-id: linkup is search-only and has no per-record retrieval API — use the search result's `url` field to reach the content"}
+```
+
+- The refusal costs **no upstream call and no retry** (before v2.26.0 it cost
+  three attempts with backoff).
+- Library callers classify it with `errors.Is(err, retrievr.ErrGetUnsupported)`
+  rather than matching the message. `errors.Is` also matches the historical
+  `ErrFormatUnsupported`.
+- **Reach the content through the result's `url`**, which the v2 `Result` wire
+  now emits unconditionally. Hand it to a page-fetching tool — retrievr
+  deliberately does not fetch pages, because a second URL→markdown
+  implementation is two copies that drift.
+- Ask `rtv_list_sources` for `supports_get` before you spend the call.
+
 ### Format notes
 
 - `native` — source's native shape (XML for arxiv/europmc, JSON for most
@@ -334,6 +360,7 @@ Returns one `SourceInfo` per registered plugin (sorted by ID).
 | `subprocessor_url` | string | DPA subprocessor link. |
 | `free_tier` | bool | Works without a paid key. |
 | `requires_key` | bool | Refuses to start without a credential. |
+| `supports_get` | bool | **`rtv_get` can succeed for this source.** `false` for all 40 search-only sources (every web + news provider, most place/social). See below. |
 
 ---
 

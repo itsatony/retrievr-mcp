@@ -21,6 +21,7 @@ const (
 	ErrMsgAllSourcesFailed    = "all sources failed"
 	ErrMsgFullTextUnavailable = "full text not available for this publication"
 	ErrMsgFormatUnsupported   = "requested format not supported by this source"
+	ErrMsgGetUnsupported      = "source does not support get-by-id"
 	ErrMsgCredentialInvalid   = "provided credential was rejected by upstream source"
 	ErrMsgCredentialRequired  = "this source requires credentials for the requested operation"
 	ErrMsgCacheKeyGeneration  = "failed to generate cache key"
@@ -109,6 +110,7 @@ var (
 	ErrAllSourcesFailed    = errors.New(ErrMsgAllSourcesFailed)
 	ErrFullTextUnavailable = errors.New(ErrMsgFullTextUnavailable)
 	ErrFormatUnsupported   = errors.New(ErrMsgFormatUnsupported)
+	ErrGetUnsupported      = errors.New(ErrMsgGetUnsupported)
 	ErrCredentialInvalid   = errors.New(ErrMsgCredentialInvalid)
 	ErrCredentialRequired  = errors.New(ErrMsgCredentialRequired)
 	ErrCacheKeyGeneration  = errors.New(ErrMsgCacheKeyGeneration)

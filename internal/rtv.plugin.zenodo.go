@@ -196,6 +196,7 @@ func (p *ZenodoPlugin) AvailableFormats() []ContentFormat {
 // Capabilities reports Zenodo's filter/sort surface.
 func (p *ZenodoPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       true,

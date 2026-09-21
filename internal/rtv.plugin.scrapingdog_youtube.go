@@ -320,7 +320,7 @@ func scrapingdogPublicationsFromResponse(resp *scrapingdogYouTubeResponse, limit
 // should resolve detail via the youtube primary plugin once a `youtube_id`
 // is in hand.
 func (p *ScrapingdogYouTubePlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: scrapingdog_youtube has no Get; resolve via the youtube plugin", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("scrapingdog_youtube has no Get; resolve via the youtube plugin")
 }
 
 // ---------------------------------------------------------------------------

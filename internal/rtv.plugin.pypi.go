@@ -136,6 +136,7 @@ func (p *PyPIPlugin) AvailableFormats() []ContentFormat { return []ContentFormat
 // Capabilities reports PyPI's filter/sort surface.
 func (p *PyPIPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         false,
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

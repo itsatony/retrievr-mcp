@@ -127,6 +127,7 @@ func (p *WikipediaPlugin) AvailableFormats() []ContentFormat {
 // Capabilities.
 func (p *WikipediaPlugin) Capabilities() SourceCapabilities {
 	return SourceCapabilities{
+		SupportsGet:              true,
 		SupportsFullText:         true, // via summary.extract
 		SupportsCitations:        false,
 		SupportsDateFilter:       false,

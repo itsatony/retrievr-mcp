@@ -259,7 +259,7 @@ func (p *EuropeanaPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 // (/record/v2/<id>.json) covers the same surface but the ID-routing path
 // is out of scope for v2.5.0.
 func (p *EuropeanaPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: europeana Get is not wired in cycle 4", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("europeana Get is not wired in cycle 4")
 }
 
 // ---------------------------------------------------------------------------

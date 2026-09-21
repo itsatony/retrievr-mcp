@@ -247,7 +247,7 @@ func (p *FirecrawlPlugin) Search(ctx context.Context, params SearchParams) (*Sea
 // Get unimplemented; the proper path is the enrichment hook that takes a
 // URL directly. Reserve for cycle 3.
 func (p *FirecrawlPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ ContentFormat) (*Publication, error) {
-	return nil, fmt.Errorf("%w: firecrawl Get reserved for cycle-3 enrichment hook", ErrFormatUnsupported)
+	return nil, NewGetUnsupportedError("firecrawl Get reserved for cycle-3 enrichment hook")
 }
 
 // ---------------------------------------------------------------------------

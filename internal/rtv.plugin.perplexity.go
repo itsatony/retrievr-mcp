@@ -38,49 +38,125 @@ const (
 	perplexityPluginName        = "Perplexity Sonar"
 	perplexityPluginDescription = "Synthesized web answer + inline citations. Maps to LLMContext on a primary KindWeb Result; citations follow as sparse-shape entries. Slow (~5-13s); US-resident; blocked under eu_strict."
 
-	perplexityDefaultBaseURL  = "https://api.perplexity.ai"
-	perplexityCompletionsPath = "/chat/completions"
+	perplexityDefaultBaseURL = "https://api.perplexity.ai"
+	// perplexityAgentPath is the Agent API (retrievr-mcp#2). ⛔ Perplexity retires the Sonar
+	// Chat Completions surface (`POST /chat/completions`) on 2026-09-27; this is its successor.
+	perplexityAgentPath       = "/v1/agent"
 	perplexityAuthHeader      = "Authorization"
 	perplexityAuthScheme      = "Bearer "
 	perplexityContentTypeJSON = "application/json"
 
-	perplexityDefaultModel = "sonar"
-	perplexityDefaultRPS   = 1.0
+	// perplexityDefaultModel is the Agent API's name for Sonar. ⛔ A bare `sonar` is refused there
+	// (400 `model "sonar" is not supported`); see agentModel for the migration of old configs.
+	perplexityDefaultModel = "perplexity/sonar"
+	perplexityModelPrefix  = "perplexity/"
+	// perplexityToolWebSearch is REQUIRED for this plugin to be a search source at all (measured
+	// 2026-09-23): without it the Agent API answers from model memory with NO search results and
+	// NO citations — a confident, unsourced answer from a plugin whose whole job is sourcing.
+	perplexityToolWebSearch      = "web_search"
+	perplexityToolChoiceRequired = "required"
+	perplexityOutputMessage      = "message"
+	perplexityOutputText         = "output_text"
+	perplexityOutputResults      = "search_results"
+	perplexityDefaultRPS         = 1.0
 
 	perplexityCategoriesHint = "synthesized web answer + citations; latency ~5-13s; not recommended in fan-out under tight ctx deadlines"
 )
 
 // Extra-key constants.
 const (
-	perplexityExtraModel = "model" // sonar | sonar-pro | sonar-reasoning
+	perplexityExtraModel = "model" // perplexity/sonar (a bare legacy name is prefixed, see agentModel)
 )
 
 // ---------------------------------------------------------------------------
 // Perplexity wire types
 // ---------------------------------------------------------------------------
 
-type perplexityChatRequest struct {
-	Model           string              `json:"model"`
-	Messages        []perplexityMessage `json:"messages"`
-	ReturnCitations bool                `json:"return_citations,omitempty"`
+// The Agent API wire shapes, MEASURED against api.perplexity.ai on 2026-09-23 (retrievr-mcp#2).
+//
+// ⛔ THE REQUEST DECODES STRICTLY upstream — an unknown field is a 400 — so it carries exactly
+// model, input and tools, and nothing "harmless" like the old return_citations.
+
+type perplexityAgentRequest struct {
+	Model string                 `json:"model"`
+	Input []perplexityAgentInput `json:"input"`
+	Tools []perplexityAgentTool  `json:"tools"`
+	// ToolChoice is "required", and it is load-bearing (measured 2026-09-23): with web_search only
+	// OFFERED, the model decides — it searched for a news question and answered a conceptual one
+	// ("encoder-only vs decoder-only transformers") from memory, with no sources. A search plugin
+	// must search every time.
+	ToolChoice string `json:"tool_choice"`
 }
 
-type perplexityMessage struct {
+type perplexityAgentInput struct {
+	Type    string `json:"type"`
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
-type perplexityChatResponse struct {
-	ID        string             `json:"id"`
-	Model     string             `json:"model"`
-	Citations []string           `json:"citations,omitempty"`
-	Choices   []perplexityChoice `json:"choices"`
+type perplexityAgentTool struct {
+	Type string `json:"type"`
 }
 
-type perplexityChoice struct {
-	Index        int               `json:"index"`
-	Message      perplexityMessage `json:"message"`
-	FinishReason string            `json:"finish_reason"`
+// perplexityAgentResponse keeps only what the plugin reads. `output` is a list of typed items:
+// a `message` (the synthesized answer, as `output_text` parts) and a `search_results` item (the
+// sources, each with a title, url, snippet and date — richer than the old bare citation URLs).
+type perplexityAgentResponse struct {
+	ID     string                  `json:"id"`
+	Model  string                  `json:"model"`
+	Status string                  `json:"status"`
+	Output []perplexityAgentOutput `json:"output"`
+}
+
+type perplexityAgentOutput struct {
+	Type    string                  `json:"type"`
+	Content []perplexityAgentPart   `json:"content,omitempty"`
+	Results []perplexityAgentResult `json:"results,omitempty"`
+}
+
+type perplexityAgentPart struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type perplexityAgentResult struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Snippet string `json:"snippet"`
+	Date    string `json:"date"`
+}
+
+// agentModel migrates a legacy model name. ⚠ Every deployed config says `sonar`, and a bare name
+// is refused by the Agent API, so an un-updated config would otherwise go dark on 2026-09-27 with
+// a 400 per call. A name that already carries a vendor prefix is used as written.
+func agentModel(m string) string {
+	m = strings.TrimSpace(m)
+	if m == "" {
+		return perplexityDefaultModel
+	}
+	if strings.Contains(m, "/") {
+		return m
+	}
+	return perplexityModelPrefix + m
+}
+
+// answerAndResults splits an Agent API response into the synthesized answer and its sources.
+func (r *perplexityAgentResponse) answerAndResults() (string, []perplexityAgentResult) {
+	var parts []string
+	var results []perplexityAgentResult
+	for _, o := range r.Output {
+		switch o.Type {
+		case perplexityOutputMessage:
+			for _, c := range o.Content {
+				if c.Type == perplexityOutputText && c.Text != "" {
+					parts = append(parts, c.Text)
+				}
+			}
+		case perplexityOutputResults:
+			results = append(results, o.Results...)
+		}
+	}
+	return strings.Join(parts, ""), results
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +233,7 @@ func (p *PerplexityPlugin) Initialize(_ context.Context, cfg PluginConfig) error
 	}
 	p.baseURL = strings.TrimRight(p.baseURL, "/")
 
-	p.model = stringFromExtra(cfg.Extra, perplexityExtraModel, perplexityDefaultModel)
+	p.model = agentModel(stringFromExtra(cfg.Extra, perplexityExtraModel, perplexityDefaultModel))
 
 	timeout := cfg.Timeout.Duration
 	if timeout == 0 {
@@ -185,10 +261,11 @@ func (p *PerplexityPlugin) Search(ctx context.Context, params SearchParams) (*Se
 		return nil, fmt.Errorf("%w: perplexity requires an API key", ErrCredentialRequired)
 	}
 
-	body := perplexityChatRequest{
-		Model:           p.model,
-		Messages:        []perplexityMessage{{Role: "user", Content: params.Query}},
-		ReturnCitations: true,
+	body := perplexityAgentRequest{
+		Model:      p.model,
+		Input:      []perplexityAgentInput{{Type: perplexityOutputMessage, Role: "user", Content: params.Query}},
+		Tools:      []perplexityAgentTool{{Type: perplexityToolWebSearch}},
+		ToolChoice: perplexityToolChoiceRequired,
 	}
 
 	resp, err := p.doSearch(ctx, body, apiKey)
@@ -198,12 +275,11 @@ func (p *PerplexityPlugin) Search(ctx context.Context, params SearchParams) (*Se
 	}
 	p.recordSuccess()
 
-	if len(resp.Choices) == 0 {
+	answer, sources := resp.answerAndResults()
+	if answer == "" && len(sources) == 0 {
 		return &SearchResult{Total: 0, Results: nil, HasMore: false}, nil
 	}
-
-	answer := resp.Choices[0].Message.Content
-	pubs := make([]Publication, 0, 1+len(resp.Citations))
+	pubs := make([]Publication, 0, 1+len(sources))
 
 	// Primary: synthesized answer with LLMContext=answer.
 	primary := Publication{
@@ -213,34 +289,42 @@ func (p *PerplexityPlugin) Search(ctx context.Context, params SearchParams) (*Se
 		Title:       fmt.Sprintf("Perplexity synthesized answer: %s", truncateForTitle(params.Query)),
 		Abstract:    answer,
 	}
-	if len(resp.Citations) > 0 {
-		primary.URL = resp.Citations[0]
+	if len(sources) > 0 {
+		primary.URL = sources[0].URL
 	}
 	primary.SourceMetadata = map[string]any{
 		smetaSnippet:  truncateSnippet(answer),
 		"llm_context": answer,
 		"model":       resp.Model,
+		// ⚠ Stated, not implied: an answer with no sources was not grounded in a search, and a
+		// consumer must be able to tell that apart from a sourced one.
+		"grounded": len(sources) > 0,
 	}
 	pubs = append(pubs, primary)
 
-	// Each citation as a sparse follow-up Publication. Title is derived
-	// from the URL hostname since Perplexity doesn't surface per-citation
-	// titles.
-	for i, citationURL := range resp.Citations {
-		host := hostFromURL(citationURL)
-		title := host
+	// Each source as a follow-up Publication. The Agent API names each source's title and date,
+	// which the old citation list did not — the host stays the fallback title.
+	for i, src := range sources {
+		host := hostFromURL(src.URL)
+		title := strings.TrimSpace(src.Title)
+		if title == "" {
+			title = host
+		}
 		if title == "" {
 			title = fmt.Sprintf("Citation %d", i+1)
 		}
+		meta := map[string]any{smetaDomain: host}
+		if src.Snippet != "" {
+			meta[smetaSnippet] = truncateSnippet(src.Snippet)
+		}
 		pubs = append(pubs, Publication{
-			ID:          fmt.Sprintf("%s:%s/cit/%d", perplexityPluginID, resp.ID, i+1),
-			Source:      perplexityPluginID,
-			ContentType: ContentTypeAny,
-			Title:       title,
-			URL:         citationURL,
-			SourceMetadata: map[string]any{
-				smetaDomain: host,
-			},
+			ID:             fmt.Sprintf("%s:%s/cit/%d", perplexityPluginID, resp.ID, i+1),
+			Source:         perplexityPluginID,
+			ContentType:    ContentTypeAny,
+			Title:          title,
+			URL:            src.URL,
+			Published:      src.Date,
+			SourceMetadata: meta,
 		})
 	}
 
@@ -256,13 +340,13 @@ func (p *PerplexityPlugin) Get(_ context.Context, _ string, _ []IncludeField, _ 
 // HTTP transport
 // ---------------------------------------------------------------------------
 
-func (p *PerplexityPlugin) doSearch(ctx context.Context, body perplexityChatRequest, apiKey string) (*perplexityChatResponse, error) {
+func (p *PerplexityPlugin) doSearch(ctx context.Context, body perplexityAgentRequest, apiKey string) (*perplexityAgentResponse, error) {
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
 		return nil, fmt.Errorf("perplexity: marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+perplexityCompletionsPath, bytes.NewReader(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+perplexityAgentPath, bytes.NewReader(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("perplexity: build request: %w", err)
 	}
@@ -287,7 +371,7 @@ func (p *PerplexityPlugin) doSearch(ctx context.Context, body perplexityChatRequ
 		return nil, fmt.Errorf("perplexity: status=%d body=%s", httpResp.StatusCode, truncateForError(string(buf)))
 	}
 
-	var resp perplexityChatResponse
+	var resp perplexityAgentResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("perplexity: decode response: %w", err)
 	}

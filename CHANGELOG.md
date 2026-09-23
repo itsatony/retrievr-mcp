@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.27.0] - 2026-09-23
+
+### Fixed — Perplexity moves to the Agent API before Sonar Chat Completions retires (#2)
+
+Perplexity shuts down `POST /chat/completions` for `sonar*` on **2026-09-27**. The plugin now calls
+**`POST /v1/agent`**, and every wire shape was **measured against the live API** before it was written.
+
+- **The request carries exactly `model`, `input`, `tools` and `tool_choice`**, because the endpoint
+  decodes strictly and an unknown field is a 400.
+- ⛔ **The search is forced (`tools: [web_search]`, `tool_choice: "required"`).** Measured: with no
+  tool, the Agent API answers from model memory with **no sources**. With `web_search` only
+  *offered*, the model still skipped it for a conceptual question ("encoder-only vs decoder-only
+  transformers") while searching for a news one. A search source that sometimes doesn't search is
+  worse than none. The live smoke now **requires a grounded answer**; revert-checked, it goes red
+  with `tool_choice: "auto"`.
+- **Sources are richer.** Each result now has its own `title`, `url`, `snippet` and `date`
+  (`Published`); the old API gave bare citation URLs. The host is still the fallback title.
+- **A legacy model name is migrated.** Every deployed config says `sonar`, and the Agent API refuses
+  a bare name, so `sonar` → `perplexity/sonar` (a vendor-prefixed name is used as written). An
+  un-updated config therefore survives the 27th.
+- An answer that came back with no sources is marked `grounded: false` rather than passed off as
+  sourced.
+
 ## [2.26.0] - 2026-09-22
 
 Minor release. **`rtv_get` could never succeed against 40 of the 61 sources, the

@@ -165,7 +165,7 @@ sources:
     rate_limit: 1.0
     rate_limit_burst: 1
     extra:
-      model: "sonar"             # sonar | sonar-pro | sonar-reasoning
+      model: "perplexity/sonar"  # the Agent API name; a bare legacy "sonar" is migrated (retrievr-mcp#2)
 
   youtube:
     enabled: false               # v3 cycle 2 (v2.3.0). Set true + supply api_key or RETRIEVR_YOUTUBE_API_KEY env

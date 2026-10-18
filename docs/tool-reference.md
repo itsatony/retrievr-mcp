@@ -6,7 +6,7 @@ retrievr-mcp exposes **three MCP tools** that give agents unified access to
 academic publications, AI research, models, datasets, web/news/social/code/
 place/image/post/package/patent/audio content, and structured facts.
 
-The catalog spans **61 source plugins** across five masterplans (v1 academic,
+The catalog spans **62 source plugins** across five masterplans (v1 academic,
 v2 web/enrichment, v3 multimodal, v5 KnowledgeCommons, v6 GeoExpansion +
 Premium). The canonical count is `SourceCount` in
 `internal/rtv.types.go`.
@@ -122,6 +122,12 @@ emits `ErrCredentialRequired`. Use `rtv_list_sources` for the live truth.
 | `newsapi` | NewsAPI | any | key | Premium news; domain + language. |
 | `serpapinews` | SerpAPI News | any | key | Google News SERP; country + language. |
 
+### v2.29 — EU web (1)
+
+| ID | Name | Content types | Key/Free | Notes |
+|---|---|---|---|---|
+| `staan` | Staan | any | key | EU index, EU-hosted (OVHcloud France); domain filters; `language` selects a documented `market`; offset paging in pages of 10 up to offset 30; no date filter. |
+
 ---
 
 ## 3. rtv_search
@@ -157,7 +163,7 @@ whatever is enabled in the running tenant). Explicit `sources` overrides
 |---|---|---|
 | `deep_research` | `s2`, `openalex` | `arxiv`, `crossref`, `europmc`, `pubmed`, `dblp`, `ads`, `core`, `openaire` |
 | `primary_source` | `europmc`, `openalex` | `crossref`, `s2`, `arxiv`, `pubmed`, `core`, `openaire`, `zenodo` |
-| `quick_lookup` | `kagi`, `mojeek`, `serpapi` | `brave`, `exa`, `linkup`, `wikipedia` |
+| `quick_lookup` | `staan`, `kagi`, `mojeek`, `serpapi` | `brave`, `exa`, `linkup`, `wikipedia` |
 | `code_provenance` | `npm`, `pypi`, `crates`, `pkggodev` | `github`, `arxiv`, `dblp`, `s2` |
 | `news` | `newsapi`, `serpapinews` | `gdelt`, `brave`, `exa`, `wikipedia` |
 | `reference` | `wolframalpha`, `kgapi` | `wikidata`, `wikipedia` |
@@ -178,10 +184,10 @@ primary source fails. The walk stops at the first fallback source returning
 | `categories` | []string | Semantics vary by source — see filter-reference.md. |
 | `open_access` | bool | Native only on `zenodo`. Use `intent=primary_source` for OA-biased scholarly retrieval. |
 | `min_citations` | int | **Reserved for a future release.** Not wired by any provider today. |
-| `include_domains` / `exclude_domains` | []string | Bare domains (no scheme). Honored by `brave`, `exa`, `gdelt`, `kagi`, `mojeek`, `serpapi`, `newsapi`. |
+| `include_domains` / `exclude_domains` | []string | Bare domains (no scheme). Honored by `brave`, `exa`, `gdelt`, `kagi`, `mojeek`, `serpapi`, `newsapi`, `staan` (max 10, include and exclude mutually exclusive). |
 | `channels` | []string | YouTube channel IDs (≤5). Honored by `youtube`, `scrapingdog_youtube`. |
 | `subreddits` | []string | Subreddit names (≤5). Honored by `reddit`. |
-| `language` | string | BCP-47 (`en`, `de`, `fr-CA`). Honored by `brave`, `youtube`, `scrapingdog_youtube`, `bluesky`, `europeana`, `mastodon` (post-fetch), `serpapi`, `serpapinews`, `kagi`, `mojeek`, `newsapi`, `gdelt`, `eurlex`, `kgapi`, `wikidata`, `here`, `googleplaces`, `listennotes`. |
+| `language` | string | BCP-47 (`en`, `de`, `fr-CA`). Honored by `brave`, `youtube`, `scrapingdog_youtube`, `bluesky`, `europeana`, `mastodon` (post-fetch), `serpapi`, `serpapinews`, `kagi`, `mojeek`, `newsapi`, `gdelt`, `eurlex`, `kgapi`, `wikidata`, `here`, `googleplaces`, `listennotes`, `staan` (maps to a documented `market`). |
 
 Plugins that do not natively support a filter MUST ignore it. Sanctioned
 post-filters: Mastodon `language`, and the v2.22.0 router-level
@@ -286,9 +292,9 @@ selects the plugin; the remainder is the source-native ID.
 
 ### ⛔ Not every source can be fetched by id — check `supports_get` first
 
-**21 of the 61 plugins have a per-record retrieval API. The other 40 do not,
+**21 of the 62 plugins have a per-record retrieval API. The other 41 do not,
 and never will.** A search-only source (linkup, brave, exa, perplexity,
-firecrawl, kagi, mojeek, serpapi, newsapi, gdelt, …) mints its result id as
+firecrawl, kagi, mojeek, staan, serpapi, newsapi, gdelt, …) mints its result id as
 `<source>:sha256(url)[:16]` — a **one-way** hash. There is no record behind it
 to fetch, and nothing inside retrievr can turn the id back into the page.
 

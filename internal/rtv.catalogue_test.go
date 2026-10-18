@@ -9,10 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// catalogueFloor is the non-vacuity floor: v2.28.0 ships 61 sources. A
+// catalogueFloor is the non-vacuity floor: v2.29.0 ships 62 sources. A
 // catalogue that shrank below this would make every coverage assertion below
 // pass over a smaller set — so the floor is a number, not len(something).
-const catalogueFloor = 61
+const catalogueFloor = 62
 
 func TestCatalogue_CoversEveryRegisteredSourceExactlyOnce(t *testing.T) {
 	t.Parallel()

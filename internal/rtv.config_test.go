@@ -545,6 +545,9 @@ sources:
   serpapinews:
     enabled: false
     timeout: "10s"
+  staan:
+    enabled: false
+    timeout: "10s"
 `
 	path := writeConfigFile(t, allSourcesYAML)
 	cfg, err := LoadConfig(path)

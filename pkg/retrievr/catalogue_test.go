@@ -34,8 +34,8 @@ func TestCommittedCatalogueMatchesCatalogue(t *testing.T) {
 // The public catalogue needs no Client: a zero-value program can render it.
 func TestCatalogue_PublicSurfaceWithoutClient(t *testing.T) {
 	cat := retrievr.Catalogue()
-	if len(cat) < 61 {
-		t.Fatalf("catalogue has %d sources, want >= 61", len(cat))
+	if len(cat) < 62 {
+		t.Fatalf("catalogue has %d sources, want >= 62", len(cat))
 	}
 	seen := map[string]bool{}
 	for _, e := range cat {

@@ -125,6 +125,9 @@ func PluginFactories() map[string]PluginFactory {
 		// v6 cycle 6 / v2.19.0 — premium news.
 		SourceNewsAPI:     func() SourcePlugin { return &NewsAPIPlugin{} },
 		SourceSerpAPINews: func() SourcePlugin { return &SerpAPINewsPlugin{} },
+
+		// v2.29.0 — EU web search.
+		SourceStaan: func() SourcePlugin { return &StaanPlugin{} },
 	}
 }
 

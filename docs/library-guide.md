@@ -253,7 +253,7 @@ if errors.As(err, &all) {
 
 ### `Get` is not available on every source (v2.26.0)
 
-**21 of the 61 plugins have a per-record retrieval API; 40 do not.** Every web
+**21 of the 62 plugins have a per-record retrieval API; 41 do not.** Every web
 and news provider is search-only — its result id is a truncated `sha256` of the
 page URL, so there is no record to address and nothing to reverse.
 

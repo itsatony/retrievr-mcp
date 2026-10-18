@@ -210,6 +210,9 @@ const (
 	// v6 cycle 6 / v2.19.0 — premium news.
 	SourceNewsAPI     = "newsapi"
 	SourceSerpAPINews = "serpapinews"
+
+	// v2.29.0 — EU web search (proprietary EU index).
+	SourceStaan = "staan"
 )
 
 // validSourceIDs is the internal immutable lookup set.
@@ -296,6 +299,8 @@ var validSourceIDs = map[string]bool{
 	// v6 cycle 6 — premium news.
 	SourceNewsAPI:     true,
 	SourceSerpAPINews: true,
+	// v2.29.0 — EU web search.
+	SourceStaan: true,
 }
 
 // IsValidSourceID returns true if the given ID is a known source.
@@ -330,7 +335,8 @@ func AllSourceIDs() []string {
 // v6 cycle 4 / v2.17.0 added Kagi + Mojeek + SerpAPI → 57.
 // v6 cycle 5 / v2.18.0 added Wolfram Alpha + Google KG → 59.
 // v6 cycle 6 / v2.19.0 added NewsAPI + SerpAPI News → 61 (closes v6).
-const SourceCount = 61
+// v2.29.0 added Staan (EU web search) → 62.
+const SourceCount = 62
 
 // SourceMetadata key constants for v3 multimodal dedup keys. Plugins
 // populate these on Publication.SourceMetadata so Router.dedup() can

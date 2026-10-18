@@ -114,6 +114,7 @@ var sourceCategories = map[string]SourceCategory{
 	SourcePerplexity:  CategoryWeb,
 	SourceSerpAPI:     CategoryWeb,
 	SourceSerpAPINews: CategoryWeb,
+	SourceStaan:       CategoryWeb,
 	SourceWayback:     CategoryWeb,
 
 	// Code hosting and package registries.

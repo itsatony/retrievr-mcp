@@ -175,8 +175,10 @@ func DefaultFallbackConfig() RouterFallbackConfig {
 				Fallback: []string{SourceCrossRef, SourceS2, SourceArXiv, SourcePubMed, SourceCORE, SourceOpenAIRE, SourceZenodo},
 			},
 			// Fast web lookup — paid web search first, free fallback.
+			// Staan (EU index, EU hosting) leads the primary rung; like every
+			// keyed source it is dropped by filterRegistered until enabled.
 			fallbackChainQuickLookup: {
-				Primary:  []string{SourceKagi, SourceMojeek, SourceSerpAPI},
+				Primary:  []string{SourceStaan, SourceKagi, SourceMojeek, SourceSerpAPI},
 				Fallback: []string{SourceBrave, SourceExa, SourceLinkup, SourceWikipedia},
 			},
 			// Code provenance — package registries first, then GitHub,

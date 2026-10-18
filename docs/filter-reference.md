@@ -1,7 +1,7 @@
 # Search Filter Reference
 
 `rtv_search` accepts a structured `filters` object that narrows results
-across all **61 source plugins**. Filters are **declared once, honored per
+across all **62 source plugins**. Filters are **declared once, honored per
 provider**: each plugin decides whether to apply a filter natively
 (server-side), via a sanctioned post-fetch step (Mastodon `language`
 only), or ignore it entirely when the upstream API has no analogue.
@@ -143,6 +143,7 @@ Honored by:
 | `mojeek` | Native domain filter. |
 | `serpapi` | Native `as_sitesearch` / SERP operators. |
 | `newsapi` | `domains` / `excludeDomains` params. |
+| `staan` | `include_domains` / `exclude_domains` body fields (max 10 each, mutually exclusive — more is refused, not truncated). |
 
 Other providers ignore.
 
@@ -183,6 +184,7 @@ Server-side honoring:
 | `kagi` | `language` |
 | `mojeek` | `language` |
 | `newsapi` | `language` |
+| `staan` | `market` (documented markets only; others fall back to `extra.market`) |
 | `gdelt` | `sourcelang` |
 | `eurlex` | language code |
 | `kgapi` | `languages` |

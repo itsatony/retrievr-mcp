@@ -16,7 +16,7 @@ live in `DefaultFallbackConfig` (internal/rtv.router.go).
 | ------------------ | -------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `deep_research`    | `s2`, `openalex`                             | `arxiv`, `crossref`, `europmc`, `pubmed`, `dblp`, `ads`, `core`, `openaire` | Scholarly evidence-gathering, broad coverage          |
 | `primary_source`   | `europmc`, `openalex`                        | `crossref`, `s2`, `arxiv`, `pubmed`, `core`, `openaire`, `zenodo`         | OA-biased scholarly retrieval. Unpaywall enrichment runs post-merge when configured |
-| `quick_lookup`     | `kagi`, `mojeek`, `serpapi`                  | `brave`, `exa`, `linkup`, `wikipedia`                                     | Fast web answer; premium first, free fallback         |
+| `quick_lookup`     | `staan`, `kagi`, `mojeek`, `serpapi`         | `brave`, `exa`, `linkup`, `wikipedia`                                     | Fast web answer; premium first, free fallback         |
 | `code_provenance`  | `npm`, `pypi`, `crates`, `pkggodev`          | `github`, `arxiv`, `dblp`, `s2`                                           | Package registries → repo → CS literature              |
 | `news`             | `newsapi`, `serpapinews`                     | `gdelt`, `brave`, `exa`, `wikipedia`                                      | Premium news APIs → open monitoring → web              |
 | `reference`        | `wolframalpha`, `kgapi`                      | `wikidata`, `wikipedia`                                                   | Structured facts → knowledge graphs → encyclopedia     |
@@ -81,7 +81,7 @@ in the chain are simply skipped. Practical implications:
   as PRI tier).
 - `news` under `eu_strict` loses NewsAPI / SerpAPI News (both US). GDELT
   is a US project but the underlying corpus is global; treat as US.
-- `quick_lookup` under `eu_strict` keeps Mojeek (EU-resident) but drops
+- `quick_lookup` under `eu_strict` keeps Staan (EU) and Mojeek (UK adequacy) but drops
   Kagi / SerpAPI / Brave / Exa.
 - `reference` under `eu_strict` is essentially Wikidata + Wikipedia.
 

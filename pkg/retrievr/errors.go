@@ -18,8 +18,10 @@ var (
 	// applying intent + eu_mode filters.
 	ErrNoProviders = errors.New("retrievr: no providers eligible for request")
 
-	// ErrAllProvidersFailed is returned when every provider in the resolved
-	// set returned an error (or zero results in zero-tolerance mode).
+	// ErrAllProvidersFailed was declared for "every provider failed" but
+	// nothing ever returned it — the router returns ErrAllSourcesFailed.
+	//
+	// Deprecated: match ErrAllSourcesFailed (or *AllSourcesFailedError).
 	ErrAllProvidersFailed = errors.New("retrievr: all providers failed")
 
 	// ErrFallbackExhausted is returned when both the primary and fallback
@@ -55,4 +57,59 @@ var (
 	// so the change is additive for anyone who was pattern-matching the old
 	// message.
 	ErrGetUnsupported = internal.ErrGetUnsupported
+
+	// ErrQuotaExhausted is a provider refusal because a quota that does not
+	// recover within a retry window is spent — YouTube Data API v3's
+	// 10,000 units/day (search.list = 100 units) is the first. It is not
+	// retried. A quota error ALSO matches ErrRateLimitExceeded (so older
+	// matchers keep working): test ErrQuotaExhausted FIRST to tell a spent
+	// daily quota from a short-window throttle. v2.28.0.
+	ErrQuotaExhausted = internal.ErrQuotaExhausted
+
+	// ErrRateLimitExceeded is a short-window throttle (HTTP 429, YouTube
+	// rateLimitExceeded). Retried with backoff. v2.28.0 re-export.
+	ErrRateLimitExceeded = internal.ErrRateLimitExceeded
+
+	// ErrCredentialRequired — the source needs a key and none was
+	// configured or supplied. v2.28.0 re-export.
+	ErrCredentialRequired = internal.ErrCredentialRequired
+
+	// ErrCredentialInvalid — the upstream rejected the key. v2.28.0 re-export.
+	ErrCredentialInvalid = internal.ErrCredentialInvalid
+
+	// ErrAllSourcesFailed is what Search / SearchV2 return when every
+	// queried source failed. The returned error is an *AllSourcesFailedError
+	// whose errors.Is also reaches each per-source cause, so
+	// errors.Is(err, ErrQuotaExhausted) answers "did the quota run out?"
+	// without parsing a message. v2.28.0 re-export.
+	ErrAllSourcesFailed = internal.ErrAllSourcesFailed
 )
+
+// AllSourcesFailedError carries the per-source failures of a search in
+// which every source failed. v2.28.0.
+type AllSourcesFailedError = internal.AllSourcesFailedError
+
+// QuotaExhaustedError is the typed form of ErrQuotaExhausted. v2.28.0.
+type QuotaExhaustedError = internal.QuotaExhaustedError
+
+// SourceError reports why one source failed (MergedSearchResult.SourceErrors).
+type SourceError = internal.SourceError
+
+// SourceErrorCode is the closed-set classification of a per-source failure.
+type SourceErrorCode = internal.SourceErrorCode
+
+// SourceErrorCode values.
+const (
+	SourceErrQuotaExhausted     = internal.SourceErrQuotaExhausted
+	SourceErrRateLimited        = internal.SourceErrRateLimited
+	SourceErrCredentialRequired = internal.SourceErrCredentialRequired
+	SourceErrCredentialInvalid  = internal.SourceErrCredentialInvalid
+	SourceErrTimeout            = internal.SourceErrTimeout
+	SourceErrCanceled           = internal.SourceErrCanceled
+	SourceErrInvalidRequest     = internal.SourceErrInvalidRequest
+	SourceErrUnsupported        = internal.SourceErrUnsupported
+	SourceErrUpstream           = internal.SourceErrUpstream
+)
+
+// ClassifySourceError maps any per-source error onto its SourceErrorCode.
+func ClassifySourceError(err error) SourceErrorCode { return internal.ClassifySourceError(err) }

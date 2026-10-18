@@ -50,6 +50,8 @@ const (
 	subcommandSearch  = "search"
 	subcommandGet     = "get"
 	subcommandSources = "sources"
+
+	subcommandCatalogue = "catalogue"
 )
 
 // usage prints a top-level usage summary to stderr.
@@ -63,6 +65,7 @@ Subcommands:
   search    Search across one or more sources.
   get       Retrieve a single publication by prefixed ID.
   sources   List available source plugins and their capabilities.
+  catalogue Print the static source catalogue as JSON (no config needed).
 
 Global flags:
   --config <path>   Path to retrievr-mcp config (default: configs/retrievr-mcp.yaml).
@@ -123,10 +126,18 @@ func run(args []string) int {
 			fmt.Fprint(os.Stderr, usageGet)
 		case subcommandSources:
 			fmt.Fprint(os.Stderr, usageSources)
+		case subcommandCatalogue:
+			fmt.Fprint(os.Stderr, usageCatalogue)
 		default:
 			usage()
 		}
 		return exitCodeSuccess
+	}
+
+	// The catalogue is configuration-independent: dispatch it before a
+	// config file is required.
+	if subcmd == subcommandCatalogue {
+		return runCatalogue(os.Stdout, subArgs)
 	}
 
 	logger := buildLogger(verbose)

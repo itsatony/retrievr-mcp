@@ -578,6 +578,9 @@ func (r *Router) Search(
 		sourcesQueried = make([]string, 0, len(resolved))
 		sourcesFailed  = make([]string, 0)
 		allResults     []Publication
+		// failures keeps the failed sourceResults (primary + fallback) so
+		// their causes reach the caller as SourceErrors — v2.28.0.
+		failures []sourceResult
 	)
 
 	// Process in deterministic source-ID order for stable dedup primary selection.
@@ -589,6 +592,7 @@ func (r *Router) Search(
 		sourcesQueried = append(sourcesQueried, sr.sourceID)
 		if sr.err != nil {
 			sourcesFailed = append(sourcesFailed, sr.sourceID)
+			failures = append(failures, sr)
 			r.metrics.RecordSearch(sr.sourceID, metricStatusError, sr.duration)
 			r.logger.Warn(logMsgSourceSearchFailed,
 				slog.String(LogKeyRequestID, requestID),
@@ -608,18 +612,23 @@ func (r *Router) Search(
 	// until one yields any hit or the list is exhausted. Otherwise return.
 	if len(sourcesFailed) == len(resolved) {
 		if len(fallbackList) == 0 {
-			return nil, fmt.Errorf("%w: "+errDetailAllSourcesFailed, ErrAllSourcesFailed, len(resolved))
+			return nil, newAllSourcesFailedError(len(resolved), failures)
 		}
 		// Walk fallback. Continues from current sourcesQueried/sourcesFailed.
 		extra := r.walkFallback(ctx, fallbackList, fanoutParams, creds, requestID)
 		sourcesQueried, sourcesFailed, allResults = applyFallbackWalk(sourcesQueried, sourcesFailed, allResults, extra)
+		failures = appendFailures(failures, extra)
 		if len(allResults) == 0 {
-			return nil, fmt.Errorf("%w: "+errDetailAllSourcesFailed, ErrAllSourcesFailed, len(sourcesQueried))
+			// ⚠ "every queried source failed" is not quite what this branch
+			// means: a fallback source may have ANSWERED with zero hits. The
+			// failures list then names only the ones that errored.
+			return nil, newAllSourcesFailedError(len(sourcesQueried), failures)
 		}
 	} else if len(allResults) == 0 && len(fallbackList) > 0 {
 		// Primary returned successfully but with zero hits. Walk fallback.
 		extra := r.walkFallback(ctx, fallbackList, fanoutParams, creds, requestID)
 		sourcesQueried, sourcesFailed, allResults = applyFallbackWalk(sourcesQueried, sourcesFailed, allResults, extra)
+		failures = appendFailures(failures, extra)
 	}
 
 	// Step 6-7: Dedup.
@@ -688,6 +697,7 @@ func (r *Router) Search(
 		Results:        allResults,
 		SourcesQueried: sourcesQueried,
 		SourcesFailed:  sourcesFailed,
+		SourceErrors:   sourceErrorsFrom(failures),
 		SourcesSkipped: euSkipped,
 		AuditRef:       auditRef,
 		FallbackWalked: fallbackWalked,
@@ -805,6 +815,29 @@ func applyFallbackWalk(
 	return sourcesQueried, sourcesFailed, allResults
 }
 
+// appendFailures appends the failed entries of extra to failures.
+func appendFailures(failures, extra []sourceResult) []sourceResult {
+	for _, sr := range extra {
+		if sr.err != nil {
+			failures = append(failures, sr)
+		}
+	}
+	return failures
+}
+
+// sourceErrorsFrom renders failed sourceResults as wire SourceErrors. Nil
+// when nothing failed, so the omitempty field stays absent on a clean search.
+func sourceErrorsFrom(failures []sourceResult) []SourceError {
+	if len(failures) == 0 {
+		return nil
+	}
+	out := make([]SourceError, 0, len(failures))
+	for _, sr := range failures {
+		out = append(out, newSourceError(sr.sourceID, sr.err))
+	}
+	return out
+}
+
 // SearchV2 runs Search and converts the merged Publication list into the
 // v2 fat-struct shape (Result with Kind discriminator + per-kind blocks).
 // Cycle 2 v1.6.0 entry point for callers wanting the new wire shape;
@@ -828,6 +861,7 @@ func (r *Router) SearchV2(
 		Results:        r.PublicationsToResults(merged.Results),
 		SourcesQueried: merged.SourcesQueried,
 		SourcesFailed:  merged.SourcesFailed,
+		SourceErrors:   merged.SourceErrors,
 		SourcesSkipped: merged.SourcesSkipped,
 		AuditRef:       merged.AuditRef,
 		FallbackWalked: merged.FallbackWalked,
@@ -1073,16 +1107,19 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 			remaining = r.rateLimits.Remaining(plugin.ID(), CredentialAnonymous)
 		}
 
-		residency := plugin.Residency()
-		acceptsCreds := sourceAcceptsCredentialsFromCaps(plugin.ID(), caps)
-		requiresKey := caps.RequiresCredential
+		// Every static field comes from catalogueEntryFor — the same producer
+		// pkg/retrievr.Catalogue() reads — so the tool and the catalogue
+		// cannot disagree about a source. Only Enabled and RateLimit are
+		// properties of this running instance.
+		entry := catalogueEntryFor(plugin)
 
 		infos = append(infos, SourceInfo{
-			ID:                       plugin.ID(),
-			Name:                     plugin.Name(),
-			Description:              plugin.Description(),
+			ID:                       entry.ID,
+			Name:                     entry.Name,
+			Description:              entry.Description,
+			Category:                 entry.Category,
 			Enabled:                  true, // registered implies enabled
-			ContentTypes:             plugin.ContentTypes(),
+			ContentTypes:             entry.ContentTypes,
 			NativeFormat:             plugin.NativeFormat(),
 			AvailableFormats:         plugin.AvailableFormats(),
 			SupportsFullText:         caps.SupportsFullText,
@@ -1104,24 +1141,24 @@ func (r *Router) ListSources(ctx context.Context) []SourceInfo {
 				Remaining:         remaining,
 			},
 			CategoriesHint:     caps.CategoriesHint,
-			AcceptsCredentials: acceptsCreds,
+			AcceptsCredentials: entry.AcceptsCredentials,
 
 			// Cycle-2 additions surfaced for LLM agents + compliance review.
 			Kinds:           caps.Kinds,
 			QueryIntents:    caps.QueryIntents,
-			Region:          residency.Region,
-			DPAStatus:       residency.DPAStatus,
-			SubprocessorURL: residency.SubprocessorURL,
+			Region:          entry.Region,
+			DPAStatus:       entry.DPAStatus,
+			SubprocessorURL: entry.SubprocessorURL,
 			// FreeTier means the plugin works without a key (anonymous
 			// or optional-credential). RequiresKey means it refuses
 			// without one (paid / strictly-keyed).
-			FreeTier:    !requiresKey,
-			RequiresKey: requiresKey,
+			FreeTier:    !entry.RequiresAPIKey,
+			RequiresKey: entry.RequiresAPIKey,
 
 			SupportsPublishedAfterFilter: caps.SupportsPublishedAfterFilter,
 
 			// v2.26.0 — whether rtv_get can ever succeed here.
-			SupportsGet: caps.SupportsGet,
+			SupportsGet: entry.SupportsGet,
 		})
 	}
 

@@ -132,15 +132,17 @@ type Result struct {
 // []Result. v1 callers continue using MergedSearchResult; v2 callers opt
 // in via Client.SearchV2 or rtv_search with compat:"v2".
 type MergedSearchResultV2 struct {
-	TotalResults   int        `json:"total_results"`
-	Results        []Result   `json:"results"`
-	SourcesQueried []string   `json:"sources_queried"`
-	SourcesFailed  []string   `json:"sources_failed"`
-	SourcesSkipped []SkipNote `json:"sources_skipped,omitempty"`
-	AuditRef       string     `json:"audit_ref,omitempty"`
-	FallbackWalked bool       `json:"fallback_walked,omitempty"`
-	EUFallbackUsed bool       `json:"eu_fallback_used,omitempty"`
-	HasMore        bool       `json:"has_more"`
+	TotalResults   int      `json:"total_results"`
+	Results        []Result `json:"results"`
+	SourcesQueried []string `json:"sources_queried"`
+	SourcesFailed  []string `json:"sources_failed"`
+	// SourceErrors — see MergedSearchResult.SourceErrors (v2.28.0).
+	SourceErrors   []SourceError `json:"source_errors,omitempty"`
+	SourcesSkipped []SkipNote    `json:"sources_skipped,omitempty"`
+	AuditRef       string        `json:"audit_ref,omitempty"`
+	FallbackWalked bool          `json:"fallback_walked,omitempty"`
+	EUFallbackUsed bool          `json:"eu_fallback_used,omitempty"`
+	HasMore        bool          `json:"has_more"`
 }
 
 // ---------------------------------------------------------------------------

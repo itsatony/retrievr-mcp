@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help build mcp cli test test-fast vet fmt fmt-check lint lint-install ci ci-fast clean install-hooks
+.PHONY: help build mcp cli test test-fast vet fmt fmt-check lint lint-install ci ci-fast clean install-hooks catalogue
 
 # Match the golangci-lint version pinned in .github/workflows/ci.yaml.
 GOLANGCI_LINT_VERSION := v1.64.8
@@ -22,6 +22,18 @@ mcp:  ## build the MCP server binary
 
 cli:  ## build the CLI binary
 	go build -o retrievr-cli ./cmd/retrievr-cli
+
+# --------------------------------------------------------------------
+# Source catalogue (v2.28.0) — docs/source-catalogue.json is GENERATED.
+# TestCommittedCatalogueMatchesCatalogue (pkg/retrievr) fails when it drifts.
+# --------------------------------------------------------------------
+
+CATALOGUE_FILE := docs/source-catalogue.json
+
+catalogue:  ## regenerate docs/source-catalogue.json from the plugin registry
+	go run ./cmd/retrievr-cli catalogue > $(CATALOGUE_FILE).tmp
+	mv $(CATALOGUE_FILE).tmp $(CATALOGUE_FILE)
+	@echo "wrote $(CATALOGUE_FILE)"
 
 # --------------------------------------------------------------------
 # Tests

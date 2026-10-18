@@ -479,3 +479,14 @@ sources:
     timeout: "20s"
     rate_limit: 2.0
     rate_limit_burst: 2
+
+  staan:
+    enabled: false               # v2.29.0. EU web search, own EU index, hosted on OVHcloud France; DPA on request. REQUIRES api_key.
+    api_key: ""                  # Bearer token; or RETRIEVR_STAAN_API_KEY env. Per-call override: credentials.staan / X-Retrievr-Cred-staan.
+    timeout: "10s"               # Staan recommends 8-10s when extra_snippets/full_content are on.
+    rate_limit: 10.0             # documented ceiling: 20 req/s
+    rate_limit_burst: 5
+    extra:
+      market: "en-us"            # fr-fr | de-de | en-us | en-gb | en-fr | en-ca | en-au | en-in; `language` filter overrides per call
+      extra_snippets: "false"    # "true" fetches pages and returns reranked chunks (slower)
+      full_content: ""           # "" | markdown | html — full page body per result (slower)

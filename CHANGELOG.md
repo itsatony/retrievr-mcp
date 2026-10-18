@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.29.0] - 2026-10-18
+
+Minor release. **Staan** — EU web search on its own European index, hosted in
+the EU — joins as source `staan` (62 sources). It is meant to become the
+default web search provider once a key exists; until then it ships disabled.
+
+### Added — `staan` source plugin
+
+- `POST https://api.staan.ai/v2/search/web`, `Authorization: Bearer <key>`
+  (docs.staan.ai, read 2026-10-18). Category `web`, kind `web`,
+  `requires_api_key: true`, intents `quick_lookup`, `reference`,
+  `deep_research`. No `news` intent: Staan documents no freshness/date filter.
+- Paging follows the documented contract — 10 results per page, `offset`
+  0/10/20/30. An offset that is not a multiple of 10 is served from the
+  enclosing page; an offset past 39 returns an empty, final page without a call.
+- `include_domains` / `exclude_domains` map to Staan's POST fields. Staan
+  **silently drops** domains past 10 and refuses both together; retrievr
+  refuses both cases up front as `invalid_request` instead of searching a
+  narrower set than asked. Queries over 400 characters are refused the same way.
+- `language` selects a documented `market` (`fr-fr`, `de-de`, `en-us`,
+  `en-gb`, `en-fr`, `en-ca`, `en-au`, `en-in`); anything else falls back to
+  `sources.staan.extra.market` (default `en-us`; Staan's own default is
+  `fr-fr`). Four further markets exist but the docs never list them, so none
+  is guessed.
+- Optional enrichment via `extra.extra_snippets` / `extra.full_content`
+  (`markdown`|`html`) / `max_snippets` / `min_score`: chunks land in
+  `source_metadata.staan_extra_snippets`, page bodies in `full_text` (only when
+  `length > 0`, as the docs require). Off by default — they make each call
+  slower (Staan recommends an 8–10 s client timeout).
+- Errors map onto the v2.28.0 typed codes. Staan documents **no** error
+  statuses or quota errors (the live API answers a bad key with
+  `401 {"message":"Unauthorized","statusCode":401}`), so the mapping is
+  defensive: 401/403 → `credential_invalid`; 402, or any body naming a
+  quota/credit/monthly/plan limit → `quota_exhausted` (permanent, not
+  retried); other 429 → `rate_limited`; 400/413/422 → `invalid_request`;
+  else `upstream_error`.
+- Residency: `region: EU` (OVHcloud France — privacy policy §3.4, FAQ),
+  `dpa_status: unknown` (the DPA is "available upon request"; none is signed),
+  `subprocessor_url: https://staan.ai/privacy-policy`,
+  `residency_verified_at: 2026-10-18`. ⚠ The FAQ also names an **American
+  fallback** that "steps in to supplement certain results only when necessary"
+  and states queries are not retained by it.
+- `staan` leads the `quick_lookup` primary rung. Like every keyed source it is
+  dropped by the router until it is enabled with a key, so nothing changes for
+  a deployment that has not configured it.
+- `TestStaan_LiveSmoke` runs against the real API when `RETRIEVR_STAAN_API_KEY`
+  is set and reports SKIPPED otherwise.
+
+### Changed
+
+- Source count 61 → 62 (`SourceCount`, catalogue floor, registry guard, tool
+  descriptions, docs). `docs/source-catalogue.json` regenerated.
+
 ## [2.28.0] - 2026-10-18
 
 Minor release. A **machine-readable source catalogue** for governance, and a

@@ -4,12 +4,13 @@
 ![License](https://img.shields.io/badge/License-MIT-blue)
 ![MCP](https://img.shields.io/badge/MCP-2025--11--25-purple)
 
-An MCP server **and** importable Go library that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repos, packages, patents, court decisions, regulations, encyclopedia articles, multimedia, social posts, places, podcasts, and structured facts. **61 source plugins** behind three tools (`rtv_search`, `rtv_get`, `rtv_list_sources`):
+An MCP server **and** importable Go library that gives LLM agents unified access to academic papers, AI models, datasets, web pages, news, code repos, packages, patents, court decisions, regulations, encyclopedia articles, multimedia, social posts, places, podcasts, and structured facts. **62 source plugins** behind three tools (`rtv_search`, `rtv_get`, `rtv_list_sources`):
 
 - **v1 Scholarly** (10): ArXiv, PubMed, Semantic Scholar, OpenAlex, HuggingFace, Europe PMC, CrossRef, DBLP, NASA ADS, bioRxiv
 - **v2 Web / enrichment** (8): Exa, Brave, Linkup (**EU-resident**), Firecrawl, GitHub, Wikipedia, Unpaywall (enrichment), Perplexity
 - **v3 Multimodal** (10): YouTube + Scrapingdog YouTube; Photon / TomTom / Nominatim (geo); Wikimedia / Europeana (images); Mastodon / Bluesky / Reddit (social)
 - **v5 Knowledge Commons** (19): StackExchange + HackerNews (Q&A); Zenodo / CORE / OpenAIRE (OA repositories); Wikidata / DataCite / ORCID (structured); npm / PyPI / crates / pkg.go.dev (packages); Google Patents / EPO OPS / CourtListener / EUR-Lex (patents + law); GDELT / IA Scholar / Wayback (archives)
+- **v2.29 EU web** (1): Staan (**EU index, EU-hosted**)
 - **v6 GeoExpansion + Premium** (14): Google Places / OSM Overpass / HERE (POI); Listen Notes / iTunes (podcasts); Dimensions / Lens (premium scholarly); Kagi / Mojeek / SerpAPI (paid web); Wolfram Alpha / Google KG (facts); NewsAPI / SerpAPI News (premium news)
 
 Paid plugins set `RequiresCredential=true` and refuse to start without a key — `rtv_list_sources` advertises `requires_key` and `free_tier` so agents can filter the catalog by reachability.
@@ -218,7 +219,7 @@ When every source fails, Go callers get an `*AllSourcesFailedError`;
 
 ## Sources
 
-61 plugins across five tiers. The full per-source capability surface (rate limits, supported filters, supported sort orders, residency, format support, intents served) is available at runtime via `rtv_list_sources`. The tables below are an abbreviated map; for the canonical detail see [`docs/tool-reference.md`](docs/tool-reference.md).
+62 plugins across five tiers. The full per-source capability surface (rate limits, supported filters, supported sort orders, residency, format support, intents served) is available at runtime via `rtv_list_sources`. The tables below are an abbreviated map; for the canonical detail see [`docs/tool-reference.md`](docs/tool-reference.md).
 
 ### v1 — Scholarly (10)
 
@@ -305,6 +306,12 @@ When every source fails, Go callers get an `*AllSourcesFailedError`;
 | Google KG | `kgapi` | reference | **required** | Knowledge Graph entity lookup |
 | NewsAPI | `newsapi` | web (news) | **required** | premium news aggregator |
 | SerpAPI News | `serpapinews` | web (news) | **required** | Google News via SerpAPI |
+
+### v2.29 — EU web (1)
+
+| Source | ID | Content | Key | Notes |
+|--------|----|---------|-----|-------|
+| Staan | `staan` | web | **required** | **EU index, hosted on OVHcloud France**; DPA on request; 10 results/page, offset ≤ 30; leads the `quick_lookup` primary rung once enabled |
 
 Use `rtv_list_sources` for the runtime catalog (capabilities, residency, free-tier flag).
 

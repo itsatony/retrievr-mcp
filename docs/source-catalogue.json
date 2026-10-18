@@ -1100,6 +1100,30 @@
       ]
     },
     {
+      "id": "staan",
+      "name": "Staan",
+      "description": "EU web search on a proprietary European index (Staan / European Search Perspective, Paris; hosted on OVHcloud France). Paid; 1,000 free requests/month, then €2 per 1,000. 10 results per page, up to 4 pages. Per-call credential: staan.",
+      "category": "web",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "EU",
+      "dpa_status": "unknown",
+      "subprocessor_url": "https://staan.ai/privacy-policy",
+      "residency_verified_at": "2026-10-18",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference",
+        "deep_research"
+      ]
+    },
+    {
       "id": "stackexchange",
       "name": "Stack Exchange",
       "description": "Search Q\u0026A across the Stack Exchange network (Stack Overflow, Server Fault, Ask Ubuntu, Math Overflow, and 170+ other sites). Free — anonymous access caps at 300/day/IP; configure a free API key for 10k/day. CC-BY-SA content. Per-call credential: stackexchange. Default site is stackoverflow; override per-deployment via extra.default_site.",

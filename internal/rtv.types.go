@@ -608,6 +608,11 @@ type MergedSearchResult struct {
 	SourcesFailed  []string      `json:"sources_failed"`
 	HasMore        bool          `json:"has_more"`
 
+	// SourceErrors says WHY each source in SourcesFailed failed, with a
+	// closed-set code (quota_exhausted, rate_limited, credential_invalid,
+	// ...). Absent when nothing failed. v2.28.0.
+	SourceErrors []SourceError `json:"source_errors,omitempty"`
+
 	// Cycle-2 additions (EU mode + audit observability):
 
 	// SourcesSkipped lists providers excluded from the fan-out by the
@@ -807,9 +812,12 @@ type RateLimitInfo struct {
 // kinds, and free-tier flags so LLM agents and operators can pick sources
 // without enumerating booleans.
 type SourceInfo struct {
-	ID                       string          `json:"id"`
-	Name                     string          `json:"name"`
-	Description              string          `json:"description"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// Category is the governance category (v2.28.0) — the same value
+	// Catalogue() reports for this source.
+	Category                 SourceCategory  `json:"category"`
 	Enabled                  bool            `json:"enabled"`
 	ContentTypes             []ContentType   `json:"content_types"`
 	NativeFormat             ContentFormat   `json:"native_format"`

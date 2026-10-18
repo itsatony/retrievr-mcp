@@ -36,7 +36,11 @@ import (
 //       sources.youtube.api_key in YAML / RETRIEVR_YOUTUBE_API_KEY env.
 // Quota: search.list = 100 units, videos.list = 1 unit. Default 10000
 //        units/day = ~100 searches/key/day. 403 with reason "quotaExceeded"
-//        maps to ErrRateLimitExceeded.
+//        or "dailyLimitExceeded" maps to ErrQuotaExhausted (v2.28.0; also
+//        matches ErrRateLimitExceeded, not retried); "rateLimitExceeded" /
+//        "userRateLimitExceeded" map to ErrRateLimitExceeded (retried).
+//        Either way the router reports a SourceError with code
+//        quota_exhausted / rate_limited — never an empty result.
 // Residency: US (Google Cloud). Blocked under eu_strict.
 // ---------------------------------------------------------------------------
 
@@ -109,7 +113,9 @@ const (
 	youtubeReasonQuotaExceeded      = "quotaExceeded"
 	youtubeReasonDailyLimitExceeded = "dailyLimitExceeded"
 	youtubeReasonRateLimitExceeded  = "rateLimitExceeded"
-	youtubeReasonKeyInvalid         = "keyInvalid"
+	// userRateLimitExceeded is Google's per-user short-window throttle.
+	youtubeReasonUserRateLimitExceeded = "userRateLimitExceeded"
+	youtubeReasonKeyInvalid            = "keyInvalid"
 )
 
 // ---------------------------------------------------------------------------
@@ -549,7 +555,14 @@ func classifyYouTubeHTTPError(status int, body []byte) error {
 	_ = json.Unmarshal(body, &env)
 	for _, e := range env.Error.Errors {
 		switch e.Reason {
-		case youtubeReasonQuotaExceeded, youtubeReasonDailyLimitExceeded, youtubeReasonRateLimitExceeded:
+		case youtubeReasonQuotaExceeded, youtubeReasonDailyLimitExceeded:
+			// The daily project quota (10,000 units; search.list = 100) is
+			// spent. It resets at midnight Pacific — not within a backoff —
+			// so this is ErrQuotaExhausted (permanent for the call), which
+			// still matches ErrRateLimitExceeded for older matchers.
+			return &QuotaExhaustedError{Source: youtubePluginID, Reason: e.Reason}
+		case youtubeReasonRateLimitExceeded, youtubeReasonUserRateLimitExceeded:
+			// A short-window throttle: a backoff does fix it.
 			return fmt.Errorf("%w: youtube reason=%s", ErrRateLimitExceeded, e.Reason)
 		case youtubeReasonKeyInvalid:
 			return fmt.Errorf("%w: youtube reason=%s", ErrCredentialInvalid, e.Reason)

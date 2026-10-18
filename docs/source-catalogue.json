@@ -1,0 +1,1326 @@
+{
+  "schema_version": "1",
+  "categories": [
+    "academic",
+    "web",
+    "code",
+    "patents_law",
+    "places",
+    "images",
+    "social",
+    "media",
+    "other"
+  ],
+  "sources": [
+    {
+      "id": "ads",
+      "name": "NASA ADS",
+      "description": "NASA Astrophysics Data System — 16M+ records in astronomy, astrophysics, planetary science, and related physics (API key required)",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": true,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "arxiv",
+      "name": "ArXiv",
+      "description": "Open-access preprint server for physics, mathematics, computer science, and more",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "biorxiv",
+      "name": "bioRxiv/medRxiv",
+      "description": "Preprint servers for biology and health sciences — supports date-range browsing and DOI retrieval (no keyword search)",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "bluesky",
+      "name": "Bluesky",
+      "description": "Search public posts on Bluesky via the AT Protocol AppView. No auth required for public search. AtprotoURI is the canonical dedup key (matches MetaKeyAtprotoURI). Tagged public-research-infrastructure for eu_strict opt-in admissibility.",
+      "category": "social",
+      "content_types": [
+        "post"
+      ],
+      "kinds": [
+        "post"
+      ],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "news"
+      ]
+    },
+    {
+      "id": "brave",
+      "name": "Brave Search",
+      "description": "Independent 35B+ page web index from Brave Software. Strong privacy posture, fast (median \u003c1s). US-resident; blocked under eu_strict.",
+      "category": "web",
+      "content_types": [
+        "any",
+        "image"
+      ],
+      "kinds": [
+        "web",
+        "news",
+        "image"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "news"
+      ]
+    },
+    {
+      "id": "core",
+      "name": "CORE",
+      "description": "Search CORE (core.ac.uk) — 350M+ open-access research papers aggregated from repositories worldwide. Returns DOIs for cross-source dedup. Free with API-key registration; pass key via PluginConfig.APIKey or per-call credentials.core.",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "paper"
+      ],
+      "region": "UK-adequacy",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "deep_research",
+        "primary_source"
+      ]
+    },
+    {
+      "id": "courtlistener",
+      "name": "CourtListener",
+      "description": "Search CourtListener (Free Law Project) for US federal and state court opinions. 8M+ records. Free; optional API token (per-call: courtlistener) lifts rate limits. Emits paper-typed results with Result.Kind = KindLaw; dedup keyed on citation code.",
+      "category": "patents_law",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "law"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source",
+        "reference"
+      ]
+    },
+    {
+      "id": "crates",
+      "name": "crates.io",
+      "description": "Search the crates.io Rust package registry. Free, public. Returns name, version, description, repository, downloads, categories, keywords. Rust Foundation policy mandates a contact User-Agent and ~1 req/s rate limit. Cross-registry dedup keyed on '\u003cecosystem\u003e:\u003cname\u003e'.",
+      "category": "code",
+      "content_types": [
+        "package"
+      ],
+      "kinds": [
+        "code"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "code_provenance",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "crossref",
+      "name": "CrossRef",
+      "description": "Comprehensive DOI registration agency with metadata for 150M+ scholarly works across all disciplines",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "datacite",
+      "name": "DataCite",
+      "description": "Search DataCite (api.datacite.org) — DOI registry specialized in research datasets, software, and outputs. Complements CrossRef's publication-DOI focus. Free, no auth required. EU-hosted (Hannover, DE).",
+      "category": "academic",
+      "content_types": [
+        "dataset",
+        "paper"
+      ],
+      "kinds": [
+        "dataset",
+        "paper"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "deep_research",
+        "primary_source",
+        "reference"
+      ]
+    },
+    {
+      "id": "dblp",
+      "name": "DBLP",
+      "description": "Computer science bibliography with 7M+ publications from conferences, journals, and workshops",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "dimensions",
+      "name": "Dimensions.ai",
+      "description": "Search Dimensions.ai (app.dimensions.ai) scholarly database via DSL. Free for academic users; paid commercial. Requires API key (per-call credentials.dimensions). Returns publications with DOI, authors, citation count, journal — covers the citation-graph depth not available in OA-only sources.",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "paper"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source"
+      ]
+    },
+    {
+      "id": "epoops",
+      "name": "EPO OPS",
+      "description": "Search the European Patent Office Open Patent Services (ops.epo.org). Free with registration (OAuth2 client_credentials). Returns worldwide patent publication references (EP, WO, US, JP, ...). Cross-source dedup keyed on publication number. EU-resident.",
+      "category": "patents_law",
+      "content_types": [
+        "patent"
+      ],
+      "kinds": [
+        "patent"
+      ],
+      "region": "EU",
+      "dpa_status": "signed",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source"
+      ]
+    },
+    {
+      "id": "eurlex",
+      "name": "EUR-Lex",
+      "description": "Search EUR-Lex (EU regulations, directives, decisions, CJEU case law) via the public HTML search page. Free, no auth. CELEX identifier serves as the dedup citation code. EU-resident (Luxembourg). Emits paper-typed results with Result.Kind = KindLaw.",
+      "category": "patents_law",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "law"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source",
+        "reference"
+      ]
+    },
+    {
+      "id": "europeana",
+      "name": "Europeana",
+      "description": "50M+ EU cultural-heritage items from museums, libraries, and archives. Image subset surfaced via TYPE=IMAGE. License first-class (Europeana's Rights statements). EU-resident (The Hague, NL); admissible under eu_strict.",
+      "category": "images",
+      "content_types": [
+        "image"
+      ],
+      "kinds": [
+        "image"
+      ],
+      "region": "EU",
+      "dpa_status": "signed",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "reference"
+      ]
+    },
+    {
+      "id": "europmc",
+      "name": "Europe PMC",
+      "description": "Open access biomedical literature database with 40M+ publications, free access, no authentication required",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "UK-adequacy",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "exa",
+      "name": "Exa.ai",
+      "description": "Neural + keyword web search with snippet extraction. Strong on technical / research-adjacent web content (US-resident; blocked under eu_strict).",
+      "category": "web",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "web",
+        "news"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "deep_research"
+      ]
+    },
+    {
+      "id": "firecrawl",
+      "name": "Firecrawl",
+      "description": "Web search + per-URL markdown extraction. Pairs with rtv_get for primary-source bodies. US-resident; blocked under eu_strict.",
+      "category": "web",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "gdelt",
+      "name": "GDELT 2.0",
+      "description": "Search the GDELT 2.0 Global Database of Events, Language \u0026 Tone — real-time global news with 15-minute update cycle, 60+ languages, structured theme/country tags. Free, no auth required. ArtList mode (article-level records).",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "news"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "news",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "github",
+      "name": "GitHub Code Search",
+      "description": "Public repository search ranked by stars/relevance. Maps to IntentCodeProvenance. US-resident; blocked under eu_strict.",
+      "category": "code",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "code"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "code_provenance"
+      ]
+    },
+    {
+      "id": "googlepatents",
+      "name": "Google Patents",
+      "description": "Search Google Patents via the public xhr/query endpoint. Free, no auth. Returns publication number, title, snippet, inventors, assignee, dates, CPC classifications. NOTE: rides Google's undocumented xhr endpoint — see retrievr_v5.md §12 for fragility caveats.",
+      "category": "patents_law",
+      "content_types": [
+        "patent"
+      ],
+      "kinds": [
+        "patent"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source"
+      ]
+    },
+    {
+      "id": "googleplaces",
+      "name": "Google Places",
+      "description": "Search Google Places (Places API v1) for POIs and addresses. Free $200/mo credit on Google Maps Platform; paid above. Requires API key (PluginConfig.APIKey or per-call credentials.googleplaces). Returns place_id, formatted address, lat/lon, rating, types, website URI.",
+      "category": "places",
+      "content_types": [
+        "place"
+      ],
+      "kinds": [
+        "place"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "hackernews",
+      "name": "Hacker News",
+      "description": "Search Hacker News via the public Algolia-hosted mirror (hn.algolia.com). Free, no auth required, covers the full HN history. Returns stories by default; filters.date_from/date_to honoured via numericFilters created_at_i. Sort: relevance (default) or date — note Algolia's search_by_date endpoint is descending-only, so SortDateAsc resolves to the same descending order as SortDateDesc.",
+      "category": "social",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "qa"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "news",
+        "code_provenance"
+      ]
+    },
+    {
+      "id": "here",
+      "name": "HERE Geocoding",
+      "description": "Search HERE Geocoding \u0026 Search (geocode.search.hereapi.com) for addresses, POIs, and administrative areas. Free 1000 transactions/day tier; paid above. EU-resident (Berlin). Requires API key (PluginConfig.APIKey or per-call credentials.here).",
+      "category": "places",
+      "content_types": [
+        "place"
+      ],
+      "kinds": [
+        "place"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "huggingface",
+      "name": "HuggingFace",
+      "description": "AI community hub with papers, models, and datasets — papers linked to ArXiv, 1M+ models, 100K+ datasets",
+      "category": "academic",
+      "content_types": [
+        "paper",
+        "model",
+        "dataset"
+      ],
+      "kinds": [],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": true,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "iascholar",
+      "name": "IA Scholar",
+      "description": "Search Internet Archive Scholar (scholar.archive.org) — aggregator of open-access scholarly papers with Wayback fallbacks for paywalled originals. Free, no auth required. Returns DOI + ArXiv ID for cross-source dedup. US non-profit residency.",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "paper"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source"
+      ]
+    },
+    {
+      "id": "itunes",
+      "name": "iTunes / Apple Podcasts",
+      "description": "Search the iTunes Store / Apple Podcasts catalog (itunes.apple.com). Free, no auth required. Returns podcast episode metadata: title, show name, publisher, audio preview URL, duration, artwork. Cross-provider audio dedup keyed on '\u003cecosystem\u003e:\u003ctrackId\u003e'.",
+      "category": "media",
+      "content_types": [
+        "audio"
+      ],
+      "kinds": [
+        "audio"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "kagi",
+      "name": "Kagi Search",
+      "description": "Search Kagi (ad-free premium web search). Paid; $25/mo + $0.025/search. Returns ranked organic results with snippet, published date, thumbnail when available. Per-call credential: kagi. US-resident (Kagi LLC).",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "deep_research",
+        "news"
+      ]
+    },
+    {
+      "id": "kgapi",
+      "name": "Google Knowledge Graph",
+      "description": "Search the Google Knowledge Graph for structured entities (people, places, books, organizations). Free with a Google Cloud API key (100k/day quota). Returns entity name, description, image, Wikipedia article body, types. Per-call credential: kgapi. Same Google Cloud key can be shared with Google Places (cycle 1) when both APIs are enabled.",
+      "category": "other",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "fact"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "lens",
+      "name": "Lens.org",
+      "description": "Search Lens.org scholarly database via the REST API. Paid subscription required. Returns publications with DOI, authors, citation count, source journal, publication type. Complements Dimensions and CrossRef for citation-graph and patent-scholarly overlap analysis.",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "paper"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source"
+      ]
+    },
+    {
+      "id": "linkup",
+      "name": "Linkup",
+      "description": "EU-resident web search (Linkup SAS, France) with signed DPA. Primary admit under eu_strict mode.",
+      "category": "web",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "EU",
+      "dpa_status": "signed",
+      "subprocessor_url": "https://www.linkup.so/legal/dpa",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "deep_research"
+      ]
+    },
+    {
+      "id": "listennotes",
+      "name": "Listen Notes",
+      "description": "Search Listen Notes (listen-api.listennotes.com) for podcast episodes and shows. Free 300 calls/mo dev tier; paid above. Returns episode title, audio URL, duration, publisher, show metadata. Requires API key (per-call credentials.listennotes).",
+      "category": "media",
+      "content_types": [
+        "audio"
+      ],
+      "kinds": [
+        "audio"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "news",
+        "reference"
+      ]
+    },
+    {
+      "id": "mastodon",
+      "name": "Mastodon",
+      "description": "Search public statuses (posts) on a configured Mastodon instance. Mastodon v4+ requires no auth for public-statuses search. Residency follows the configured instance — defaults to EU; operators using a non-EU instance must set extra.region accordingly.",
+      "category": "social",
+      "content_types": [
+        "post"
+      ],
+      "kinds": [
+        "post"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "news"
+      ]
+    },
+    {
+      "id": "mojeek",
+      "name": "Mojeek",
+      "description": "Search Mojeek (mojeek.com) — independent UK-based web index. Free dev tier (~1k/mo); paid above. UK-adequacy residency. Per-call credential: mojeek.",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "UK-adequacy",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "deep_research"
+      ]
+    },
+    {
+      "id": "newsapi",
+      "name": "NewsAPI.org",
+      "description": "Search NewsAPI.org for news articles across 80k+ sources. Free dev tier (24-hour delay + dev-domain-only); paid plans real-time. Returns title, source, author, snippet, URL, published date. Per-call credential: newsapi. Maps filters.language (ISO-639-1), date_from/date_to, include_domains/exclude_domains.",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "news"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "news",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "nominatim",
+      "name": "Nominatim (OSM)",
+      "description": "OpenStreetMap reference geocoder. Comprehensive global coverage. STRICT policy: 1 req/s hard cap on the public endpoint; self-host for higher volume. UK-adequacy residency; admissible under eu_strict.",
+      "category": "places",
+      "content_types": [
+        "place"
+      ],
+      "kinds": [
+        "place"
+      ],
+      "region": "UK-adequacy",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "reference"
+      ]
+    },
+    {
+      "id": "npm",
+      "name": "npm",
+      "description": "Search the npm package registry (registry.npmjs.org). Free, no auth required. Returns name, version, description, keywords, repository URL, weekly-download-derived popularity score. Cross-registry dedup keyed on '\u003cecosystem\u003e:\u003cname\u003e'.",
+      "category": "code",
+      "content_types": [
+        "package"
+      ],
+      "kinds": [
+        "code"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "code_provenance",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "openaire",
+      "name": "OpenAIRE",
+      "description": "Search OpenAIRE (EU, Greece) — EU-funded research aggregator with publications, datasets, software, and project outputs across 50+ European countries. Returns DOIs for cross-source dedup. Free; optional public-data token via PluginConfig.APIKey or per-call credentials.openaire.",
+      "category": "academic",
+      "content_types": [
+        "paper",
+        "dataset"
+      ],
+      "kinds": [
+        "paper",
+        "dataset"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "deep_research",
+        "primary_source",
+        "reference"
+      ]
+    },
+    {
+      "id": "openalex",
+      "name": "OpenAlex",
+      "description": "Open catalog of the global research system with 250M+ works, authors, institutions, and concepts",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": true,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "orcid",
+      "name": "ORCID",
+      "description": "Search ORCID (pub.orcid.org) for researcher profiles by name, affiliation, or keyword. Public-data API; free with registration token. Returns person records (display name, affiliations, ORCID iD). Cross-source dedup keys on ORCID iD.",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "fact"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "osmoverpass",
+      "name": "OSM Overpass",
+      "description": "Query OpenStreetMap via the Overpass API. Free, no auth required. Default query is a name regex over nodes/ways/relations; pass raw Overpass QL beginning with '[out:' via filters.categories[0] for full control. EU-hosted by default (overpass-api.de Heidelberg mirror).",
+      "category": "places",
+      "content_types": [
+        "place"
+      ],
+      "kinds": [
+        "place"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "perplexity",
+      "name": "Perplexity Sonar",
+      "description": "Synthesized web answer + inline citations. Maps to LLMContext on a primary KindWeb Result; citations follow as sparse-shape entries. Slow (~5-13s); US-resident; blocked under eu_strict.",
+      "category": "web",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "deep_research"
+      ]
+    },
+    {
+      "id": "photon",
+      "name": "Photon (Komoot)",
+      "description": "OpenStreetMap-based geocoder by Komoot (Berlin, DE). Search-as-you-type tolerant, typo-correcting. Apache 2.0 OSS — public endpoint or self-host. EU-resident; admissible under eu_strict.",
+      "category": "places",
+      "content_types": [
+        "place"
+      ],
+      "kinds": [
+        "place"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "pkggodev",
+      "name": "pkg.go.dev",
+      "description": "Search the Go module index (pkg.go.dev). Free, no auth required. Returns package import path, version, synopsis, import-count, license. NOTE: result extraction parses the HTML search page — pkg.go.dev has no free-text-search JSON API. Cross-registry dedup keyed on '\u003cecosystem\u003e:\u003cimportPath\u003e'.",
+      "category": "code",
+      "content_types": [
+        "package"
+      ],
+      "kinds": [
+        "code"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "code_provenance",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "pubmed",
+      "name": "PubMed",
+      "description": "Biomedical literature database from the U.S. National Library of Medicine with 35M+ citations",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": true,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "pypi",
+      "name": "PyPI",
+      "description": "Search the Python Package Index (pypi.org). Free, no auth required. Search returns lightweight hits (name, version, summary) parsed from the official HTML search page; Get returns the full JSON metadata for a known package. Cross-registry dedup keyed on '\u003cecosystem\u003e:\u003cname\u003e'.",
+      "category": "code",
+      "content_types": [
+        "package"
+      ],
+      "kinds": [
+        "code"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "code_provenance",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "reddit",
+      "name": "Reddit",
+      "description": "Search Reddit posts (type=link) via OAuth2 client-credentials. Credential format is \u003cclient_id\u003e:\u003cclient_secret\u003e as a single value. ~100 QPM on the free tier. US-resident; blocked under eu_strict.",
+      "category": "social",
+      "content_types": [
+        "post"
+      ],
+      "kinds": [
+        "post"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "news"
+      ]
+    },
+    {
+      "id": "s2",
+      "name": "Semantic Scholar",
+      "description": "AI-powered research tool for scientific literature with citation data and open-access links",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": true,
+      "supports_get": true,
+      "intents": []
+    },
+    {
+      "id": "scrapingdog_youtube",
+      "name": "Scrapingdog YouTube",
+      "description": "Paid Scrapingdog fallback for YouTube search when the official YouTube Data API daily quota is exhausted. ~5 credits per query (~$0.005). Same youtube_id dedup as the official source — merged transparently in cross-source results.",
+      "category": "media",
+      "content_types": [
+        "video"
+      ],
+      "kinds": [
+        "video"
+      ],
+      "region": "US",
+      "dpa_status": "unknown",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "serpapi",
+      "name": "SerpAPI (Google)",
+      "description": "Search Google via SerpAPI (serpapi.com). Paid; same per-call credential covers Google + Google News engines (cycle 6 reuses this key). Returns organic_results with position, title, link, snippet, displayed_link, date.",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "deep_research",
+        "news"
+      ]
+    },
+    {
+      "id": "serpapinews",
+      "name": "SerpAPI (Google News)",
+      "description": "Search Google News via SerpAPI's engine=google_news endpoint. Same SerpAPI API key as the cycle-4 web plugin (serpapi). Paid. Returns news articles with title, snippet, source, displayed_link, date.",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "news"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "news",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "stackexchange",
+      "name": "Stack Exchange",
+      "description": "Search Q\u0026A across the Stack Exchange network (Stack Overflow, Server Fault, Ask Ubuntu, Math Overflow, and 170+ other sites). Free — anonymous access caps at 300/day/IP; configure a free API key for 10k/day. CC-BY-SA content. Per-call credential: stackexchange. Default site is stackoverflow; override per-deployment via extra.default_site.",
+      "category": "social",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "qa"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference",
+        "code_provenance"
+      ]
+    },
+    {
+      "id": "tomtom",
+      "name": "TomTom Search",
+      "description": "Commercial EU-resident place search by TomTom (Amsterdam, NL). Strong POI coverage, 2,500 free requests/day. EU-resident; admissible under eu_strict.",
+      "category": "places",
+      "content_types": [
+        "place"
+      ],
+      "kinds": [
+        "place"
+      ],
+      "region": "EU",
+      "dpa_status": "signed",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "unpaywall",
+      "name": "Unpaywall",
+      "description": "DOI → open-access PDF resolver. Used as a post-merge enrichment hook on paper results with a DOI but no upstream PDF link.",
+      "category": "academic",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "paper"
+      ],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "primary_source"
+      ]
+    },
+    {
+      "id": "wayback",
+      "name": "Wayback Machine",
+      "description": "Resolve a URL to its closest Internet Archive Wayback snapshot. GET-only: pass the URL (and optional YYYYMMDD timestamp) as the rtv_get id like 'wayback:https://example.com' or 'wayback:https://example.com:20230114'. Search returns a usage hint, not real results.",
+      "category": "web",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "web"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "wikidata",
+      "name": "Wikidata",
+      "description": "Search Wikidata for structured-fact entities (QIDs, labels, descriptions, aliases). Uses the wbsearchentities text-lookup endpoint by default — power users can pass raw SPARQL via filters.extra['sparql'] in a future cycle. Free; throttled to ~5s response window. Public-research-infrastructure.",
+      "category": "other",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "fact"
+      ],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "wikimedia",
+      "name": "Wikimedia Commons",
+      "description": "100M+ openly-licensed images, audio, and video on Wikimedia Commons. License (e.g. CC BY-SA) is first-class — Publication.License and ImageData.License are always populated for downstream-safe reuse. Tagged public-research-infrastructure (US-hosted but openly-licensed public infrastructure).",
+      "category": "images",
+      "content_types": [
+        "image"
+      ],
+      "kinds": [
+        "image"
+      ],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": false,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "wikipedia",
+      "name": "Wikipedia",
+      "description": "Encyclopedia article search via the public MediaWiki API. No auth required (polite User-Agent recommended).",
+      "category": "other",
+      "content_types": [
+        "any"
+      ],
+      "kinds": [
+        "encyclopedia"
+      ],
+      "region": "public-research-infrastructure",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "reference",
+        "quick_lookup"
+      ]
+    },
+    {
+      "id": "wolframalpha",
+      "name": "Wolfram Alpha",
+      "description": "Query Wolfram Alpha (api.wolframalpha.com) for computed answers, structured facts, formulas, and unit conversions. Free dev tier 2k/mo; paid above. Each result pod becomes a Publication with KindFact at the v2 layer. Per-call credential: wolframalpha.",
+      "category": "other",
+      "content_types": [
+        "paper"
+      ],
+      "kinds": [
+        "fact"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": false,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "youtube",
+      "name": "YouTube",
+      "description": "Search YouTube videos via the official Data API v3. Returns metadata (title, channel, thumbnail, published_at) on search; rtv_get adds duration, view count, and like count. US-resident; blocked under eu_strict. Default quota: 10,000 units/day per API key = ~100 searches/day.",
+      "category": "media",
+      "content_types": [
+        "video"
+      ],
+      "kinds": [
+        "video"
+      ],
+      "region": "US",
+      "dpa_status": "covered-by-scc",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": true,
+      "accepts_credentials": true,
+      "supports_get": true,
+      "intents": [
+        "quick_lookup",
+        "reference"
+      ]
+    },
+    {
+      "id": "zenodo",
+      "name": "Zenodo",
+      "description": "Search Zenodo (CERN-hosted, EU) for open-access papers, datasets, software, and other research outputs. Returns DOIs for cross-source dedup with arXiv/CrossRef/OpenAlex. Free, no auth required. Filters: resource_type (categories), publication_date range.",
+      "category": "academic",
+      "content_types": [
+        "paper",
+        "dataset"
+      ],
+      "kinds": [
+        "paper",
+        "dataset"
+      ],
+      "region": "EU",
+      "dpa_status": "n/a",
+      "residency_verified_at": "2026-05-10",
+      "requires_api_key": false,
+      "accepts_credentials": false,
+      "supports_get": true,
+      "intents": [
+        "deep_research",
+        "primary_source",
+        "reference"
+      ]
+    }
+  ]
+}

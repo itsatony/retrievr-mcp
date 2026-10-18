@@ -216,6 +216,7 @@ exposed via the `credentials` object.
 | `results` | []Result | Merged + deduplicated list. |
 | `sources_queried` | []string | Source IDs actually contacted. |
 | `sources_failed` | []string | Source IDs that errored. |
+| `source_errors` | []SourceError | v2.28.0 — why each failed: `{source, code, message, retryable}`; `code` ∈ `quota_exhausted`, `rate_limited`, `credential_required`, `credential_invalid`, `timeout`, `canceled`, `invalid_request`, `unsupported`, `upstream_error`. Omitted when nothing failed. |
 | `sources_skipped` | []SkipNote | Providers excluded by EU-mode gate, with structured reason. |
 | `audit_ref` | string | `evt_aud_<16hex>` — correlate to retrievr's audit log. |
 | `fallback_walked` | bool | True when the fallback chain walked past the primary set. |
@@ -332,6 +333,7 @@ Returns one `SourceInfo` per registered plugin (sorted by ID).
 | `id` | string | Source identifier. |
 | `name` | string | Human-readable name. |
 | `description` | string | Short description. |
+| `category` | string | v2.28.0 governance grouping (`academic`, `web`, `code`, `patents_law`, `places`, `images`, `social`, `media`, `other`) — same value as `retrievr.Catalogue()` / `docs/source-catalogue.json`. |
 | `enabled` | bool | True when registered. |
 | `content_types` | []string | Content types served. |
 | `native_format` | string | Native response format. |

@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.28.0] - 2026-10-18
+
+Minor release. A **machine-readable source catalogue** for governance, and a
+spent **YouTube quota** that is reported as such instead of vanishing.
+
+### Added — `retrievr.Catalogue()`: the static source catalogue
+
+obol's per-org source allow-list needs every source's static description
+without constructing a client or hardcoding a list. `pkg/retrievr` now exports:
+
+```go
+func Catalogue() []CatalogueEntry            // sorted by ID; no client, no config, no I/O
+func CatalogueJSON() ([]byte, error)         // == docs/source-catalogue.json
+func AllSourceCategories() []SourceCategory
+func SourceCategoryFor(sourceID string) SourceCategory
+```
+
+Each `CatalogueEntry` carries `id`, `name`, `description`, `category`
+(`academic`/`web`/`code`/`patents_law`/`places`/`images`/`social`/`media`/`other`),
+`content_types`, `kinds`, `region` (+ `dpa_status`, `subprocessor_url`,
+`residency_verified_at`), `requires_api_key`, `accepts_credentials`,
+`supports_get`, `intents`. 61 sources: residency **34 US · 13 EU ·
+10 public-research-infrastructure · 4 UK-adequacy · 0 global · 0 unknown** —
+the existing `ResidencyTag` vocabulary, reported, not re-mapped.
+
+- **One producer.** `rtv_list_sources` and `Catalogue()` read every static
+  field through one function; `SourceInfo` gains `category`. Guarded by
+  `TestListSourcesAgreesWithCatalogue`.
+- **Coverage both directions** (factories ↔ catalogue ↔ `AllSourceIDs` ↔
+  categories), each source exactly once, with a hard floor of 61 so a shrunken
+  registry cannot pass vacuously; categories are cross-checked against each
+  plugin's own declared kinds (one documented exception: `orcid`).
+- `docs/source-catalogue.json` is generated (`make catalogue` /
+  `retrievr-cli catalogue`, which needs no config) and drift-guarded by
+  `TestCommittedCatalogueMatchesCatalogue`. Contract: `docs/source-catalogue.md`.
+- ⚠ **Measured while building it: a zero-value `huggingface` plugin reports NO
+  content types** — they are set in `Initialize`. The catalogue therefore reads
+  default-configured plugins (empty config, no key), and
+  `TestCatalogueIsIndependentOfInitialization` pins that no field depends on
+  the configured key or endpoint.
+
+### Fixed — a spent YouTube quota is typed, reported and not retried
+
+The YouTube Data API v3 gives 10,000 units/day per project; `search.list`
+costs 100. When it ran out, the plugin already returned
+`ErrRateLimitExceeded`, but then:
+
+- ⛔ **the router dropped the cause.** A YouTube-only search returned
+  `all sources failed: queried 1 sources` — the quota error was logged and
+  discarded, so it read like an outage; in a mixed search YouTube was a bare
+  id in `sources_failed`.
+- ⛔ **it was retried three times** with backoff, although the quota resets at
+  midnight Pacific.
+- a spent daily quota and a short-window throttle were the same error.
+
+Now:
+
+- **`ErrQuotaExhausted` / `*QuotaExhaustedError`** for `quotaExceeded` and
+  `dailyLimitExceeded`. It also matches `ErrRateLimitExceeded` (every existing
+  matcher keeps working) and is in the permanent set, so it is **not retried**
+  (`hits == 1`, with a positive control showing `rateLimitExceeded` IS retried).
+- `rateLimitExceeded` and `userRateLimitExceeded` stay `ErrRateLimitExceeded`
+  (retried).
+- **`source_errors`** on `MergedSearchResult` / `MergedSearchResultV2` (and the
+  `rtv_search` response): `{source, code, message, retryable}` for every failed
+  source, `code` ∈ `quota_exhausted`, `rate_limited`, `credential_required`,
+  `credential_invalid`, `timeout`, `canceled`, `invalid_request`,
+  `unsupported`, `upstream_error`. Messages are sanitized like
+  `SourceHealth.LastError`. Absent (`omitempty`) on a clean search.
+- When every source fails, Search returns **`*AllSourcesFailedError`**: still
+  `errors.Is(err, ErrAllSourcesFailed)`, the message keeps its old prefix and
+  appends the codes (`… queried 1 sources (youtube=quota_exhausted)`), and
+  `errors.Is` reaches each per-source cause. The MCP error envelope keeps
+  `"all sources failed"` as its message.
+- `pkg/retrievr` re-exports `ErrQuotaExhausted`, `ErrRateLimitExceeded`,
+  `ErrCredentialRequired`, `ErrCredentialInvalid`, `ErrAllSourcesFailed`,
+  `AllSourcesFailedError`, `QuotaExhaustedError`, `SourceError`,
+  `SourceErrorCode` (+ constants) and `ClassifySourceError`.
+- No automatic fallback to `scrapingdog_youtube` (operator decision).
+
+### Deprecated
+
+- `retrievr.ErrAllProvidersFailed` — declared since cycle 1, **returned by
+  nothing**; the router has always returned `ErrAllSourcesFailed`, now
+  re-exported. Matching the old sentinel never fired.
+
+### Fixed — versions.yaml
+
+- The flat `version:` alias had stayed at 2.26.0 through 2.27.0; both keys now
+  read 2.28.0. (No `v2.26.0` tag was ever pushed; history is not rewritten.)
+
 ## [2.27.0] - 2026-09-23
 
 ### Fixed — Perplexity moves to the Agent API before Sonar Chat Completions retires (#2)

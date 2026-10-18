@@ -91,6 +91,12 @@ var permanentSentinels = []error{
 	ErrCredentialRequired,
 	ErrCredentialInvalid,
 
+	// A spent daily/period quota (v2.28.0). It resets on the provider's
+	// schedule, never within a backoff, so a retry only re-spends latency.
+	// Listed although a QuotaExhaustedError also matches the transient
+	// ErrRateLimitExceeded: membership here wins.
+	ErrQuotaExhausted,
+
 	// Request validation — the same malformed request would be re-sent.
 	ErrInvalidID,
 	ErrInvalidInput,

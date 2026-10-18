@@ -208,6 +208,11 @@ func (c *Client) Stream(ctx, params, sources) (<-chan StreamEvent, error)       
 func (c *Client) Get(ctx, prefixedID, include, format) (*Publication, error)
 func (c *Client) ListSources(ctx) []SourceInfo
 
+// Static source catalogue (v2.28.0) — no Client, no config, no I/O
+func Catalogue() []CatalogueEntry
+func CatalogueJSON() ([]byte, error)   // == docs/source-catalogue.json
+func SourceCategoryFor(sourceID string) SourceCategory
+
 // Credentials
 func WithCredentials(ctx, map[string]string) context.Context
 func CredentialsFromContext(ctx) map[string]string
@@ -224,6 +229,26 @@ type Region, DPAStatus, ResidencyTag, FallbackChain, ...
 // Sentinel errors
 var ErrEUModeProviderConflict, ErrCompatV1Sunset, ErrFallbackExhausted, ...
 var ErrGetUnsupported  // v2.26.0 — Get refused: this source has no get-by-id
+var ErrQuotaExhausted, ErrRateLimitExceeded, ErrCredentialRequired,
+    ErrCredentialInvalid, ErrAllSourcesFailed  // v2.28.0
+type AllSourcesFailedError, QuotaExhaustedError, SourceError, SourceErrorCode
+func ClassifySourceError(err error) SourceErrorCode
+```
+
+### Why did a source fail? (v2.28.0)
+
+```go
+res, err := client.SearchV2(ctx, params, []string{"youtube"})
+if errors.Is(err, retrievr.ErrQuotaExhausted) {
+    // The YouTube Data API daily quota (10,000 units; one search = 100) is
+    // spent. Not retried; resets at midnight Pacific. Test this BEFORE
+    // ErrRateLimitExceeded — a quota error matches both.
+}
+var all *retrievr.AllSourcesFailedError
+if errors.As(err, &all) {
+    for _, f := range all.Failures { /* f.Source, f.Code, f.Retryable */ }
+}
+// On partial success the same report is res.SourceErrors.
 ```
 
 ### `Get` is not available on every source (v2.26.0)

@@ -311,7 +311,7 @@ When every source fails, Go callers get an `*AllSourcesFailedError`;
 
 | Source | ID | Content | Key | Notes |
 |--------|----|---------|-----|-------|
-| Staan | `staan` | web | **required** | **EU index, hosted on OVHcloud France**; DPA on request; 10 results/page, offset ≤ 30; leads the `quick_lookup` primary rung once enabled |
+| Staan | `staan` | web | **required** | **EU index, hosted on OVHcloud France**; DPA signed; 10 results/page, offset ≤ 30; leads the `quick_lookup` primary rung once enabled |
 
 Use `rtv_list_sources` for the runtime catalog (capabilities, residency, free-tier flag).
 

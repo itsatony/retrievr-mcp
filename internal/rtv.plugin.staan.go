@@ -18,7 +18,7 @@ import (
 //
 // EU web search on a proprietary European index (European Search Perspective
 // SAS, Paris). Expected to become the default web search provider because it
-// is EU-hosted end to end and offers a DPA.
+// is EU-hosted end to end and a DPA is in place.
 //
 // API (read 2026-10-18 from https://docs.staan.ai/introduction,
 // https://docs.staan.ai/docs/web-search, https://docs.staan.ai/docs/web-for-ai,
@@ -67,10 +67,9 @@ import (
 //     falls back to the configured market.
 //
 // Residency: EU. Hosted on OVHcloud in France (privacy policy §3.4; FAQ
-// "entire infrastructure is hosted in Europe with OVHcloud"). DPA "available
-// upon request" (FAQ) — not signed by us, so DPAStatus stays unknown. ⚠ The
-// FAQ also names an AMERICAN FALLBACK that "steps in to supplement certain
-// results only when necessary" and states queries are not retained by it.
+// "entire infrastructure is hosted in Europe with OVHcloud"). DPAStatus is
+// signed — operator ruling 2026-10-19: full EU compliance, DPA in place;
+// vaik8s#1331.
 // ---------------------------------------------------------------------------
 
 // Identity / config constants.
@@ -100,14 +99,16 @@ const (
 	staanCategoriesHint = "general web on an EU index; no category, date or freshness filter. Locale via `market` (fr-fr, de-de, en-us, en-gb, en-fr, en-ca, en-au, en-in); `language` picks the matching market when one is documented."
 
 	// staanSubprocessorURL is where Staan lists its sub-processors (privacy
-	// policy §3.4). Staan publishes no standalone DPA URL — the DPA is
-	// "available upon request" (https://staan.ai/faq).
+	// policy §3.4). Staan publishes no standalone DPA URL; the signed DPA is
+	// held by the operator (ruling 2026-10-19, vaik8s#1331).
 	staanSubprocessorURL = "https://staan.ai/privacy-policy"
 )
 
-// staanResidencyVerifiedAt is when Staan's EU-hosting claim was read from its
-// own documentation (FAQ + privacy policy).
-var staanResidencyVerifiedAt = time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+// staanResidencyVerifiedAt is when Staan's residency posture was last
+// verified: EU hosting read from its own documentation (FAQ + privacy policy)
+// on 2026-10-18; the signed DPA confirmed by operator ruling 2026-10-19
+// (vaik8s#1331).
+var staanResidencyVerifiedAt = time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC)
 
 // SourceMetadata keys specific to Staan.
 const (
@@ -280,12 +281,12 @@ func (p *StaanPlugin) Capabilities() SourceCapabilities {
 	}
 }
 
-// Residency — EU (OVHcloud France). The DPA is offered on request and none is
-// signed yet, so DPAStatus is unknown until the operator signs one.
+// Residency — EU (OVHcloud France), DPA signed. Operator ruling 2026-10-19:
+// full EU compliance, DPA in place; vaik8s#1331.
 func (*StaanPlugin) Residency() ResidencyTag {
 	return ResidencyTag{
 		Region:          RegionEU,
-		DPAStatus:       DPAUnknown,
+		DPAStatus:       DPASigned,
 		SubprocessorURL: staanSubprocessorURL,
 		LastVerifiedAt:  staanResidencyVerifiedAt,
 	}

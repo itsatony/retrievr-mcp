@@ -1111,9 +1111,9 @@
         "web"
       ],
       "region": "EU",
-      "dpa_status": "unknown",
+      "dpa_status": "signed",
       "subprocessor_url": "https://staan.ai/privacy-policy",
-      "residency_verified_at": "2026-10-18",
+      "residency_verified_at": "2026-10-19",
       "requires_api_key": true,
       "accepts_credentials": true,
       "supports_get": false,

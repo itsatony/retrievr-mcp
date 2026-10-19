@@ -111,14 +111,14 @@ func TestStaan_Capabilities(t *testing.T) {
 	assert.Equal(t, staanPageSize, caps.MaxResultsPerQuery)
 }
 
-func TestStaan_Residency_IsEUWithoutASignedDPA(t *testing.T) {
+func TestStaan_Residency_IsEUWithASignedDPA(t *testing.T) {
 	t.Parallel()
 	tag := (&StaanPlugin{}).Residency()
 	assert.Equal(t, RegionEU, tag.Region)
 	assert.True(t, tag.Region.IsEU(), "Staan must pass the eu_strict gate")
-	assert.Equal(t, DPAUnknown, tag.DPAStatus, "the DPA is offered on request; none is signed")
+	assert.Equal(t, DPASigned, tag.DPAStatus, "operator ruling 2026-10-19: DPA in place (vaik8s#1331)")
 	assert.Equal(t, staanSubprocessorURL, tag.SubprocessorURL)
-	assert.Equal(t, time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC), tag.LastVerifiedAt)
+	assert.Equal(t, time.Date(2026, 10, 19, 0, 0, 0, 0, time.UTC), tag.LastVerifiedAt)
 }
 
 func TestStaan_Initialize_Defaults(t *testing.T) {

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.29.1] - 2026-10-19
+
+Patch release. Staan's residency metadata now records a signed DPA.
+
+### Changed — `staan` residency
+
+- `dpa_status`: `unknown` → `signed`. Operator ruling 2026-10-19: Staan is
+  fully EU-compliant with a DPA in place (vaik8s#1331). Region stays `EU`
+  and `subprocessor_url` stays `https://staan.ai/privacy-policy`;
+  `residency_verified_at` moves to `2026-10-19`.
+- The plugin comment, README source table and sample config no longer
+  describe the DPA as "on request" or carry the US-fallback caveat from the
+  2.29.0 notes; the ruling supersedes both.
+
 ## [2.29.0] - 2026-10-18
 
 Minor release. **Staan** — EU web search on its own European index, hosted in
